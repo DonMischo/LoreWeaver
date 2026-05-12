@@ -1,0 +1,82 @@
+import type {
+  Project, Chapter, Scene, CodexEntry, CodexRelation, Settings
+} from "@/types";
+
+const BASE = "/api";
+
+async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { "Content-Type": "application/json", ...init?.headers },
+    ...init,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status}: ${text}`);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+// ── Projects ──────────────────────────────────────────────────────────────────
+
+export const projectsApi = {
+  list: () => req<Project[]>("/projects"),
+  get: (id: number) => req<Project>(`/projects/${id}`),
+  create: (data: { title: string; description?: string }) =>
+    req<Project>("/projects", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<Pick<Project, "title" | "description">>) =>
+    req<Project>(`/projects/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: number) => req<void>(`/projects/${id}`, { method: "DELETE" }),
+  export: (id: number, format: "md" | "tex") =>
+    fetch(`${BASE}/projects/${id}/export?format=${format}`),
+};
+
+// ── Chapters ──────────────────────────────────────────────────────────────────
+
+export const chaptersApi = {
+  list: (projectId: number) => req<Chapter[]>(`/projects/${projectId}/chapters`),
+  create: (data: { project_id: number; title: string; order_index?: number }) =>
+    req<Chapter>("/chapters", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<Pick<Chapter, "title" | "order_index">>) =>
+    req<Chapter>(`/chapters/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: number) => req<void>(`/chapters/${id}`, { method: "DELETE" }),
+  reorder: (items: { id: number; order_index: number }[]) =>
+    req<void>("/chapters/reorder", { method: "POST", body: JSON.stringify({ items }) }),
+};
+
+// ── Scenes ────────────────────────────────────────────────────────────────────
+
+export const scenesApi = {
+  list: (chapterId: number) => req<Scene[]>(`/chapters/${chapterId}/scenes`),
+  get: (id: number) => req<Scene>(`/scenes/${id}`),
+  create: (data: { chapter_id: number; title?: string; content?: string; order_index?: number }) =>
+    req<Scene>("/scenes", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<Pick<Scene, "title" | "content" | "order_index" | "word_count">>) =>
+    req<Scene>(`/scenes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: number) => req<void>(`/scenes/${id}`, { method: "DELETE" }),
+  reorder: (items: { id: number; order_index: number }[]) =>
+    req<void>("/scenes/reorder", { method: "POST", body: JSON.stringify({ items }) }),
+};
+
+// ── Codex ─────────────────────────────────────────────────────────────────────
+
+export const codexApi = {
+  list: (projectId: number) => req<CodexEntry[]>(`/projects/${projectId}/codex`),
+  get: (id: number) => req<CodexEntry>(`/codex/${id}`),
+  create: (data: Omit<CodexEntry, "id" | "created_at" | "updated_at">) =>
+    req<CodexEntry>("/codex", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<Omit<CodexEntry, "id" | "project_id" | "created_at" | "updated_at">>) =>
+    req<CodexEntry>(`/codex/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: number) => req<void>(`/codex/${id}`, { method: "DELETE" }),
+  createRelation: (data: { source_id: number; target_id: number; relation_type?: string }) =>
+    req<CodexRelation>("/codex/relations", { method: "POST", body: JSON.stringify(data) }),
+  deleteRelation: (id: number) => req<void>(`/codex/relations/${id}`, { method: "DELETE" }),
+};
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export const settingsApi = {
+  get: () => req<Settings>("/settings"),
+  update: (data: { openrouter_api_key?: string; default_model?: string; theme?: string }) =>
+    req<Settings>("/settings", { method: "POST", body: JSON.stringify(data) }),
+};

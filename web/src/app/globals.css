@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 20% 8%;
+    --foreground: 210 40% 95%;
+    --card: 222 20% 11%;
+    --card-foreground: 210 40% 95%;
+    --popover: 222 20% 11%;
+    --popover-foreground: 210 40% 95%;
+    --primary: 262 80% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 20% 16%;
+    --secondary-foreground: 210 40% 95%;
+    --muted: 222 20% 16%;
+    --muted-foreground: 215 20% 55%;
+    --accent: 262 80% 65%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 20% 18%;
+    --input: 222 20% 18%;
+    --ring: 262 80% 65%;
+    --radius: 0.5rem;
+  }
+
+  .light {
+    --background: 0 0% 98%;
+    --foreground: 222 20% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 20% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 20% 8%;
+    --primary: 262 80% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 20% 93%;
+    --secondary-foreground: 222 20% 8%;
+    --muted: 210 20% 93%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 262 80% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 262 80% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* TipTap editor */
+.ProseMirror {
+  outline: none;
+  min-height: 100%;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  @apply text-muted-foreground;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.ProseMirror p {
+  @apply mb-4 leading-relaxed;
+}
+
+/* Codex highlight marks */
+.codex-highlight {
+  border-bottom: 2px solid;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.codex-highlight:hover {
+  opacity: 0.85;
+}
