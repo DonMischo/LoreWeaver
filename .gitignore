@@ -45,3 +45,4 @@ desktop.ini
 *.log
 npm-debug.log*
 *.db
+api/uv.lock
