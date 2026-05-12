@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine
 from models import Base
-from routers import projects, chapters, scenes, codex, settings, ai, export
+from routers import projects, chapters, scenes, codex, settings, ai, export, imports
 
 Base.metadata.create_all(bind=engine)
 
@@ -24,6 +24,7 @@ app.include_router(codex.router)
 app.include_router(settings.router)
 app.include_router(ai.router)
 app.include_router(export.router)
+app.include_router(imports.router)
 
 
 @app.get("/api/health")

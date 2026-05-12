@@ -26,6 +26,7 @@ import {
   useUpdateChapter, useProject,
 } from "@/store/queries";
 import { useExport } from "@/hooks/useExport";
+import { ImportButton } from "@/components/layout/ImportButton";
 import type { Chapter, Scene } from "@/types";
 
 interface Props {
@@ -253,6 +254,13 @@ export function ProjectSidebar({ projectId }: Props) {
           <Book className="h-4 w-4" />
           Codex
         </Link>
+
+        <div className="border-t border-border/50 my-1" />
+
+        {/* Import */}
+        <ImportButton projectId={projectId} mode="story" />
+
+        {/* Export */}
         <div className="flex gap-1">
           <button
             onClick={() => project && exportProject(projectId, "md", project.title)}
@@ -270,6 +278,9 @@ export function ProjectSidebar({ projectId }: Props) {
             .tex
           </button>
         </div>
+
+        <div className="border-t border-border/50 my-1" />
+
         <Link
           href="/settings"
           className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
