@@ -73,6 +73,37 @@ export const codexApi = {
   deleteRelation: (id: number) => req<void>(`/codex/relations/${id}`, { method: "DELETE" }),
 };
 
+// ── Import ────────────────────────────────────────────────────────────────────
+
+export interface ImportResult {
+  message: string;
+  chapters?: number;
+  scenes?: number;
+  created?: number;
+  skipped?: number;
+}
+
+export const importApi = {
+  story: (projectId: number, file: File): Promise<ImportResult> => {
+    const form = new FormData();
+    form.append("file", file);
+    return fetch(`${BASE}/projects/${projectId}/import/story`, { method: "POST", body: form })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        return r.json();
+      });
+  },
+  codex: (projectId: number, file: File): Promise<ImportResult> => {
+    const form = new FormData();
+    form.append("file", file);
+    return fetch(`${BASE}/projects/${projectId}/import/codex`, { method: "POST", body: form })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        return r.json();
+      });
+  },
+};
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 export const settingsApi = {

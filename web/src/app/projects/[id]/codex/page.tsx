@@ -6,6 +6,7 @@ import { Plus, Pencil, Trash2, User, MapPin, Package, Scroll, Tag } from "lucide
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CodexEntryDialog } from "@/components/codex/CodexEntryDialog";
+import { ImportButton } from "@/components/layout/ImportButton";
 import { useCodexEntries, useCreateCodexEntry, useUpdateCodexEntry, useDeleteCodexEntry } from "@/store/queries";
 import type { CodexEntry, EntryType } from "@/types";
 import { cn } from "@/lib/utils";
@@ -50,10 +51,13 @@ export default function CodexPage() {
           <h1 className="text-lg font-semibold">Codex</h1>
           <p className="text-xs text-muted-foreground">{entries.length} {entries.length === 1 ? "entry" : "entries"}</p>
         </div>
-        <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
-          <Plus className="h-4 w-4" />
-          New Entry
-        </Button>
+        <div className="flex items-center gap-2">
+          <ImportButton projectId={projectId} mode="codex" className="w-auto" />
+          <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
+            <Plus className="h-4 w-4" />
+            New Entry
+          </Button>
+        </div>
       </header>
 
       <div className="flex items-center gap-3 px-6 py-3 border-b border-border">
