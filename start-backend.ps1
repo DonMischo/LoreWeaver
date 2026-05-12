@@ -1,14 +1,19 @@
 # Start LoreWeaver backend
 
-# Add uv's install location to PATH for this session
-$env:Path = "C:\Users\m.poehle16\.local\bin;$env:Path"
+# Add uv's install location to PATH for this session (works for any user)
+$env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
 
 Set-Location "$PSScriptRoot\api"
 
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Host "uv not found. Installing..." -ForegroundColor Yellow
     Invoke-RestMethod "https://astral.sh/uv/install.ps1" | Invoke-Expression
-    $env:Path = "C:\Users\m.poehle16\.local\bin;$env:Path"
+    $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
+
+    if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+        Write-Host "uv installation failed or not on PATH. Please restart PowerShell and try again." -ForegroundColor Red
+        exit 1
+    }
 }
 
 if (-not (Test-Path ".venv")) {
