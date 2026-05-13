@@ -1,7 +1,28 @@
+// ── Book metadata (EPUB Dublin Core fields) ───────────────────────────────────
+
+export interface BookMeta {
+  author?: string;          // dc:creator
+  author_sort?: string;     // sort key, e.g. "Tolkien, J.R.R."
+  subtitle?: string;        // secondary title
+  language?: string;        // BCP 47 language code
+  publisher?: string;       // dc:publisher
+  published_date?: string;  // dc:date — YYYY or YYYY-MM-DD
+  isbn?: string;            // dc:identifier scheme=ISBN
+  rights?: string;          // dc:rights (copyright statement)
+  series?: string;          // series name
+  series_index?: string;    // position in series
+  genre?: string;           // primary subject/category
+  subjects?: string[];      // additional subject tags
+  synopsis?: string;        // dc:description (separate from project.description)
+  translator?: string;      // dc:contributor role="trl"
+  editor?: string;          // dc:contributor role="edt"
+}
+
 export interface Project {
   id: number;
   title: string;
   description: string | null;
+  book_meta: BookMeta | null;
   created_at: string;
   updated_at: string;
 }

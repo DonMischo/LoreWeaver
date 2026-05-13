@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronDown, ChevronRight, Plus, Trash2, BookOpen,
-  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors,
+  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors, Info,
 } from "lucide-react";
 import {
   DndContext, closestCenter, DragEndEvent,
@@ -25,12 +25,13 @@ import {
   useCreateAct, useCreateChapter, useCreateScene,
   useDeleteAct, useDeleteChapter, useDeleteScene,
   useReorderActs, useReorderChapters, useReorderScenes,
-  useUpdateAct, useUpdateChapter, useProject,
+  useUpdateAct, useUpdateChapter, useProject, useUpdateProject,
   useTimeConfig, useUpdateTimeConfig,
 } from "@/store/queries";
-import { useExport } from "@/hooks/useExport";
 import { ImportButton } from "@/components/layout/ImportButton";
 import { TimeConfigDialog } from "@/components/time/TimeConfigDialog";
+import { ExportDialog } from "@/components/export/ExportDialog";
+import { BookMetaDialog } from "@/components/project/BookMetaDialog";
 import { DEFAULT_TIME_CONFIG } from "@/types";
 import type { Act, Chapter, Scene } from "@/types";
 
@@ -352,13 +353,15 @@ export function ProjectSidebar({ projectId }: Props) {
   const currentSceneId = params?.sceneId ? Number(params.sceneId) : undefined;
 
   const { data: project } = useProject(projectId);
-  const { exportProject } = useExport();
   const { data: acts = [] } = useActs(projectId);
   const createAct = useCreateAct(projectId);
   const reorderActs = useReorderActs(projectId);
+  const updateProject = useUpdateProject();
   const { data: timeConfigData } = useTimeConfig(projectId);
   const updateTimeConfig = useUpdateTimeConfig(projectId);
   const [timeConfigOpen, setTimeConfigOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [metaOpen, setMetaOpen] = useState(false);
   const timeConfig = timeConfigData ?? DEFAULT_TIME_CONFIG;
 
   const sensors = useSensors(
@@ -454,28 +457,25 @@ export function ProjectSidebar({ projectId }: Props) {
           <Clock className="h-4 w-4" />
           Time System
         </button>
+        <button
+          onClick={() => setMetaOpen(true)}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+        >
+          <Info className="h-4 w-4" />
+          Project Info
+        </button>
 
         <div className="border-t border-border/50 my-1" />
 
         <ImportButton projectId={projectId} mode="story" />
 
-        <div className="flex gap-1">
-          <button
-            onClick={() => project && exportProject(projectId, "md", project.title)}
-            className="flex flex-1 items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
-            title="Export as Markdown"
-          >
-            <Download className="h-4 w-4" />
-            Export .md
-          </button>
-          <button
-            onClick={() => project && exportProject(projectId, "tex", project.title)}
-            className="px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
-            title="Export as LaTeX"
-          >
-            .tex
-          </button>
-        </div>
+        <button
+          onClick={() => setExportOpen(true)}
+          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+        >
+          <Download className="h-4 w-4" />
+          Export…
+        </button>
 
         <div className="border-t border-border/50 my-1" />
 
@@ -493,6 +493,23 @@ export function ProjectSidebar({ projectId }: Props) {
         onClose={() => setTimeConfigOpen(false)}
         initial={timeConfig}
         onSave={(cfg) => updateTimeConfig.mutate(cfg)}
+      />
+
+      <ExportDialog
+        projectId={projectId}
+        projectTitle={project?.title ?? ""}
+        bookMeta={project?.book_meta ?? null}
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+      />
+
+      <BookMetaDialog
+        projectId={projectId}
+        projectTitle={project?.title ?? ""}
+        initial={project?.book_meta ?? null}
+        open={metaOpen}
+        onClose={() => setMetaOpen(false)}
+        onSave={(meta) => updateProject.mutate({ id: projectId, data: { book_meta: meta } })}
       />
     </aside>
   );

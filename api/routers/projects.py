@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -93,7 +94,11 @@ def update_project(project_id: int, body: ProjectUpdate, db: Session = Depends(g
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
-    for k, v in body.model_dump(exclude_none=True).items():
+    data = body.model_dump(exclude_none=True)
+    # Serialize nested model to JSON string for TEXT column
+    if "book_meta" in data:
+        data["book_meta"] = json.dumps(data["book_meta"])
+    for k, v in data.items():
         setattr(project, k, v)
     db.commit()
     db.refresh(project)

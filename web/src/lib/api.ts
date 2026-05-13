@@ -1,10 +1,33 @@
 import type {
   Project, Act, Chapter, Scene, CodexEntry, CodexRelation, CodexRelationResolved,
   Settings, ChapterReadData, ActReadData, TimeConfig, SceneTime,
-  Fragment, FragmentTabs,
+  Fragment, FragmentTabs, BookMeta,
 } from "@/types";
 
 const BASE = "/api";
+
+// ── Export types ──────────────────────────────────────────────────────────────
+
+export interface ExportOptions {
+  format: "md" | "tex" | "epub-style";
+  scene_ids?: number[] | null;
+  include_act_headings: boolean;
+  include_chapter_headings: boolean;
+  include_scene_headings: boolean;
+  font?: string;
+  font_size: "10pt" | "11pt" | "12pt";
+  line_spacing: "1" | "1.5" | "2";
+  paper_size: "a4paper" | "letterpaper";
+  text_color: string;
+  bg_color: string;
+  page_margin: string;
+  // author and other metadata come from project.book_meta (set via Project Info)
+}
+
+export interface ExportScene   { id: number; title: string; order_index: number }
+export interface ExportChapter { id: number; title: string; order_index: number; scenes: ExportScene[] }
+export interface ExportAct     { id: number; title: string; order_index: number; chapters: ExportChapter[] }
+export interface ExportStructure { title: string; acts: ExportAct[] }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -26,11 +49,17 @@ export const projectsApi = {
   get: (id: number) => req<Project>(`/projects/${id}`),
   create: (data: { title: string; description?: string; copy_codex_from?: number }) =>
     req<Project>("/projects", { method: "POST", body: JSON.stringify(data) }),
-  update: (id: number, data: Partial<Pick<Project, "title" | "description">>) =>
+  update: (id: number, data: Partial<Pick<Project, "title" | "description">> & { book_meta?: BookMeta | null }) =>
     req<Project>(`/projects/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: number) => req<void>(`/projects/${id}`, { method: "DELETE" }),
-  export: (id: number, format: "md" | "tex") =>
-    fetch(`${BASE}/projects/${id}/export?format=${format}`),
+  exportStructure: (id: number) =>
+    req<ExportStructure>(`/projects/${id}/export/structure`),
+  export: (id: number, opts: ExportOptions): Promise<Response> =>
+    fetch(`${BASE}/projects/${id}/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts),
+    }),
 };
 
 // ── Acts ──────────────────────────────────────────────────────────────────────

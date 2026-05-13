@@ -72,6 +72,7 @@ def migrate_new_columns():
         ("codex_entries", "tags",        "TEXT DEFAULT '[]'"),
         ("projects",      "time_config",    "TEXT"),
         ("projects",      "fragment_tabs",  "TEXT"),
+        ("projects",      "book_meta",      "TEXT"),
         ("scenes",        "scene_time",     "TEXT"),
     ]
     with engine.connect() as conn:

@@ -28,6 +28,7 @@ class Project(Base):
 
     time_config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     fragment_tabs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: ["tab-id", ...]
+    book_meta: Mapped[Optional[str]] = mapped_column(Text, nullable=True)      # JSON: BookMeta dict
 
     acts: Mapped[list["Act"]] = relationship(
         "Act", back_populates="project", cascade="all, delete-orphan",

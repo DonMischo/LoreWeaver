@@ -7,6 +7,29 @@ from models import EntryType
 
 # ── Projects ──────────────────────────────────────────────────────────────────
 
+# ── Book metadata (EPUB Dublin Core fields) ───────────────────────────────────
+
+class BookMeta(BaseModel):
+    """Stores EPUB / Dublin Core metadata for a project."""
+    author: Optional[str] = None           # dc:creator
+    author_sort: Optional[str] = None      # sort key, e.g. "Tolkien, J.R.R."
+    subtitle: Optional[str] = None         # secondary title line
+    language: str = "en"                   # dc:language (BCP 47)
+    publisher: Optional[str] = None        # dc:publisher
+    published_date: Optional[str] = None   # dc:date (YYYY or YYYY-MM-DD)
+    isbn: Optional[str] = None             # dc:identifier scheme=ISBN
+    rights: Optional[str] = None           # dc:rights (copyright statement)
+    series: Optional[str] = None           # calibre:series
+    series_index: Optional[str] = None     # calibre:series_index
+    genre: Optional[str] = None            # primary dc:subject
+    subjects: list[str] = Field(default_factory=list)  # additional dc:subject tags
+    synopsis: Optional[str] = None         # dc:description (distinct from project description)
+    translator: Optional[str] = None       # dc:contributor role="trl"
+    editor: Optional[str] = None           # dc:contributor role="edt"
+
+
+# ── Projects ──────────────────────────────────────────────────────────────────
+
 class ProjectBase(BaseModel):
     title: str
     description: Optional[str] = None
@@ -19,14 +42,29 @@ class ProjectCreate(ProjectBase):
 class ProjectUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    book_meta: Optional[BookMeta] = None
 
 
 class ProjectOut(ProjectBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    book_meta: Optional[BookMeta] = None
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _parse_book_meta(cls, data):
+        if hasattr(data, "__dict__"):
+            raw = getattr(data, "book_meta", None)
+            if isinstance(raw, str):
+                try:
+                    parsed = json.loads(raw)
+                    object.__setattr__(data, "book_meta", parsed)
+                except Exception:
+                    object.__setattr__(data, "book_meta", None)
+        return data
 
 
 # ── Acts ──────────────────────────────────────────────────────────────────────
@@ -308,3 +346,27 @@ class TimeConfig(BaseModel):
 
 class TimeConfigOut(TimeConfig):
     pass
+
+# ── Export ────────────────────────────────────────────────────────────────────
+
+from typing import Literal
+
+class ExportOptions(BaseModel):
+    format: Literal["md", "tex", "epub-style"] = "md"
+    # Content selection — None means "all"
+    scene_ids: Optional[list[int]] = None   # None = all scenes
+    # Structural headings
+    include_act_headings: bool = True
+    include_chapter_headings: bool = True
+    include_scene_headings: bool = True
+    # Typography (LaTeX + EPUB)
+    font: Optional[str] = None          # e.g. "EB Garamond"
+    font_size: str = "12pt"             # "10pt" | "11pt" | "12pt"
+    line_spacing: str = "1.5"           # "1" | "1.5" | "2"
+    # LaTeX only
+    paper_size: str = "a4paper"         # "a4paper" | "letterpaper"
+    # EPUB style only
+    text_color: str = "#1a1a1a"
+    bg_color: str = "#ffffff"
+    page_margin: str = "2em"
+    # Author/metadata come from project.book_meta — not stored here
