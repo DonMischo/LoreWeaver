@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- rounded background -->
+  <rect width="32" height="32" rx="7" fill="#1e1433"/>
+
+  <!-- left page -->
+  <path
+    d="M15.5 9.5
+       C13 9 9 9.5 6.5 11
+       L6.5 23
+       C9 21.8 13 21.5 15.5 22
+       Z"
+    fill="#7c3aed" opacity="0.85"
+  />
+
+  <!-- right page -->
+  <path
+    d="M16.5 9.5
+       C19 9 23 9.5 25.5 11
+       L25.5 23
+       C23 21.8 19 21.5 16.5 22
+       Z"
+    fill="#a78bfa" opacity="0.95"
+  />
+
+  <!-- spine -->
+  <line x1="16" y1="9.5" x2="16" y2="22.5" stroke="#c4b5fd" stroke-width="1.2" stroke-linecap="round"/>
+
+  <!-- left page lines (text suggestion) -->
+  <line x1="8.5"  y1="13.5" x2="14"   y2="13"   stroke="#c4b5fd" stroke-width="0.8" stroke-linecap="round" opacity="0.5"/>
+  <line x1="8.5"  y1="15.5" x2="14"   y2="15"   stroke="#c4b5fd" stroke-width="0.8" stroke-linecap="round" opacity="0.5"/>
+  <line x1="8.5"  y1="17.5" x2="14"   y2="17.2" stroke="#c4b5fd" stroke-width="0.8" stroke-linecap="round" opacity="0.5"/>
+
+  <!-- right page lines -->
+  <line x1="18"   y1="13"   x2="23.5" y2="13.5" stroke="#ede9fe" stroke-width="0.8" stroke-linecap="round" opacity="0.5"/>
+  <line x1="18"   y1="15"   x2="23.5" y2="15.5" stroke="#ede9fe" stroke-width="0.8" stroke-linecap="round" opacity="0.5"/>
+  <line x1="18"   y1="17.2" x2="23.5" y2="17.5" stroke="#ede9fe" stroke-width="0.8" stroke-linecap="round" opacity="0.5"/>
+</svg>
