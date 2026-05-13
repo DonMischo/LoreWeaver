@@ -12,11 +12,11 @@ import {
   useFragmentTabs, useUpdateFragmentTabs,
   useFragments, useCreateFragment, useUpdateFragment, useDeleteFragment,
 } from "@/store/queries";
-import type { Fragment } from "@/types";
+import type { Fragment as FragmentItem } from "@/types";
 import { BUILTIN_TABS } from "@/types";
 import { cn } from "@/lib/utils";
 
-// ── Tab icon map ──────────────────────────────────────────────────────────────
+// ── Tab icon ──────────────────────────────────────────────────────────────────
 
 function TabIcon({ tab, className }: { tab: string; className?: string }) {
   if (tab === "snippets") return <Scissors className={cn("h-3.5 w-3.5", className)} />;
@@ -28,37 +28,43 @@ function TabIcon({ tab, className }: { tab: string; className?: string }) {
 // ── Fragment card ─────────────────────────────────────────────────────────────
 
 function FragmentCard({
-  fragment, projectId, allTabs,
-}: { fragment: Fragment; projectId: number; allTabs: string[] }) {
+  fragment,
+  projectId,
+  allTabs,
+}: {
+  fragment: FragmentItem;
+  projectId: number;
+  allTabs: string[];
+}) {
   const updateFragment = useUpdateFragment(projectId);
   const deleteFragment = useDeleteFragment(projectId);
 
   const [editingTitle, setEditingTitle] = useState(false);
-  const [title, setTitle] = useState(fragment.title ?? "");
-  const [content, setContent] = useState(fragment.content ?? "");
+  const [localTitle, setLocalTitle] = useState(fragment.title ?? "");
+  const [localContent, setLocalContent] = useState(fragment.content ?? "");
   const [showMove, setShowMove] = useState(false);
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = el.scrollHeight + "px";
-  }, [content]);
+  }, [localContent]);
 
-  const saveContent = (val: string) => {
+  const scheduleContentSave = (val: string) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       updateFragment.mutate({ id: fragment.id, data: { content: val } });
     }, 800);
   };
 
-  const saveTitle = () => {
+  const commitTitle = () => {
     setEditingTitle(false);
-    if (title !== fragment.title) {
-      updateFragment.mutate({ id: fragment.id, data: { title: title || null } });
+    const next = localTitle.trim() || null;
+    if (next !== fragment.title) {
+      updateFragment.mutate({ id: fragment.id, data: { title: next } });
     }
   };
 
@@ -67,16 +73,22 @@ function FragmentCard({
     setShowMove(false);
   };
 
+  const wordCount = localContent.trim()
+    ? localContent.trim().split(/\s+/).length
+    : 0;
+
   return (
     <div className="group relative bg-card border border-border rounded-lg p-3 space-y-2 hover:border-border/80 transition-colors">
       {/* Title row */}
       <div className="flex items-center gap-1.5 min-h-[24px]">
         {editingTitle ? (
           <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={saveTitle}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") saveTitle(); }}
+            value={localTitle}
+            onChange={(e) => setLocalTitle(e.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === "Escape") commitTitle();
+            }}
             className="h-6 text-xs px-1 flex-1"
             autoFocus
           />
@@ -86,16 +98,20 @@ function FragmentCard({
             onDoubleClick={() => setEditingTitle(true)}
             title="Double-click to rename"
           >
-            {fragment.title || <span className="text-muted-foreground italic">Untitled — double-click to name</span>}
+            {fragment.title ? (
+              <span>{fragment.title}</span>
+            ) : (
+              <span className="text-muted-foreground italic">Untitled</span>
+            )}
           </button>
         )}
 
-        {/* Actions — visible on hover */}
+        {/* Hover actions */}
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 shrink-0 transition-opacity">
           {/* Move to tab */}
           <div className="relative">
             <button
-              onClick={() => setShowMove(v => !v)}
+              onClick={() => setShowMove((v) => !v)}
               className="text-muted-foreground hover:text-foreground p-0.5 rounded"
               title="Move to tab"
             >
@@ -103,16 +119,18 @@ function FragmentCard({
             </button>
             {showMove && (
               <div className="absolute right-0 top-6 z-20 bg-card border border-border rounded-md shadow-lg py-1 min-w-[130px]">
-                {allTabs.filter(t => t !== fragment.tab).map(t => (
-                  <button
-                    key={t}
-                    onClick={() => moveToTab(t)}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-secondary text-left capitalize"
-                  >
-                    <TabIcon tab={t} />
-                    {t}
-                  </button>
-                ))}
+                {allTabs
+                  .filter((t) => t !== fragment.tab)
+                  .map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => moveToTab(t)}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-secondary text-left capitalize"
+                    >
+                      <TabIcon tab={t} />
+                      {t}
+                    </button>
+                  ))}
               </div>
             )}
           </div>
@@ -127,29 +145,30 @@ function FragmentCard({
         </div>
       </div>
 
-      {/* Content textarea */}
+      {/* Content */}
       <textarea
         ref={contentRef}
-        value={content}
-        onChange={(e) => { setContent(e.target.value); saveContent(e.target.value); }}
-        placeholder="Write something…"
-        className={cn(
-          "w-full resize-none bg-transparent text-sm text-foreground",
-          "placeholder:text-muted-foreground/50 focus:outline-none",
-          "min-h-[60px] leading-relaxed"
-        )}
+        value={localContent}
+        onChange={(e) => {
+          setLocalContent(e.target.value);
+          scheduleContentSave(e.target.value);
+        }}
+        placeholder="Write something..."
+        className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none min-h-[60px] leading-relaxed"
         rows={3}
       />
 
-      {/* Footer: date + word count */}
+      {/* Footer */}
       <div className="flex items-center justify-between text-[10px] text-muted-foreground/50">
         <span>{new Date(fragment.updated_at).toLocaleDateString()}</span>
-        <span>{content.trim() ? content.trim().split(/\s+/).length : 0} words</span>
+        <span>{wordCount} words</span>
       </div>
 
-      {/* Close move popover on outside click */}
       {showMove && (
-        <div className="fixed inset-0 z-10" onClick={() => setShowMove(false)} />
+        <div
+          className="fixed inset-0 z-10"
+          onClick={() => setShowMove(false)}
+        />
       )}
     </div>
   );
@@ -166,19 +185,20 @@ export default function FragmentsPage() {
   const updateTabs = useUpdateFragmentTabs(projectId);
   const createFragment = useCreateFragment(projectId);
 
-  const allTabs = tabsData?.all ?? [...BUILTIN_TABS];
-  const customTabs = tabsData?.custom ?? [];
+  const allTabs: string[] = tabsData?.all ?? (BUILTIN_TABS as unknown as string[]);
+  const customTabs: string[] = tabsData?.custom ?? [];
 
   const [activeTab, setActiveTab] = useState("snippets");
   const [addingTab, setAddingTab] = useState(false);
   const [newTabName, setNewTabName] = useState("");
 
-  // Keep activeTab valid if tabs change
   useEffect(() => {
-    if (!allTabs.includes(activeTab)) setActiveTab(allTabs[0] ?? "snippets");
-  }, [allTabs]);
+    if (allTabs.length > 0 && !allTabs.includes(activeTab)) {
+      setActiveTab(allTabs[0]);
+    }
+  }, [allTabs, activeTab]);
 
-  const tabFragments = fragments.filter(f => f.tab === activeTab);
+  const tabFragments = fragments.filter((f) => f.tab === activeTab);
 
   const handleAddTab = () => {
     const name = newTabName.trim().toLowerCase();
@@ -190,17 +210,13 @@ export default function FragmentsPage() {
   };
 
   const handleDeleteTab = (tab: string) => {
-    const count = fragments.filter(f => f.tab === tab).length;
-    const msg = count > 0
-      ? `Delete tab "${tab}"? It has ${count} fragment${count !== 1 ? "s" : ""} that will also be deleted.`
-      : `Delete tab "${tab}"?`;
+    const count = fragments.filter((f) => f.tab === tab).length;
+    const msg =
+      count > 0
+        ? `Delete tab "${tab}"? Its ${count} fragment(s) will become inaccessible.`
+        : `Delete tab "${tab}"?`;
     if (!confirm(msg)) return;
-    // Fragments on this tab will be orphaned on backend; let's move them to snippets first
-    // (The backend will cascade-delete if we remove the project, but tab deletion is frontend-only)
-    // Since custom tabs are just labels, we can just update the tab list and the fragments stay
-    // but become inaccessible — better to delete them explicitly via individual delete or
-    // just filter them out. For simplicity, we keep them but switch to snippets:
-    updateTabs.mutate(customTabs.filter(t => t !== tab));
+    updateTabs.mutate(customTabs.filter((t) => t !== tab));
     if (activeTab === tab) setActiveTab("snippets");
   };
 
@@ -211,7 +227,8 @@ export default function FragmentsPage() {
         <div>
           <h1 className="text-base font-semibold">Fragments</h1>
           <p className="text-xs text-muted-foreground">
-            {fragments.length} fragment{fragments.length !== 1 ? "s" : ""} across {allTabs.length} tab{allTabs.length !== 1 ? "s" : ""}
+            {fragments.length} fragment{fragments.length !== 1 ? "s" : ""} across{" "}
+            {allTabs.length} tab{allTabs.length !== 1 ? "s" : ""}
           </p>
         </div>
         <Button
@@ -226,9 +243,9 @@ export default function FragmentsPage() {
 
       {/* Tab bar */}
       <div className="flex items-center gap-1 px-4 pt-3 pb-0 border-b border-border shrink-0 overflow-x-auto">
-        {allTabs.map(tab => {
+        {allTabs.map((tab) => {
           const isBuiltin = (BUILTIN_TABS as readonly string[]).includes(tab);
-          const count = fragments.filter(f => f.tab === tab).length;
+          const count = fragments.filter((f) => f.tab === tab).length;
           return (
             <div key={tab} className="flex items-center group/tab shrink-0">
               <button
@@ -243,15 +260,18 @@ export default function FragmentsPage() {
                 <TabIcon tab={tab} />
                 {tab}
                 {count > 0 && (
-                  <span className={cn(
-                    "text-[10px] rounded-full px-1.5 py-px",
-                    activeTab === tab ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground"
-                  )}>
+                  <span
+                    className={cn(
+                      "text-[10px] rounded-full px-1.5 py-px",
+                      activeTab === tab
+                        ? "bg-primary/20 text-primary"
+                        : "bg-secondary text-muted-foreground"
+                    )}
+                  >
                     {count}
                   </span>
                 )}
               </button>
-              {/* Delete custom tab */}
               {!isBuiltin && (
                 <button
                   onClick={() => handleDeleteTab(tab)}
@@ -267,22 +287,34 @@ export default function FragmentsPage() {
 
         {/* Add tab */}
         {addingTab ? (
-          <div className="flex items-center gap-1 ml-1 mb-1">
+          <div className="flex items-center gap-1 ml-1 mb-1 shrink-0">
             <Input
               value={newTabName}
-              onChange={e => setNewTabName(e.target.value)}
-              onKeyDown={e => {
+              onChange={(e) => setNewTabName(e.target.value)}
+              onKeyDown={(e) => {
                 if (e.key === "Enter") handleAddTab();
-                if (e.key === "Escape") { setAddingTab(false); setNewTabName(""); }
+                if (e.key === "Escape") {
+                  setAddingTab(false);
+                  setNewTabName("");
+                }
               }}
-              placeholder="Tab name…"
+              placeholder="Tab name..."
               className="h-6 text-xs w-28 px-2"
               autoFocus
             />
-            <button onClick={handleAddTab} className="text-primary hover:text-primary/80">
+            <button
+              onClick={handleAddTab}
+              className="text-primary hover:text-primary/80"
+            >
               <Check className="h-3.5 w-3.5" />
             </button>
-            <button onClick={() => { setAddingTab(false); setNewTabName(""); }} className="text-muted-foreground hover:text-foreground">
+            <button
+              onClick={() => {
+                setAddingTab(false);
+                setNewTabName("");
+              }}
+              className="text-muted-foreground hover:text-foreground"
+            >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -298,7 +330,7 @@ export default function FragmentsPage() {
         )}
       </div>
 
-      {/* Fragment list */}
+      {/* Fragment grid */}
       <div className="flex-1 overflow-y-auto p-4">
         {tabFragments.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground gap-3 py-16">
@@ -307,8 +339,8 @@ export default function FragmentsPage() {
               <p className="font-medium capitalize">{activeTab} is empty</p>
               <p className="text-xs mt-1">
                 {activeTab === "archive"
-                  ? "Move scenes here from the scene editor to archive them."
-                  : "Click "New fragment" to add one."}
+                  ? "Use the Archive button in the scene editor to send scenes here."
+                  : "Click New fragment to add one."}
               </p>
             </div>
             <Button
@@ -322,7 +354,7 @@ export default function FragmentsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {tabFragments.map(fragment => (
+            {tabFragments.map((fragment) => (
               <FragmentCard
                 key={fragment.id}
                 fragment={fragment}
@@ -330,14 +362,9 @@ export default function FragmentsPage() {
                 allTabs={allTabs}
               />
             ))}
-            {/* Add card */}
             <button
               onClick={() => createFragment.mutate({ tab: activeTab })}
-              className={cn(
-                "flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border",
-                "text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors",
-                "min-h-[120px] text-xs"
-              )}
+              className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors min-h-[120px] text-xs"
             >
               <Plus className="h-5 w-5" />
               New fragment
