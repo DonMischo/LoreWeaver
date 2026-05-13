@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
-from models import Project, Act, Chapter, CodexEntry
+from models import Project, Act, Chapter, CodexEntry, CodexRelation
 from services.tags import build_relations_graph, build_timeline
 
 router = APIRouter(prefix="/api/projects", tags=["graph"])
@@ -28,7 +28,7 @@ def _load_codex(project_id: int, db: Session):
     return (
         db.query(CodexEntry)
         .options(
-            selectinload(CodexEntry.relations_from).selectinload("target"),
+            selectinload(CodexEntry.relations_from).selectinload(CodexRelation.target),
         )
         .filter(CodexEntry.project_id == project_id)
         .all()
