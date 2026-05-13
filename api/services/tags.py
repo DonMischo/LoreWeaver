@@ -2,9 +2,6 @@
 Inline tag extraction from scene content.
 
 Supported syntax:
-  [rel:TargetName|relation type]   — relation between the POV/current char and another
-  [rel:TargetName]                 — relation without a type label
-
   {time:day 6|Event Name}          — time + event anchor
   {time:year 1337, 6th month, day 7|Event Name}
 
@@ -14,6 +11,8 @@ Time components (any combination, any order, comma-separated):
   year N        → year
 
 Events with identical names across scenes are treated as the SAME event on the timeline.
+
+Relations between codex entries are managed via the CodexRelation model, not inline tags.
 """
 
 import re
@@ -161,28 +160,6 @@ def build_relations_graph(project, codex_entries: list) -> dict:
                 "scene_title": "",
                 "via": "codex",
             })
-
-    # 3. Inline [rel:] tags from scenes
-    from models import Act, Chapter, Scene
-    for act in sorted(project.acts, key=lambda a: a.order_index):
-        for chapter in sorted(act.chapters, key=lambda c: c.order_index):
-            for scene in sorted(chapter.scenes, key=lambda s: s.order_index):
-                for target_name, rel_type in extract_rel_tags(scene.content or ""):
-                    codex_entry = entry_by_name.get(target_name.lower())
-                    if codex_entry:
-                        ensure_node(codex_entry.name, codex_entry.id,
-                                    codex_entry.entry_type, codex_entry.color)
-                    else:
-                        ensure_node(target_name)
-                    edges.append({
-                        "source": None,
-                        "target": codex_entry.name if codex_entry else target_name,
-                        "type": rel_type,
-                        "scene_id": scene.id,
-                        "scene_title": scene.title or "Scene",
-                        "chapter_title": chapter.title,
-                        "via": "inline",
-                    })
 
     return {"nodes": list(nodes_seen.values()), "edges": edges}
 

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CodexEntry, EntryType } from "@/types";
+import { useEntryRelations } from "@/store/queries";
 
 const TYPE_ICONS: Record<EntryType, React.ElementType> = {
   character: User,
@@ -44,6 +45,7 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd }: 
   });
 
   const selected = entries.find((e) => e.id === selectedId);
+  const { data: relations = [] } = useEntryRelations(selected?.id ?? 0);
 
   return (
     <div className="flex flex-col w-72 border-l border-border bg-card h-full">
@@ -72,8 +74,10 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd }: 
             <h3 className="font-semibold">{selected.name}</h3>
           </div>
           <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider">{TYPE_LABELS[selected.entry_type as EntryType]}</p>
-          {(selected.group || selected.species) && (
-            <div className="flex gap-3 mb-3">
+
+          {/* Group / Species / Subtype */}
+          {(selected.group || selected.species || selected.subtype) && (
+            <div className="flex gap-3 mb-3 flex-wrap">
               {selected.group && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-0.5">Group</p>
@@ -86,8 +90,28 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd }: 
                   <p className="text-xs">{selected.species}</p>
                 </div>
               )}
+              {selected.subtype && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Subtype</p>
+                  <p className="text-xs">{selected.subtype}</p>
+                </div>
+              )}
             </div>
           )}
+
+          {/* Tags */}
+          {selected.tags.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs text-muted-foreground mb-1">Tags</p>
+              <div className="flex flex-wrap gap-1">
+                {selected.tags.map((t) => (
+                  <span key={t} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">#{t}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Aliases */}
           {selected.aliases.length > 0 && (
             <div className="mb-3">
               <p className="text-xs text-muted-foreground mb-1">Also known as</p>
@@ -98,16 +122,38 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd }: 
               </div>
             </div>
           )}
+
+          {/* Description */}
           {selected.description && (
             <div className="mb-3">
               <p className="text-xs text-muted-foreground mb-1">Description</p>
               <p className="text-sm leading-relaxed">{selected.description}</p>
             </div>
           )}
+
+          {/* Notes */}
           {selected.notes && (
-            <div>
+            <div className="mb-3">
               <p className="text-xs text-muted-foreground mb-1">Notes</p>
               <p className="text-sm leading-relaxed text-muted-foreground">{selected.notes}</p>
+            </div>
+          )}
+
+          {/* Relations */}
+          {relations.length > 0 && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Relations</p>
+              <div className="space-y-1">
+                {relations.map((r) => (
+                  <div key={r.id} className="flex items-center gap-2 text-xs">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.other_color }} />
+                    <span className="font-medium">{r.other_name}</span>
+                    {r.relation_type && (
+                      <span className="text-muted-foreground">— {r.relation_type}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

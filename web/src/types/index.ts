@@ -46,6 +46,8 @@ export interface CodexEntry {
   color: string;
   group: string | null;
   species: string | null;
+  subtype: string | null;
+  tags: string[];
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +58,18 @@ export interface CodexRelation {
   target_id: number;
   relation_type: string | null;
   created_at: string;
+}
+
+export interface CodexRelationResolved {
+  id: number;
+  source_id: number;
+  target_id: number;
+  other_id: number;
+  other_name: string;
+  other_color: string;
+  other_type: EntryType;
+  relation_type: string;
+  direction: "from" | "to";
 }
 
 export interface Settings {

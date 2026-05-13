@@ -107,7 +107,9 @@ class CodexEntry(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     color: Mapped[str] = mapped_column(String(7), default="#eab308")
     entry_group: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    species: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    species:     Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    subtype:     Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    tags:        Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
@@ -129,6 +131,15 @@ class CodexEntry(Base):
 
     def set_aliases(self, aliases: list[str]) -> None:
         self.aliases = json.dumps(aliases)
+
+    def get_tags(self) -> list[str]:
+        try:
+            return json.loads(self.tags or "[]")
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def set_tags(self, tags: list[str]) -> None:
+        self.tags = json.dumps(tags)
 
 
 class CodexRelation(Base):

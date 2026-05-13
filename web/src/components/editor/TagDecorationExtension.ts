@@ -3,8 +3,6 @@
  * altering the saved content. The raw syntax is preserved in storage.
  *
  * Supported syntax:
- *   [rel:TargetName|relation type]   → purple badge
- *   [rel:TargetName]                 → purple badge (no type)
  *   {time:day 6|Event Name}          → amber badge
  *   {time:year 1337, 6th month|Coronation}
  */
@@ -15,7 +13,6 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
 const PLUGIN_KEY = new PluginKey("tagDecorations");
 
-const REL_RE  = /\[rel:([^\]|]+?)(?:\|([^\]]*))?\]/g;
 const TIME_RE = /\{time:([^}|]+?)(?:\|([^}]*))?\}/g;
 
 function buildDecorations(doc: any): DecorationSet {
@@ -24,24 +21,6 @@ function buildDecorations(doc: any): DecorationSet {
   doc.descendants((node: any, pos: number) => {
     if (!node.isText || !node.text) return;
     const text: string = node.text;
-
-    // ── [rel:...] ──
-    for (const m of text.matchAll(REL_RE)) {
-      const from = pos + m.index!;
-      const to   = from + m[0].length;
-      const target = m[1].trim();
-      const relType = m[2]?.trim() ?? "";
-      const label = relType ? `↔ ${target} (${relType})` : `↔ ${target}`;
-
-      decorations.push(
-        Decoration.inline(from, to, {
-          class: "tag-rel",
-          "data-rel-target": target,
-          "data-rel-type": relType,
-          title: `Relation → ${label}`,
-        })
-      );
-    }
 
     // ── {time:...} ──
     for (const m of text.matchAll(TIME_RE)) {

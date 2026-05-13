@@ -341,10 +341,17 @@ export default function CodexPage() {
                       {entry.aliases.length > 0 && (
                         <p className="text-xs text-muted-foreground mb-1">{entry.aliases.join(", ")}</p>
                       )}
-                      {(entry.group || entry.species) && (
+                      {(entry.group || entry.species || entry.subtype) && (
                         <p className="text-xs text-muted-foreground/70 mb-1">
-                          {[entry.group, entry.species].filter(Boolean).join(" · ")}
+                          {[entry.group, entry.species, entry.subtype].filter(Boolean).join(" · ")}
                         </p>
+                      )}
+                      {entry.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-0.5 mb-1">
+                          {entry.tags.map(t => (
+                            <span key={t} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0 rounded-full">#{t}</span>
+                          ))}
+                        </div>
                       )}
                       {entry.description && (
                         <p className="text-xs text-muted-foreground line-clamp-2">{entry.description}</p>
@@ -379,9 +386,14 @@ export default function CodexPage() {
                   {entry.group && (
                     <span className="text-xs bg-secondary px-1.5 py-0.5 rounded shrink-0">{entry.group}</span>
                   )}
-                  {entry.species && (
-                    <span className="text-xs bg-secondary px-1.5 py-0.5 rounded shrink-0">{entry.species}</span>
+                  {(entry.species || entry.subtype) && (
+                    <span className="text-xs bg-secondary px-1.5 py-0.5 rounded shrink-0">
+                      {entry.species || entry.subtype}
+                    </span>
                   )}
+                  {entry.tags.slice(0, 3).map(t => (
+                    <span key={t} className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full shrink-0">#{t}</span>
+                  ))}
                   {entry.description && (
                     <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{entry.description}</span>
                   )}
@@ -406,6 +418,7 @@ export default function CodexPage() {
         onSave={handleSave}
         initial={editing ?? undefined}
         title={editing ? "Edit Entry" : "New Codex Entry"}
+        allEntries={entries}
       />
     </div>
   );

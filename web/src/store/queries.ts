@@ -220,6 +220,29 @@ export const useDeleteCodexEntry = (projectId: number) => {
   });
 };
 
+export const useEntryRelations = (entryId: number) =>
+  useQuery({
+    queryKey: ["codex-relations", entryId],
+    queryFn: () => codexApi.getRelations(entryId),
+    enabled: !!entryId,
+  });
+
+export const useCreateRelation = (entryId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: codexApi.createRelation,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["codex-relations", entryId] }),
+  });
+};
+
+export const useDeleteRelation = (entryId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: codexApi.deleteRelation,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["codex-relations", entryId] }),
+  });
+};
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 export const useSettings = () =>

@@ -1,5 +1,5 @@
 import type {
-  Project, Act, Chapter, Scene, CodexEntry, CodexRelation,
+  Project, Act, Chapter, Scene, CodexEntry, CodexRelation, CodexRelationResolved,
   Settings, ChapterReadData, ActReadData,
 } from "@/types";
 
@@ -84,6 +84,7 @@ export const codexApi = {
   update: (id: number, data: Partial<Omit<CodexEntry, "id" | "project_id" | "created_at" | "updated_at">>) =>
     req<CodexEntry>(`/codex/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: number) => req<void>(`/codex/${id}`, { method: "DELETE" }),
+  getRelations: (id: number) => req<CodexRelationResolved[]>(`/codex/${id}/relations`),
   createRelation: (data: { source_id: number; target_id: number; relation_type?: string }) =>
     req<CodexRelation>("/codex/relations", { method: "POST", body: JSON.stringify(data) }),
   deleteRelation: (id: number) => req<void>(`/codex/relations/${id}`, { method: "DELETE" }),
