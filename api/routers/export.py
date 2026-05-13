@@ -20,10 +20,13 @@ def export_project(
     format: str = Query("md", pattern="^(md|tex)$"),
     db: Session = Depends(get_db),
 ):
+    from models import Act, Chapter
     project = (
         db.query(Project)
         .options(
-            selectinload(Project.chapters).selectinload("scenes")  # type: ignore[arg-type]
+            selectinload(Project.acts)
+            .selectinload(Act.chapters)
+            .selectinload(Chapter.scenes)
         )
         .filter(Project.id == project_id)
         .first()

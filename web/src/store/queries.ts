@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { projectsApi, chaptersApi, scenesApi, codexApi, settingsApi } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi } from "@/lib/api";
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -37,47 +37,103 @@ export const useDeleteProject = () => {
   });
 };
 
-// ── Chapters ──────────────────────────────────────────────────────────────────
+// ── Acts ──────────────────────────────────────────────────────────────────────
 
-export const useChapters = (projectId: number) =>
+export const useActs = (projectId: number) =>
   useQuery({
-    queryKey: ["chapters", projectId],
-    queryFn: () => chaptersApi.list(projectId),
+    queryKey: ["acts", projectId],
+    queryFn: () => actsApi.list(projectId),
     enabled: !!projectId,
   });
 
-export const useCreateChapter = (projectId: number) => {
+export const useCreateAct = (projectId: number) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: chaptersApi.create,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["chapters", projectId] }),
+    mutationFn: actsApi.create,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["acts", projectId] }),
   });
 };
 
-export const useUpdateChapter = (projectId: number) => {
+export const useUpdateAct = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof actsApi.update>[1] }) =>
+      actsApi.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["acts", projectId] }),
+  });
+};
+
+export const useDeleteAct = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: actsApi.delete,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["acts", projectId] }),
+  });
+};
+
+export const useReorderActs = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: actsApi.reorder,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["acts", projectId] }),
+  });
+};
+
+export const useActRead = (actId: number) =>
+  useQuery({
+    queryKey: ["act-read", actId],
+    queryFn: () => actsApi.read(actId),
+    enabled: !!actId,
+  });
+
+// ── Chapters ──────────────────────────────────────────────────────────────────
+
+export const useChapters = (actId: number) =>
+  useQuery({
+    queryKey: ["chapters", actId],
+    queryFn: () => chaptersApi.list(actId),
+    enabled: !!actId,
+  });
+
+export const useCreateChapter = (actId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: chaptersApi.create,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chapters", actId] }),
+  });
+};
+
+export const useUpdateChapter = (actId: number) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: Parameters<typeof chaptersApi.update>[1] }) =>
       chaptersApi.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["chapters", projectId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chapters", actId] }),
   });
 };
 
-export const useDeleteChapter = (projectId: number) => {
+export const useDeleteChapter = (actId: number) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: chaptersApi.delete,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["chapters", projectId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chapters", actId] }),
   });
 };
 
-export const useReorderChapters = (projectId: number) => {
+export const useReorderChapters = (actId: number) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: chaptersApi.reorder,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["chapters", projectId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chapters", actId] }),
   });
 };
+
+export const useChapterRead = (chapterId: number) =>
+  useQuery({
+    queryKey: ["chapter-read", chapterId],
+    queryFn: () => chaptersApi.read(chapterId),
+    enabled: !!chapterId,
+  });
 
 // ── Scenes ────────────────────────────────────────────────────────────────────
 

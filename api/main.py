@@ -1,9 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import engine, migrate_new_columns
+from database import engine, migrate_to_four_level, migrate_new_columns
 from models import Base
-from routers import projects, chapters, scenes, codex, settings, ai, export, imports, graph
+from routers import projects, acts, chapters, scenes, codex, settings, ai, export, imports, graph
+
+# ── Run migrations BEFORE create_all so table renames happen first ────────────
+migrate_to_four_level()
 
 Base.metadata.create_all(bind=engine)
 migrate_new_columns()
@@ -19,6 +22,7 @@ app.add_middleware(
 )
 
 app.include_router(projects.router)
+app.include_router(acts.router)
 app.include_router(chapters.router)
 app.include_router(scenes.router)
 app.include_router(codex.router)

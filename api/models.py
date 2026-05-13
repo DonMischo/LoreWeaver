@@ -26,17 +26,18 @@ class Project(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
-    chapters: Mapped[list["Chapter"]] = relationship(
-        "Chapter", back_populates="project", cascade="all, delete-orphan",
-        order_by="Chapter.order_index"
+    acts: Mapped[list["Act"]] = relationship(
+        "Act", back_populates="project", cascade="all, delete-orphan",
+        order_by="Act.order_index"
     )
     codex_entries: Mapped[list["CodexEntry"]] = relationship(
         "CodexEntry", back_populates="project", cascade="all, delete-orphan"
     )
 
 
-class Chapter(Base):
-    __tablename__ = "chapters"
+class Act(Base):
+    """Top-level structural grouping within a project (## in source files)."""
+    __tablename__ = "acts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     project_id: Mapped[int] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
@@ -44,7 +45,24 @@ class Chapter(Base):
     order_index: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
-    project: Mapped["Project"] = relationship("Project", back_populates="chapters")
+    project: Mapped["Project"] = relationship("Project", back_populates="acts")
+    chapters: Mapped[list["Chapter"]] = relationship(
+        "Chapter", back_populates="act", cascade="all, delete-orphan",
+        order_by="Chapter.order_index"
+    )
+
+
+class Chapter(Base):
+    """Mid-level grouping within an act (### in source files)."""
+    __tablename__ = "chapters"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    act_id: Mapped[int] = mapped_column(Integer, ForeignKey("acts.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    act: Mapped["Act"] = relationship("Act", back_populates="chapters")
     scenes: Mapped[list["Scene"]] = relationship(
         "Scene", back_populates="chapter", cascade="all, delete-orphan",
         order_by="Scene.order_index"
@@ -52,6 +70,7 @@ class Chapter(Base):
 
 
 class Scene(Base):
+    """Smallest editable unit (#### in source files)."""
     __tablename__ = "scenes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)

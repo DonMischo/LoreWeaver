@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronDown, ChevronRight, Plus, Trash2, BookOpen,
-  GripVertical, Settings, Book, Download, Network, Calendar
+  GripVertical, Settings, Book, Download, Network, Calendar,
 } from "lucide-react";
 import {
   DndContext, closestCenter, DragEndEvent,
@@ -21,21 +21,23 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  useChapters, useScenes, useCreateChapter, useCreateScene,
-  useDeleteChapter, useDeleteScene, useReorderChapters, useReorderScenes,
-  useUpdateChapter, useProject,
+  useActs, useChapters, useScenes,
+  useCreateAct, useCreateChapter, useCreateScene,
+  useDeleteAct, useDeleteChapter, useDeleteScene,
+  useReorderActs, useReorderChapters, useReorderScenes,
+  useUpdateAct, useUpdateChapter, useProject,
 } from "@/store/queries";
 import { useExport } from "@/hooks/useExport";
 import { ImportButton } from "@/components/layout/ImportButton";
-import type { Chapter, Scene } from "@/types";
+import type { Act, Chapter, Scene } from "@/types";
 
-interface Props {
-  projectId: number;
-}
+interface Props { projectId: number }
+
+// ── Scene divider (insert-between) ───────────────────────────────────────────
 
 function SceneDivider({ onInsert }: { onInsert: () => void }) {
   return (
-    <div className="group relative h-5 flex items-center px-8">
+    <div className="group relative h-5 flex items-center px-12">
       <div className="w-full h-px bg-transparent group-hover:bg-border/60 transition-colors" />
       <button
         onClick={onInsert}
@@ -48,14 +50,15 @@ function SceneDivider({ onInsert }: { onInsert: () => void }) {
   );
 }
 
+// ── Scene item ────────────────────────────────────────────────────────────────
+
 function SceneItem({
-  scene, projectId, currentSceneId
+  scene, projectId, currentSceneId,
 }: { scene: Scene; projectId: number; currentSceneId?: number }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: scene.id });
   const deleteScene = useDeleteScene(scene.chapter_id);
   const router = useRouter();
-
   const style = { transform: CSS.Transform.toString(transform), transition };
 
   return (
@@ -63,7 +66,7 @@ function SceneItem({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group flex items-center gap-1 pl-8 pr-2 py-1 rounded hover:bg-secondary/50 text-sm",
+        "group flex items-center gap-1 pl-12 pr-2 py-1 rounded hover:bg-secondary/50 text-sm",
         isDragging && "opacity-50",
         currentSceneId === scene.id && "bg-secondary text-foreground font-medium"
       )}
@@ -93,8 +96,10 @@ function SceneItem({
   );
 }
 
+// ── Chapter item ──────────────────────────────────────────────────────────────
+
 function ChapterItem({
-  chapter, projectId, currentSceneId
+  chapter, projectId, currentSceneId,
 }: { chapter: Chapter; projectId: number; currentSceneId?: number }) {
   const [expanded, setExpanded] = useState(true);
   const [renaming, setRenaming] = useState(false);
@@ -105,9 +110,16 @@ function ChapterItem({
 
   const { data: scenes = [] } = useScenes(chapter.id);
   const createScene = useCreateScene(chapter.id);
-  const deleteChapter = useDeleteChapter(projectId);
-  const updateChapter = useUpdateChapter(projectId);
+  const deleteChapter = useDeleteChapter(chapter.act_id);
+  const updateChapter = useUpdateChapter(chapter.act_id);
   const reorderScenes = useReorderScenes(chapter.id);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const style = { transform: CSS.Transform.toString(transform), transition };
 
   const handleInsertAfter = async (afterIndex: number) => {
     const newScene = await createScene.mutateAsync({
@@ -122,13 +134,6 @@ function ChapterItem({
     reorderScenes.mutate(newOrder);
   };
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  const style = { transform: CSS.Transform.toString(transform), transition };
-
   const handleSceneDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
@@ -140,54 +145,56 @@ function ChapterItem({
   };
 
   const handleRename = () => {
-    if (newTitle.trim() && newTitle !== chapter.title) {
+    if (newTitle.trim() && newTitle !== chapter.title)
       updateChapter.mutate({ id: chapter.id, data: { title: newTitle.trim() } });
-    }
     setRenaming(false);
   };
 
   return (
     <div ref={setNodeRef} style={style} className={cn("select-none", isDragging && "opacity-50")}>
-      <div className="group flex items-center gap-1 px-2 py-1.5 rounded hover:bg-secondary/50">
+      {/* Chapter row */}
+      <div className="group flex items-center gap-1 pl-4 pr-2 py-1 rounded hover:bg-secondary/40">
         <button {...attributes} {...listeners} className="opacity-0 group-hover:opacity-40 cursor-grab">
           <GripVertical className="h-3 w-3" />
         </button>
         <button onClick={() => setExpanded(!expanded)} className="text-muted-foreground">
           {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         </button>
+
         {renaming ? (
           <Input
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             onBlur={handleRename}
-            onKeyDown={(e) => { if (e.key === "Enter") handleRename(); if (e.key === "Escape") setRenaming(false); }}
-            className="h-5 text-xs px-1 py-0"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleRename();
+              if (e.key === "Escape") setRenaming(false);
+            }}
+            className="h-5 text-xs px-1 py-0 flex-1"
             autoFocus
           />
         ) : (
-          <span
-            className="flex-1 text-sm font-medium cursor-pointer truncate"
-            onDoubleClick={() => setRenaming(true)}
+          <Link
+            href={`/projects/${projectId}/chapters/${chapter.id}`}
+            className="flex-1 text-xs text-muted-foreground hover:text-foreground truncate"
+            onDoubleClick={(e) => { e.preventDefault(); setRenaming(true); }}
           >
             {chapter.title}
-          </span>
+          </Link>
         )}
+
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5">
           <button
             className="hover:text-primary"
-            onClick={() => createScene.mutate({
-              chapter_id: chapter.id,
-              order_index: scenes.length,
-            })}
+            onClick={() => createScene.mutate({ chapter_id: chapter.id, order_index: scenes.length })}
           >
             <Plus className="h-3 w-3" />
           </button>
           <button
             className="hover:text-destructive"
             onClick={() => {
-              if (confirm(`Delete chapter "${chapter.title}" and all its scenes?`)) {
+              if (confirm(`Delete chapter "${chapter.title}" and all its scenes?`))
                 deleteChapter.mutate(chapter.id);
-              }
             }}
           >
             <Trash2 className="h-3 w-3" />
@@ -195,6 +202,7 @@ function ChapterItem({
         </div>
       </div>
 
+      {/* Scene list */}
       {expanded && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSceneDragEnd}>
           <SortableContext items={scenes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
@@ -213,20 +221,30 @@ function ChapterItem({
   );
 }
 
-export function ProjectSidebar({ projectId }: Props) {
-  const params = useParams();
-  const currentSceneId = params?.sceneId ? Number(params.sceneId) : undefined;
+// ── Act item ──────────────────────────────────────────────────────────────────
 
-  const { data: project } = useProject(projectId);
-  const { exportProject } = useExport();
-  const { data: chapters = [] } = useChapters(projectId);
-  const createChapter = useCreateChapter(projectId);
-  const reorderChapters = useReorderChapters(projectId);
+function ActItem({
+  act, projectId, currentSceneId,
+}: { act: Act; projectId: number; currentSceneId?: number }) {
+  const [expanded, setExpanded] = useState(true);
+  const [renaming, setRenaming] = useState(false);
+  const [newTitle, setNewTitle] = useState(act.title);
+
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: act.id });
+
+  const { data: chapters = [] } = useChapters(act.id);
+  const createChapter = useCreateChapter(act.id);
+  const deleteAct = useDeleteAct(projectId);
+  const updateAct = useUpdateAct(projectId);
+  const reorderChapters = useReorderChapters(act.id);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
+
+  const style = { transform: CSS.Transform.toString(transform), transition };
 
   const handleChapterDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -235,6 +253,115 @@ export function ProjectSidebar({ projectId }: Props) {
       const newIdx = chapters.findIndex((c) => c.id === over.id);
       const reordered = arrayMove(chapters, oldIdx, newIdx);
       reorderChapters.mutate(reordered.map((c, i) => ({ id: c.id, order_index: i })));
+    }
+  };
+
+  const handleRename = () => {
+    if (newTitle.trim() && newTitle !== act.title)
+      updateAct.mutate({ id: act.id, data: { title: newTitle.trim() } });
+    setRenaming(false);
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className={cn("select-none", isDragging && "opacity-50")}>
+      {/* Act row */}
+      <div className="group flex items-center gap-1 px-2 py-1.5 rounded hover:bg-secondary/50">
+        <button {...attributes} {...listeners} className="opacity-0 group-hover:opacity-40 cursor-grab">
+          <GripVertical className="h-3 w-3" />
+        </button>
+        <button onClick={() => setExpanded(!expanded)} className="text-muted-foreground">
+          {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        </button>
+
+        {renaming ? (
+          <Input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            onBlur={handleRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleRename();
+              if (e.key === "Escape") setRenaming(false);
+            }}
+            className="h-5 text-xs px-1 py-0 flex-1"
+            autoFocus
+          />
+        ) : (
+          <Link
+            href={`/projects/${projectId}/acts/${act.id}`}
+            className="flex-1 text-sm font-medium hover:text-foreground truncate"
+            onDoubleClick={(e) => { e.preventDefault(); setRenaming(true); }}
+          >
+            {act.title}
+          </Link>
+        )}
+
+        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5">
+          <button
+            className="hover:text-primary"
+            onClick={() => createChapter.mutate({
+              act_id: act.id,
+              title: `Chapter ${chapters.length + 1}`,
+              order_index: chapters.length,
+            })}
+            title="Add chapter"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+          <button
+            className="hover:text-destructive"
+            onClick={() => {
+              if (confirm(`Delete act "${act.title}" and all its chapters and scenes?`))
+                deleteAct.mutate(act.id);
+            }}
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+
+      {/* Chapter list */}
+      {expanded && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleChapterDragEnd}>
+          <SortableContext items={chapters.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+            {chapters.map((chapter) => (
+              <ChapterItem
+                key={chapter.id}
+                chapter={chapter}
+                projectId={projectId}
+                currentSceneId={currentSceneId}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
+      )}
+    </div>
+  );
+}
+
+// ── Project sidebar ───────────────────────────────────────────────────────────
+
+export function ProjectSidebar({ projectId }: Props) {
+  const params = useParams();
+  const currentSceneId = params?.sceneId ? Number(params.sceneId) : undefined;
+
+  const { data: project } = useProject(projectId);
+  const { exportProject } = useExport();
+  const { data: acts = [] } = useActs(projectId);
+  const createAct = useCreateAct(projectId);
+  const reorderActs = useReorderActs(projectId);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleActDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIdx = acts.findIndex((a) => a.id === active.id);
+      const newIdx = acts.findIndex((a) => a.id === over.id);
+      const reordered = arrayMove(acts, oldIdx, newIdx);
+      reorderActs.mutate(reordered.map((a, i) => ({ id: a.id, order_index: i })));
     }
   };
 
@@ -248,13 +375,14 @@ export function ProjectSidebar({ projectId }: Props) {
       </div>
 
       <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground uppercase tracking-wider">
-        <span>Chapters</span>
+        <span>Story</span>
         <button
           className="hover:text-foreground"
-          onClick={() => createChapter.mutate({
+          title="Add act"
+          onClick={() => createAct.mutate({
             project_id: projectId,
-            title: `Chapter ${chapters.length + 1}`,
-            order_index: chapters.length,
+            title: `Act ${acts.length + 1}`,
+            order_index: acts.length,
           })}
         >
           <Plus className="h-3 w-3" />
@@ -262,20 +390,20 @@ export function ProjectSidebar({ projectId }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-1 pb-2">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleChapterDragEnd}>
-          <SortableContext items={chapters.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-            {chapters.map((chapter) => (
-              <ChapterItem
-                key={chapter.id}
-                chapter={chapter}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleActDragEnd}>
+          <SortableContext items={acts.map((a) => a.id)} strategy={verticalListSortingStrategy}>
+            {acts.map((act) => (
+              <ActItem
+                key={act.id}
+                act={act}
                 projectId={projectId}
                 currentSceneId={currentSceneId}
               />
             ))}
           </SortableContext>
         </DndContext>
-        {chapters.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-4">No chapters yet</p>
+        {acts.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-4">No acts yet</p>
         )}
       </div>
 
@@ -304,10 +432,8 @@ export function ProjectSidebar({ projectId }: Props) {
 
         <div className="border-t border-border/50 my-1" />
 
-        {/* Import */}
         <ImportButton projectId={projectId} mode="story" />
 
-        {/* Export */}
         <div className="flex gap-1">
           <button
             onClick={() => project && exportProject(projectId, "md", project.title)}

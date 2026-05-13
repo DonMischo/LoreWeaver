@@ -163,27 +163,26 @@ def build_relations_graph(project, codex_entries: list) -> dict:
             })
 
     # 3. Inline [rel:] tags from scenes
-    from models import Chapter, Scene
-    for chapter in sorted(project.chapters, key=lambda c: c.order_index):
-        for scene in sorted(chapter.scenes, key=lambda s: s.order_index):
-            for target_name, rel_type in extract_rel_tags(scene.content or ""):
-                # Try to resolve target to a codex entry
-                codex_entry = entry_by_name.get(target_name.lower())
-                if codex_entry:
-                    ensure_node(codex_entry.name, codex_entry.id,
-                                codex_entry.entry_type, codex_entry.color)
-                else:
-                    ensure_node(target_name)
-
-                edges.append({
-                    "source": None,         # inline tags have no explicit source
-                    "target": codex_entry.name if codex_entry else target_name,
-                    "type": rel_type,
-                    "scene_id": scene.id,
-                    "scene_title": scene.title or "Scene",
-                    "chapter_title": chapter.title,
-                    "via": "inline",
-                })
+    from models import Act, Chapter, Scene
+    for act in sorted(project.acts, key=lambda a: a.order_index):
+        for chapter in sorted(act.chapters, key=lambda c: c.order_index):
+            for scene in sorted(chapter.scenes, key=lambda s: s.order_index):
+                for target_name, rel_type in extract_rel_tags(scene.content or ""):
+                    codex_entry = entry_by_name.get(target_name.lower())
+                    if codex_entry:
+                        ensure_node(codex_entry.name, codex_entry.id,
+                                    codex_entry.entry_type, codex_entry.color)
+                    else:
+                        ensure_node(target_name)
+                    edges.append({
+                        "source": None,
+                        "target": codex_entry.name if codex_entry else target_name,
+                        "type": rel_type,
+                        "scene_id": scene.id,
+                        "scene_title": scene.title or "Scene",
+                        "chapter_title": chapter.title,
+                        "via": "inline",
+                    })
 
     return {"nodes": list(nodes_seen.values()), "edges": edges}
 
@@ -194,18 +193,19 @@ def build_timeline(project) -> dict:
     """
     events: list[TimeEvent] = []
 
-    for chapter in sorted(project.chapters, key=lambda c: c.order_index):
-        for scene in sorted(chapter.scenes, key=lambda s: s.order_index):
-            for pt, name in extract_time_events(scene.content or ""):
-                events.append(TimeEvent(
-                    time=pt,
-                    event_name=name or pt.raw,
-                    scene_id=scene.id,
-                    scene_title=scene.title or "Scene",
-                    chapter_title=chapter.title,
-                    chapter_order=chapter.order_index,
-                    scene_order=scene.order_index,
-                ))
+    for act in sorted(project.acts, key=lambda a: a.order_index):
+        for chapter in sorted(act.chapters, key=lambda c: c.order_index):
+            for scene in sorted(chapter.scenes, key=lambda s: s.order_index):
+                for pt, name in extract_time_events(scene.content or ""):
+                    events.append(TimeEvent(
+                        time=pt,
+                        event_name=name or pt.raw,
+                        scene_id=scene.id,
+                        scene_title=scene.title or "Scene",
+                        chapter_title=chapter.title,
+                        chapter_order=act.order_index * 10000 + chapter.order_index,
+                        scene_order=scene.order_index,
+                    ))
 
     events.sort(key=lambda e: (e.time.sort_key, e.chapter_order, e.scene_order))
 

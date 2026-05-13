@@ -28,6 +28,30 @@ class ProjectOut(ProjectBase):
     model_config = {"from_attributes": True}
 
 
+# ── Acts ──────────────────────────────────────────────────────────────────────
+
+class ActBase(BaseModel):
+    title: str
+    order_index: int = 0
+
+
+class ActCreate(ActBase):
+    project_id: int
+
+
+class ActUpdate(BaseModel):
+    title: Optional[str] = None
+    order_index: Optional[int] = None
+
+
+class ActOut(ActBase):
+    id: int
+    project_id: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # ── Chapters ──────────────────────────────────────────────────────────────────
 
 class ChapterBase(BaseModel):
@@ -36,7 +60,7 @@ class ChapterBase(BaseModel):
 
 
 class ChapterCreate(ChapterBase):
-    project_id: int
+    act_id: int
 
 
 class ChapterUpdate(BaseModel):
@@ -46,7 +70,7 @@ class ChapterUpdate(BaseModel):
 
 class ChapterOut(ChapterBase):
     id: int
-    project_id: int
+    act_id: int
     created_at: datetime
 
     model_config = {"from_attributes": True}

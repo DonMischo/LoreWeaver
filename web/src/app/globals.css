@@ -58,6 +58,29 @@
   }
 }
 
+/* ── Story typography ────────────────────────────────────────────────────────
+   Applied to both the TipTap editor (.ProseMirror) and the read views
+   (.story-prose).  Selector list keeps the rules in one place.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.ProseMirror p,
+.story-prose p {
+  text-indent: 1em;
+  margin-bottom: 0.5em;
+  line-height: 1.15;
+  text-align: justify;
+}
+
+/* No indent on the very first paragraph or right after a heading */
+.ProseMirror p:first-child,
+.story-prose p:first-child,
+.ProseMirror h1 + p, .ProseMirror h2 + p,
+.ProseMirror h3 + p, .ProseMirror h4 + p,
+.story-prose  h1 + p, .story-prose  h2 + p,
+.story-prose  h3 + p, .story-prose  h4 + p {
+  text-indent: 0;
+}
+
 /* TipTap editor */
 .ProseMirror {
   outline: none;
@@ -70,10 +93,6 @@
   float: left;
   height: 0;
   pointer-events: none;
-}
-
-.ProseMirror p {
-  @apply mb-4 leading-relaxed;
 }
 
 /* Codex highlight marks */

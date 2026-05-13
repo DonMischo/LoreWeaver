@@ -6,9 +6,17 @@ export interface Project {
   updated_at: string;
 }
 
-export interface Chapter {
+export interface Act {
   id: number;
   project_id: number;
+  title: string;
+  order_index: number;
+  created_at: string;
+}
+
+export interface Chapter {
+  id: number;
+  act_id: number;
   title: string;
   order_index: number;
   created_at: string;
@@ -58,3 +66,30 @@ export interface Settings {
 }
 
 export type SaveStatus = "saved" | "saving" | "error" | "idle";
+
+// Flowing read view shapes
+export interface ChapterReadScene {
+  id: number;
+  title: string;
+  content: string;
+}
+
+export interface ChapterReadData {
+  id: number;
+  title: string;
+  act_id: number;
+  act_title: string;
+  scenes: ChapterReadScene[];
+}
+
+export interface ActReadChapter {
+  id: number;
+  title: string;
+  scenes: ChapterReadScene[];
+}
+
+export interface ActReadData {
+  id: number;
+  title: string;
+  chapters: ActReadChapter[];
+}

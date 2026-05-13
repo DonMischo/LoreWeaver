@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
-from models import Project, CodexEntry
+from models import Project, Act, Chapter, CodexEntry
 from services.tags import build_relations_graph, build_timeline
 
 router = APIRouter(prefix="/api/projects", tags=["graph"])
@@ -12,7 +12,9 @@ def _load_project(project_id: int, db: Session):
     project = (
         db.query(Project)
         .options(
-            selectinload(Project.chapters).selectinload("scenes"),
+            selectinload(Project.acts)
+            .selectinload(Act.chapters)
+            .selectinload(Chapter.scenes),
         )
         .filter(Project.id == project_id)
         .first()

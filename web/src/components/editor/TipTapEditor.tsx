@@ -46,7 +46,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
       onChange(editor.getHTML());
     },
     editorProps: {
-      attributes: { class: "prose prose-invert max-w-none focus:outline-none min-h-full px-8 py-6" },
+      attributes: { class: "story-prose prose-invert max-w-none focus:outline-none min-h-full px-8 py-6" },
     },
   });
 

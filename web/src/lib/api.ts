@@ -1,5 +1,6 @@
 import type {
-  Project, Chapter, Scene, CodexEntry, CodexRelation, Settings
+  Project, Act, Chapter, Scene, CodexEntry, CodexRelation,
+  Settings, ChapterReadData, ActReadData,
 } from "@/types";
 
 const BASE = "/api";
@@ -31,17 +32,32 @@ export const projectsApi = {
     fetch(`${BASE}/projects/${id}/export?format=${format}`),
 };
 
+// ── Acts ──────────────────────────────────────────────────────────────────────
+
+export const actsApi = {
+  list: (projectId: number) => req<Act[]>(`/projects/${projectId}/acts`),
+  create: (data: { project_id: number; title: string; order_index?: number }) =>
+    req<Act>("/acts", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<Pick<Act, "title" | "order_index">>) =>
+    req<Act>(`/acts/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: number) => req<void>(`/acts/${id}`, { method: "DELETE" }),
+  reorder: (items: { id: number; order_index: number }[]) =>
+    req<void>("/acts/reorder", { method: "POST", body: JSON.stringify({ items }) }),
+  read: (id: number) => req<ActReadData>(`/acts/${id}/read`),
+};
+
 // ── Chapters ──────────────────────────────────────────────────────────────────
 
 export const chaptersApi = {
-  list: (projectId: number) => req<Chapter[]>(`/projects/${projectId}/chapters`),
-  create: (data: { project_id: number; title: string; order_index?: number }) =>
+  list: (actId: number) => req<Chapter[]>(`/acts/${actId}/chapters`),
+  create: (data: { act_id: number; title: string; order_index?: number }) =>
     req<Chapter>("/chapters", { method: "POST", body: JSON.stringify(data) }),
   update: (id: number, data: Partial<Pick<Chapter, "title" | "order_index">>) =>
     req<Chapter>(`/chapters/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: number) => req<void>(`/chapters/${id}`, { method: "DELETE" }),
   reorder: (items: { id: number; order_index: number }[]) =>
     req<void>("/chapters/reorder", { method: "POST", body: JSON.stringify({ items }) }),
+  read: (id: number) => req<ChapterReadData>(`/chapters/${id}/read`),
 };
 
 // ── Scenes ────────────────────────────────────────────────────────────────────
@@ -77,6 +93,8 @@ export const codexApi = {
 
 export interface ImportResult {
   message: string;
+  project_id?: number;
+  acts?: number;
   chapters?: number;
   scenes?: number;
   created?: number;

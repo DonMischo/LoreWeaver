@@ -1,11 +1,16 @@
+import re
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Project, Chapter, Scene, CodexEntry
+from models import Project, Act, Chapter, Scene, CodexEntry
 from services.importer import parse_story_markdown, parse_codex_markdown, _md_to_html
 
 router = APIRouter(prefix="/api/projects", tags=["import"])
+
+
+def _word_count(html: str) -> int:
+    return len(re.sub(r"<[^>]+>", "", html).split())
 
 
 @router.post("/{project_id}/import/story")
@@ -14,51 +19,87 @@ async def import_story(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    if not db.get(Project, project_id):
+    source_project = db.get(Project, project_id)
+    if not source_project:
         raise HTTPException(404, "Project not found")
 
     content = (await file.read()).decode("utf-8", errors="replace")
-    parsed_chapters = parse_story_markdown(content)
+    book_title, parsed_acts = parse_story_markdown(content)
 
-    if not parsed_chapters:
-        raise HTTPException(400, "No chapters found in the file. Use ## for chapters and ### for scenes.")
+    if not parsed_acts:
+        raise HTTPException(400, "No content found. Use ## for acts, ### for chapters, #### for scenes.")
 
-    # Get current max order_index
-    existing = db.query(Chapter).filter(Chapter.project_id == project_id).count()
+    # ── Determine target project ──────────────────────────────────────────────
+    if book_title:
+        # # heading → create a new project, copy codex from source project
+        target_project = Project(title=book_title)
+        db.add(target_project)
+        db.flush()
 
-    created_chapters = 0
-    created_scenes = 0
-
-    for i, pc in enumerate(parsed_chapters):
-        chapter = Chapter(
-            project_id=project_id,
-            title=pc.title,
-            order_index=existing + i,
-        )
-        db.add(chapter)
-        db.flush()  # get chapter.id
-
-        for j, ps in enumerate(pc.scenes):
-            html_content = _md_to_html(ps.content_md)
-            import re
-            word_count = len(re.sub(r"<[^>]+>", "", html_content).split())
-            title = ps.title or None
-
-            scene = Scene(
-                chapter_id=chapter.id,
-                title=title,
-                content=html_content,
-                order_index=j,
-                word_count=word_count,
+        # Duplicate codex entries from source project into the new project
+        for entry in source_project.codex_entries:
+            clone = CodexEntry(
+                project_id=target_project.id,
+                name=entry.name,
+                aliases=entry.aliases,
+                entry_type=entry.entry_type,
+                description=entry.description,
+                notes=entry.notes,
+                color=entry.color,
+                entry_group=entry.entry_group,
+                species=entry.species,
             )
-            db.add(scene)
-            created_scenes += 1
+            db.add(clone)
+    else:
+        target_project = source_project
 
-        created_chapters += 1
+    # ── Append after existing acts ────────────────────────────────────────────
+    existing_act_count = db.query(Act).filter(Act.project_id == target_project.id).count()
+
+    created_acts = created_chapters = created_scenes = 0
+
+    for act_i, pa in enumerate(parsed_acts):
+        act = Act(
+            project_id=target_project.id,
+            title=pa.title or f"Act {existing_act_count + act_i + 1}",
+            order_index=existing_act_count + act_i,
+        )
+        db.add(act)
+        db.flush()
+        created_acts += 1
+
+        for ch_i, pc in enumerate(pa.chapters):
+            chapter = Chapter(
+                act_id=act.id,
+                title=pc.title or f"Chapter {ch_i + 1}",
+                order_index=ch_i,
+            )
+            db.add(chapter)
+            db.flush()
+            created_chapters += 1
+
+            for sc_i, ps in enumerate(pc.scenes):
+                html = _md_to_html(ps.content_md)
+                scene = Scene(
+                    chapter_id=chapter.id,
+                    title=ps.title or None,
+                    content=html,
+                    order_index=sc_i,
+                    word_count=_word_count(html),
+                )
+                db.add(scene)
+                created_scenes += 1
 
     db.commit()
+
+    msg = f"Imported {created_acts} act(s), {created_chapters} chapter(s), {created_scenes} scene(s)."
+    if book_title:
+        msg += f" Created new project '{book_title}' with codex copied."
+
     return {
-        "message": f"Imported {created_chapters} chapter(s) and {created_scenes} scene(s).",
+        "message": msg,
+        "project_id": target_project.id,
+        "acts": created_acts,
         "chapters": created_chapters,
         "scenes": created_scenes,
     }
@@ -79,14 +120,11 @@ async def import_codex(
     if not parsed_entries:
         raise HTTPException(400, "No entries found. Supports YAML-frontmatter (---) or ## heading format.")
 
-    created = 0
-    skipped = 0
-
+    created = skipped = 0
     for pe in parsed_entries:
         if not pe.name:
             skipped += 1
             continue
-
         entry = CodexEntry(
             project_id=project_id,
             name=pe.name,

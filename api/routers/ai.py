@@ -6,7 +6,7 @@ import httpx
 
 from crypto import decrypt
 from database import get_db
-from models import Scene, Chapter, Project, UserSettings, CodexEntry
+from models import Scene, Chapter, Act, Project, UserSettings, CodexEntry
 from schemas import AIGenerateRequest
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
@@ -24,7 +24,8 @@ MODE_SYSTEM_PROMPTS = {
 
 def _build_context(scene: Scene, db: Session) -> str:
     chapter = db.get(Chapter, scene.chapter_id)
-    project = db.get(Project, chapter.project_id)
+    act = db.get(Act, chapter.act_id)
+    project = db.get(Project, act.project_id)
 
     codex_entries = db.query(CodexEntry).filter(CodexEntry.project_id == project.id).all()
     codex_text = ""
@@ -36,12 +37,13 @@ def _build_context(scene: Scene, db: Session) -> str:
             lines.append(f"**{entry.name}** [{entry.entry_type}]{alias_str}: {entry.description or ''}")
         codex_text = "\n".join(lines)
 
-    all_chapters = (
-        db.query(Chapter)
-        .filter(Chapter.project_id == project.id)
-        .order_by(Chapter.order_index)
-        .all()
-    )
+    # Gather all scenes across acts→chapters, in order, stopping at current scene
+    all_acts = db.query(Act).filter(Act.project_id == project.id).order_by(Act.order_index).all()
+    all_chapters = [
+        ch
+        for a in all_acts
+        for ch in sorted(a.chapters, key=lambda c: c.order_index)
+    ]
 
     prev_scenes_text = ""
     found = False

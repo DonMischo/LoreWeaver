@@ -1,43 +1,30 @@
 """
 Markdown import parsers for story structure and codex entries.
 
-─── Our native codex format ────────────────────────────────────────────────────
+Story heading hierarchy
+───────────────────────
+  #     Book / Project title  →  creates a new project on import
+  ##    Act                   →  Act in the DB
+  ###   Chapter               →  Chapter in the DB
+  ####+ Scene                 →  Scene in the DB
+
+Files that use only ## / ### (old two-level format) are also handled:
+  ##  → Act
+  ### → Scene inside a default "Chapter 1"
+
+─── Native codex format ────────────────────────────────────────────────────────
 ## character: Aragorn
 **Aliases:** Strider, Elessar
 **Color:** #ef4444
-**Group:** Fellowship
-**Species:** Human
-
-Description text here...
-
-**Notes:** Private notes here
+...
 
 ─── Legacy YAML-frontmatter format (auto-detected) ────────────────────────────
 ---
 type: character
 name: Aragorn
-color: yellow
-aliases:
-  - Strider
-  - Elessar
-group: Fellowship
-species: Human
-tags: []
-alwaysIncludeInContext: false
-doNotTrack: false
-noAutoInclude: false
-fields: {}
+...
 ---
-Description text here...
-
-Multiple entries can be placed back-to-back in a single file.
-Fields ignored on import: alwaysIncludeInContext, doNotTrack, noAutoInclude, fields, tags.
-
-─── Story format ────────────────────────────────────────────────────────────────
-## Chapter Title
-
-### Scene Title
-Scene content paragraphs...
+Description here...
 """
 
 import re
@@ -108,6 +95,12 @@ class ParsedChapter:
     scenes: list[ParsedScene] = field(default_factory=list)
 
 
+@dataclass
+class ParsedAct:
+    title: str
+    chapters: list[ParsedChapter] = field(default_factory=list)
+
+
 # ── Format detection ──────────────────────────────────────────────────────────
 
 def is_legacy_format(text: str) -> bool:
@@ -115,52 +108,40 @@ def is_legacy_format(text: str) -> bool:
     return bool(re.match(r"^\s*---\s*\n", text))
 
 
+# ── Heading helpers ───────────────────────────────────────────────────────────
+
+def _heading(line: str) -> tuple[int, str]:
+    """Return (level, title) for a markdown heading line, else (0, '')."""
+    m = re.match(r"^(#{1,6})\s+(.+)$", line)
+    if m:
+        return len(m.group(1)), m.group(2).strip()
+    return 0, ""
+
+
 # ── Legacy YAML-frontmatter parser ────────────────────────────────────────────
 
 def parse_legacy_codex_markdown(text: str) -> list[ParsedCodexEntry]:
-    """
-    Parse one or more YAML-frontmatter codex entries from a single file.
-
-    Each entry:
-        ---
-        <YAML>
-        ---
-        <description text>
-    """
     entries: list[ParsedCodexEntry] = []
-
-    # Split on every opening --- that starts a new frontmatter block.
-    # Pattern captures (yaml_block, body) pairs.
     block_pattern = re.compile(
         r"---\s*\n(.*?)\n---[ \t]*\n?(.*?)(?=\n---\s*\n|\Z)",
         re.DOTALL,
     )
-
     for m in block_pattern.finditer(text):
         yaml_text = m.group(1).strip()
         body = m.group(2).strip()
-
         try:
             data = yaml.safe_load(yaml_text)
         except yaml.YAMLError:
             continue
-
         if not isinstance(data, dict):
             continue
-
         name = str(data.get("name", "")).strip()
         if not name:
             continue
-
         raw_type = str(data.get("type", "custom")).strip().lower()
         entry_type = raw_type if raw_type in _VALID_TYPES else "custom"
-
         raw_aliases = data.get("aliases", [])
-        if isinstance(raw_aliases, list):
-            aliases = [str(a) for a in raw_aliases if str(a) != name]
-        else:
-            aliases = []
-
+        aliases = [str(a) for a in raw_aliases if str(a) != name] if isinstance(raw_aliases, list) else []
         entries.append(ParsedCodexEntry(
             name=name,
             entry_type=entry_type,
@@ -169,9 +150,7 @@ def parse_legacy_codex_markdown(text: str) -> list[ParsedCodexEntry]:
             color=_resolve_color(str(data.get("color", ""))),
             group=str(data["group"]).strip() if data.get("group") else None,
             species=str(data["species"]).strip() if data.get("species") else None,
-            # alwaysIncludeInContext / doNotTrack / noAutoInclude / fields / tags → ignored
         ))
-
     return entries
 
 
@@ -239,11 +218,12 @@ def _parse_native_codex_markdown(text: str) -> list[ParsedCodexEntry]:
             entries.append(_parse_native_codex_block(current_heading, "\n".join(current_lines)))
 
     for line in text.splitlines():
-        if re.match(r"^#\s+", line) and not re.match(r"^##", line):
-            continue
-        if m := re.match(r"^##\s+(.+)$", line):
+        level, title = _heading(line)
+        if level == 1:
+            continue  # skip top-level title
+        if level == 2:
             flush()
-            current_heading = m.group(1).strip()
+            current_heading = title
             current_lines.clear()
             continue
         if current_heading is not None:
@@ -253,7 +233,7 @@ def _parse_native_codex_markdown(text: str) -> list[ParsedCodexEntry]:
     return entries
 
 
-# ── Story parser ──────────────────────────────────────────────────────────────
+# ── HTML conversion ───────────────────────────────────────────────────────────
 
 def _md_to_html(text: str) -> str:
     text = text.strip()
@@ -272,8 +252,32 @@ def _md_to_html(text: str) -> str:
     return "".join(parts)
 
 
-def parse_story_markdown(text: str) -> list[ParsedChapter]:
-    chapters: list[ParsedChapter] = []
+# ── Story parser ──────────────────────────────────────────────────────────────
+
+def parse_story_markdown(text: str) -> tuple[Optional[str], list[ParsedAct]]:
+    """
+    Parse a 4-level story markdown file.
+
+    Returns (book_title, [ParsedAct]).
+
+    Heading mapping in source file:
+      #    → book title  (optional — triggers new project creation on import)
+      ##   → Act
+      ###  → Chapter
+      #### → Scene  (any deeper heading also counts as a scene)
+
+    Fallback for old 2-level files (## Chapter / ### Scene):
+      If no #### headings appear, ### headings are treated as Scenes inside a
+      single default Chapter per Act.
+    """
+    lines = text.splitlines()
+
+    # ── First pass: check for #### to decide whether ### = chapter or scene ──
+    has_four_level = any(_heading(l)[0] >= 4 for l in lines)
+
+    book_title: Optional[str] = None
+    acts: list[ParsedAct] = []
+    current_act: Optional[ParsedAct] = None
     current_chapter: Optional[ParsedChapter] = None
     current_scene: Optional[ParsedScene] = None
     current_lines: list[str] = []
@@ -289,33 +293,71 @@ def parse_story_markdown(text: str) -> list[ParsedChapter]:
     def flush_chapter():
         flush_scene()
         nonlocal current_chapter
-        if current_chapter is not None:
-            chapters.append(current_chapter)
+        if current_chapter is not None and current_act is not None:
+            current_act.chapters.append(current_chapter)
         current_chapter = None
 
-    for line in text.splitlines():
-        if re.match(r"^##\s+", line) and not re.match(r"^###", line):
-            flush_chapter()
-            current_chapter = ParsedChapter(title=line.lstrip("#").strip())
+    def flush_act():
+        flush_chapter()
+        nonlocal current_act
+        if current_act is not None:
+            acts.append(current_act)
+        current_act = None
+
+    def ensure_act():
+        nonlocal current_act
+        if current_act is None:
+            current_act = ParsedAct(title="")
+
+    def ensure_chapter():
+        ensure_act()
+        nonlocal current_chapter
+        if current_chapter is None:
+            current_chapter = ParsedChapter(title="")
+
+    for line in lines:
+        level, title = _heading(line)
+
+        if level == 1:
+            flush_act()
+            book_title = title
             continue
-        if m := re.match(r"^#{3,}\s+(.+)$", line):
+
+        if level == 2:
+            flush_act()
+            current_act = ParsedAct(title=title)
+            continue
+
+        if level == 3:
+            if has_four_level:
+                # ### = Chapter
+                flush_chapter()
+                ensure_act()
+                current_chapter = ParsedChapter(title=title)
+            else:
+                # Old format: ### = Scene inside an implicit chapter
+                flush_scene()
+                ensure_act()
+                if current_chapter is None:
+                    current_chapter = ParsedChapter(title="")
+                current_scene = ParsedScene(title=title, content_md="")
+            continue
+
+        if level >= 4:
+            # #### = Scene
             flush_scene()
-            current_scene = ParsedScene(title=m.group(1).strip(), content_md="")
+            ensure_chapter()
+            current_scene = ParsedScene(title=title, content_md="")
             continue
-        if re.match(r"^#\s+", line):
-            continue
+
+        # Plain content line
         if current_scene is not None:
             current_lines.append(line)
         elif current_chapter is not None and line.strip():
+            # Content directly under a chapter heading → auto-open default scene
             current_scene = ParsedScene(title="", content_md="")
             current_lines.append(line)
 
-    flush_chapter()
+    flush_act()
 
-    if not chapters and current_lines:
-        chapters.append(ParsedChapter(
-            title="Imported Chapter",
-            scenes=[ParsedScene(title="Imported Scene", content_md="\n".join(current_lines).strip())]
-        ))
-
-    return chapters
+    return book_title, acts
