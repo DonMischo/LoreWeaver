@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, migrate_new_columns
 from models import Base
-from routers import projects, chapters, scenes, codex, settings, ai, export, imports
+from routers import projects, chapters, scenes, codex, settings, ai, export, imports, graph
 
 Base.metadata.create_all(bind=engine)
 migrate_new_columns()
@@ -26,6 +26,7 @@ app.include_router(settings.router)
 app.include_router(ai.router)
 app.include_router(export.router)
 app.include_router(imports.router)
+app.include_router(graph.router)
 
 
 @app.get("/api/health")

@@ -7,6 +7,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { Extension } from "@tiptap/core";
 import type { CodexEntry } from "@/types";
 import { createCodexHighlightPlugin, patchEntryAliases } from "./CodexHighlightExtension";
+import { TagDecorationExtension } from "./TagDecorationExtension";
 
 interface Props {
   content: string;
@@ -38,6 +39,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
       StarterKit,
       Placeholder.configure({ placeholder: "Start writing your scene..." }),
       CodexHighlight,
+      TagDecorationExtension,
     ],
     content,
     onUpdate({ editor }) {

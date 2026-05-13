@@ -86,3 +86,31 @@
 .codex-highlight:hover {
   opacity: 0.85;
 }
+
+/* Inline relation tags  [rel:...] */
+.tag-rel {
+  display: inline;
+  background-color: hsl(262 80% 65% / 0.18);
+  color: hsl(262 80% 75%);
+  border: 1px solid hsl(262 80% 65% / 0.4);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 0.8em;
+  font-family: ui-monospace, monospace;
+  cursor: default;
+  white-space: nowrap;
+}
+
+/* Inline time/event tags  {time:...} */
+.tag-time {
+  display: inline;
+  background-color: hsl(38 92% 50% / 0.15);
+  color: hsl(38 92% 65%);
+  border: 1px solid hsl(38 92% 50% / 0.4);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 0.8em;
+  font-family: ui-monospace, monospace;
+  cursor: default;
+  white-space: nowrap;
+}

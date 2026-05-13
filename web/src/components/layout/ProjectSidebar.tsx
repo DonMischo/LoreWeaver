@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronDown, ChevronRight, Plus, Trash2, BookOpen,
-  GripVertical, Settings, Book, Download
+  GripVertical, Settings, Book, Download, Network, Calendar
 } from "lucide-react";
 import {
   DndContext, closestCenter, DragEndEvent,
@@ -253,6 +253,20 @@ export function ProjectSidebar({ projectId }: Props) {
         >
           <Book className="h-4 w-4" />
           Codex
+        </Link>
+        <Link
+          href={`/projects/${projectId}/relations`}
+          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+        >
+          <Network className="h-4 w-4" />
+          Relations
+        </Link>
+        <Link
+          href={`/projects/${projectId}/timeline`}
+          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+        >
+          <Calendar className="h-4 w-4" />
+          Timeline
         </Link>
 
         <div className="border-t border-border/50 my-1" />
