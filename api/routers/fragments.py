@@ -1,5 +1,6 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException
+import re
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -105,3 +106,85 @@ def delete_fragment(fragment_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Fragment not found")
     db.delete(fragment)
     db.commit()
+
+
+# ── Import ─────────────────────────────────────────────────────────────────────
+
+_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?(.*)", re.DOTALL)
+_KV_RE = re.compile(r"^(\w+)\s*:\s*(.*)$")
+
+
+def _parse_snippet_file(raw: str) -> dict:
+    """Parse a YAML-frontmatter snippet file.
+
+    Returns a dict with keys: title (str|None), tab (str), content (str).
+    Frontmatter keys recognised: title, tab, favourite (ignored but accepted).
+    """
+    m = _FRONTMATTER_RE.match(raw.strip())
+    if not m:
+        # No frontmatter — treat whole file as content, use filename as title later
+        return {"title": None, "tab": "snippets", "content": raw.strip()}
+
+    frontmatter_str, body = m.group(1), m.group(2).strip()
+
+    meta: dict = {}
+    for line in frontmatter_str.splitlines():
+        kv = _KV_RE.match(line.strip())
+        if kv:
+            meta[kv.group(1).lower()] = kv.group(2).strip()
+
+    return {
+        "title": meta.get("title") or None,
+        "tab":   meta.get("tab", "snippets").lower(),
+        "content": body,
+    }
+
+
+@router.post("/api/projects/{project_id}/fragments/import")
+async def import_fragments(
+    project_id: int,
+    files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+):
+    """Import one or more snippet files with YAML frontmatter.
+
+    Accepts multiple files at once (single file or whole directory upload).
+    """
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    valid_tabs = _all_tabs(project)
+    created = skipped = 0
+
+    for upload in files:
+        if not upload.filename:
+            skipped += 1
+            continue
+
+        raw = (await upload.read()).decode("utf-8", errors="replace")
+        parsed = _parse_snippet_file(raw)
+
+        # Fallback title: filename without extension
+        if not parsed["title"]:
+            stem = upload.filename.rsplit(".", 1)[0]
+            parsed["title"] = stem if stem else None
+
+        # Map unknown tabs to "snippets"
+        tab = parsed["tab"] if parsed["tab"] in valid_tabs else "snippets"
+
+        fragment = Fragment(
+            project_id=project_id,
+            tab=tab,
+            title=parsed["title"],
+            content=parsed["content"],
+        )
+        db.add(fragment)
+        created += 1
+
+    db.commit()
+    return {
+        "message": f"Imported {created} snippet{'' if created == 1 else 's'}.",
+        "created": created,
+        "skipped": skipped,
+    }

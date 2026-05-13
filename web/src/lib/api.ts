@@ -165,6 +165,15 @@ export const fragmentsApi = {
   update: (id: number, data: Partial<Pick<Fragment, "tab" | "title" | "content" | "order_index">>) =>
     req<Fragment>(`/fragments/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: number) => req<void>(`/fragments/${id}`, { method: "DELETE" }),
+  import: (projectId: number, files: File[]): Promise<{ message: string; created: number; skipped: number }> => {
+    const form = new FormData();
+    files.forEach((f) => form.append("files", f));
+    return fetch(`${BASE}/projects/${projectId}/fragments/import`, { method: "POST", body: form })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await r.text());
+        return r.json();
+      });
+  },
 };
 
 // ── Settings ──────────────────────────────────────────────────────────────────
