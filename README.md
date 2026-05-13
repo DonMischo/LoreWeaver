@@ -28,7 +28,7 @@ Then open **http://localhost:3000** in your browser.
 | Editor | TipTap with Codex highlight extension |
 | State | Zustand + TanStack Query v5 |
 | Backend | FastAPI, SQLAlchemy 2.0, SQLite (WAL mode) |
-| AI | OpenRouter (any model, proxied via backend) |
+| AI | OpenRouter (any model, proxied via backend) WIP |
 | Export | Markdown + LaTeX (Jinja2 templates) |
 
 ---
