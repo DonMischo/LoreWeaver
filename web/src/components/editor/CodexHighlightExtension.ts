@@ -38,7 +38,7 @@ function buildDecorations(doc: any, entries: PatchedEntry[]): DecorationSet {
         decorations.push(
           Decoration.inline(from, to, {
             class: "codex-highlight",
-            style: `border-color: ${entry.color}; background-color: ${entry.color}22;`,
+            style: `border-color: ${entry.color}; background-color: ${entry.color}22; color: ${entry.color};`,
             "data-codex-id": String(entry.id),
             "data-codex-name": entry.name,
             "data-codex-type": entry.entry_type,
