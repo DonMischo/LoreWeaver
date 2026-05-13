@@ -1,6 +1,6 @@
-# LoreWeaver Personal Studio
+# LoreWeaver Personal Writer Studio
 
-A local-first novel writing studio — write, world-build, and track your story's timeline, all running on your own machine. No subscriptions, no cloud sync.
+A local-first novel writing studio — write, world-build, and track your story's timeline and relationships, all running on your own machine. No subscriptions, no cloud sync.
 
 ## Quick Start
 
@@ -28,7 +28,7 @@ Then open **http://localhost:3000** in your browser.
 | Editor | TipTap with Codex highlight extension |
 | State | Zustand + TanStack Query v5 |
 | Backend | FastAPI, SQLAlchemy 2.0, SQLite (WAL mode) |
-| AI | OpenRouter (any model, proxied via backend) |
+| AI | OpenRouter (any model, proxied via backend) WIP |
 | Export | Markdown + LaTeX (Jinja2 templates) |
 
 ---
