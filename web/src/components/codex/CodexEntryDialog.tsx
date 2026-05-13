@@ -33,6 +33,8 @@ export function CodexEntryDialog({ open, onClose, onSave, initial, title }: Prop
   const [description, setDescription] = useState(initial?.description ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [color, setColor] = useState(initial?.color ?? "#eab308");
+  const [group, setGroup] = useState(initial?.group ?? "");
+  const [species, setSpecies] = useState(initial?.species ?? "");
 
   useEffect(() => {
     if (open) {
@@ -42,6 +44,8 @@ export function CodexEntryDialog({ open, onClose, onSave, initial, title }: Prop
       setDescription(initial?.description ?? "");
       setNotes(initial?.notes ?? "");
       setColor(initial?.color ?? "#eab308");
+      setGroup(initial?.group ?? "");
+      setSpecies(initial?.species ?? "");
       setAliasInput("");
     }
   }, [open, initial]);
@@ -58,13 +62,22 @@ export function CodexEntryDialog({ open, onClose, onSave, initial, title }: Prop
 
   const handleSave = () => {
     if (!name.trim()) return;
-    onSave({ name: name.trim(), aliases, entry_type: entryType, description, notes, color });
+    onSave({
+      name: name.trim(),
+      aliases,
+      entry_type: entryType,
+      description,
+      notes: notes || null,
+      color,
+      group: group.trim() || null,
+      species: species.trim() || null,
+    });
     onClose();
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -84,6 +97,17 @@ export function CodexEntryDialog({ open, onClose, onSave, initial, title }: Prop
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Group</Label>
+              <Input value={group} onChange={(e) => setGroup(e.target.value)} placeholder="e.g. Fellowship, Empire..." />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Species</Label>
+              <Input value={species} onChange={(e) => setSpecies(e.target.value)} placeholder="e.g. Human, Elf..." />
             </div>
           </div>
 

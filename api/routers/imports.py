@@ -77,7 +77,7 @@ async def import_codex(
     parsed_entries = parse_codex_markdown(content)
 
     if not parsed_entries:
-        raise HTTPException(400, "No entries found. Use ## headings like '## character: Name'.")
+        raise HTTPException(400, "No entries found. Supports YAML-frontmatter (---) or ## heading format.")
 
     created = 0
     skipped = 0
@@ -94,6 +94,8 @@ async def import_codex(
             description=pe.description,
             notes=pe.notes,
             color=pe.color,
+            entry_group=pe.group,
+            species=pe.species,
         )
         entry.set_aliases(pe.aliases)
         db.add(entry)

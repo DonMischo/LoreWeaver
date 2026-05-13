@@ -87,6 +87,8 @@ class CodexEntry(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="")
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     color: Mapped[str] = mapped_column(String(7), default="#eab308")
+    entry_group: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    species: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 

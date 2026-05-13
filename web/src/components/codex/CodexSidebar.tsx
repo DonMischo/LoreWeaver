@@ -72,6 +72,22 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd }: 
             <h3 className="font-semibold">{selected.name}</h3>
           </div>
           <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider">{TYPE_LABELS[selected.entry_type as EntryType]}</p>
+          {(selected.group || selected.species) && (
+            <div className="flex gap-3 mb-3">
+              {selected.group && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Group</p>
+                  <p className="text-xs">{selected.group}</p>
+                </div>
+              )}
+              {selected.species && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Species</p>
+                  <p className="text-xs">{selected.species}</p>
+                </div>
+              )}
+            </div>
+          )}
           {selected.aliases.length > 0 && (
             <div className="mb-3">
               <p className="text-xs text-muted-foreground mb-1">Also known as</p>

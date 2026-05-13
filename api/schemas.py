@@ -99,6 +99,8 @@ class CodexEntryBase(BaseModel):
     description: Optional[str] = ""
     notes: Optional[str] = None
     color: str = "#eab308"
+    group: Optional[str] = Field(None, alias=None)
+    species: Optional[str] = None
 
 
 class CodexEntryCreate(CodexEntryBase):
@@ -112,6 +114,8 @@ class CodexEntryUpdate(BaseModel):
     description: Optional[str] = None
     notes: Optional[str] = None
     color: Optional[str] = None
+    group: Optional[str] = None
+    species: Optional[str] = None
 
 
 class CodexEntryOut(CodexEntryBase):
@@ -133,6 +137,8 @@ class CodexEntryOut(CodexEntryBase):
             "description": entry.description,
             "notes": entry.notes,
             "color": entry.color,
+            "group": entry.entry_group,
+            "species": entry.species,
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
         }

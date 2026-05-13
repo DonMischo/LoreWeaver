@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 
 DATABASE_URL = "sqlite:///./loreweaver.db"
@@ -15,6 +15,21 @@ def set_sqlite_pragma(dbapi_conn, _):
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def migrate_new_columns():
+    """Safely add new columns to existing databases without Alembic."""
+    new_columns = [
+        ("codex_entries", "entry_group", "TEXT"),
+        ("codex_entries", "species",     "TEXT"),
+    ]
+    with engine.connect() as conn:
+        for table, col, col_type in new_columns:
+            try:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                conn.commit()
+            except Exception:
+                pass  # column already exists — SQLite raises OperationalError
 
 
 def get_db():

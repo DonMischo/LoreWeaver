@@ -36,6 +36,8 @@ export interface CodexEntry {
   description: string | null;
   notes: string | null;
   color: string;
+  group: string | null;
+  species: string | null;
   created_at: string;
   updated_at: string;
 }

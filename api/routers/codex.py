@@ -25,6 +25,8 @@ def create_codex_entry(body: CodexEntryCreate, db: Session = Depends(get_db)):
         raise HTTPException(404, "Project not found")
     data = body.model_dump()
     aliases = data.pop("aliases", [])
+    group = data.pop("group", None)
+    data["entry_group"] = group
     entry = CodexEntry(**data)
     entry.set_aliases(aliases)
     db.add(entry)
@@ -49,6 +51,8 @@ def update_codex_entry(entry_id: int, body: CodexEntryUpdate, db: Session = Depe
     data = body.model_dump(exclude_none=True)
     if "aliases" in data:
         entry.set_aliases(data.pop("aliases"))
+    if "group" in data:
+        entry.entry_group = data.pop("group")
     for k, v in data.items():
         setattr(entry, k, v)
     db.commit()
