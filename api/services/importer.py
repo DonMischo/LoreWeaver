@@ -298,7 +298,7 @@ def parse_story_markdown(text: str) -> list[ParsedChapter]:
             flush_chapter()
             current_chapter = ParsedChapter(title=line.lstrip("#").strip())
             continue
-        if m := re.match(r"^###\s+(.+)$", line):
+        if m := re.match(r"^#{3,}\s+(.+)$", line):
             flush_scene()
             current_scene = ParsedScene(title=m.group(1).strip(), content_md="")
             continue

@@ -33,6 +33,21 @@ interface Props {
   projectId: number;
 }
 
+function SceneDivider({ onInsert }: { onInsert: () => void }) {
+  return (
+    <div className="group relative h-5 flex items-center px-8">
+      <div className="w-full h-px bg-transparent group-hover:bg-border/60 transition-colors" />
+      <button
+        onClick={onInsert}
+        className="absolute left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 h-4 w-4 rounded-full bg-card border border-border flex items-center justify-center hover:bg-primary hover:border-primary hover:text-primary-foreground transition-all"
+        title="Insert scene here"
+      >
+        <Plus className="h-2.5 w-2.5" />
+      </button>
+    </div>
+  );
+}
+
 function SceneItem({
   scene, projectId, currentSceneId
 }: { scene: Scene; projectId: number; currentSceneId?: number }) {
@@ -93,6 +108,19 @@ function ChapterItem({
   const deleteChapter = useDeleteChapter(projectId);
   const updateChapter = useUpdateChapter(projectId);
   const reorderScenes = useReorderScenes(chapter.id);
+
+  const handleInsertAfter = async (afterIndex: number) => {
+    const newScene = await createScene.mutateAsync({
+      chapter_id: chapter.id,
+      order_index: scenes.length + 1,
+    });
+    const newOrder = [
+      ...scenes.slice(0, afterIndex + 1).map((s, i) => ({ id: s.id, order_index: i })),
+      { id: newScene.id, order_index: afterIndex + 1 },
+      ...scenes.slice(afterIndex + 1).map((s, i) => ({ id: s.id, order_index: afterIndex + 2 + i })),
+    ];
+    reorderScenes.mutate(newOrder);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -170,8 +198,13 @@ function ChapterItem({
       {expanded && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSceneDragEnd}>
           <SortableContext items={scenes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-            {scenes.map((scene) => (
-              <SceneItem key={scene.id} scene={scene} projectId={projectId} currentSceneId={currentSceneId} />
+            {scenes.map((scene, idx) => (
+              <div key={scene.id}>
+                <SceneItem scene={scene} projectId={projectId} currentSceneId={currentSceneId} />
+                {idx < scenes.length - 1 && (
+                  <SceneDivider onInsert={() => handleInsertAfter(idx)} />
+                )}
+              </div>
             ))}
           </SortableContext>
         </DndContext>
