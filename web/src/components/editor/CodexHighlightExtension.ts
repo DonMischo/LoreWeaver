@@ -9,7 +9,7 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-interface PatchedEntry extends CodexEntry {
+export interface PatchedEntry extends CodexEntry {
   _allTerms: string[];
 }
 

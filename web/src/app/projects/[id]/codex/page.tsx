@@ -345,7 +345,7 @@ export default function CodexPage() {
           </Button>
           <ImportButton projectId={projectId} mode="codex" className="w-auto" />
           <button
-            onClick={() => setView(v => v === "grid" ? "list" : "grid")}
+            onClick={() => setView(view === "grid" ? "list" : "grid")}
             className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
             title={view === "grid" ? "Switch to list view" : "Switch to grid view"}
           >

@@ -6,7 +6,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Extension } from "@tiptap/core";
 import type { CodexEntry } from "@/types";
-import { createCodexHighlightPlugin, patchEntryAliases } from "./CodexHighlightExtension";
+import { createCodexHighlightPlugin, patchEntryAliases, type PatchedEntry } from "./CodexHighlightExtension";
 import { TagDecorationExtension } from "./TagDecorationExtension";
 
 interface Props {
@@ -17,7 +17,7 @@ interface Props {
 }
 
 export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick }: Props) {
-  const entriesRef = useRef(codexEntries);
+  const entriesRef = useRef<PatchedEntry[]>(patchEntryAliases(codexEntries));
   const onClickRef = useRef(onCodexEntryClick);
   entriesRef.current = patchEntryAliases(codexEntries);
   onClickRef.current = onCodexEntryClick;

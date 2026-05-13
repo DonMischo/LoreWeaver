@@ -84,7 +84,7 @@ function SceneItem({
         <span className="text-muted-foreground/50 text-[10px] tabular-nums shrink-0 w-4 text-right">{index}.</span>
         <span className="truncate">{scene.title || "Untitled Scene"}</span>
         {scene.scene_time && Object.keys(scene.scene_time).length > 0 && (
-          <Clock className="h-2.5 w-2.5 shrink-0 text-primary/60" title="Has scene time" />
+          <Clock className="h-2.5 w-2.5 shrink-0 text-primary/60" aria-label="Has scene time" />
         )}
       </Link>
       <button
