@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, migrate_to_four_level, migrate_new_columns
 from models import Base
-from routers import projects, acts, chapters, scenes, codex, settings, ai, export, imports, graph
+from routers import projects, acts, chapters, scenes, codex, settings, ai, export, imports, graph, time
 
 # ── Run migrations BEFORE create_all so table renames happen first ────────────
 migrate_to_four_level()
@@ -31,6 +31,7 @@ app.include_router(ai.router)
 app.include_router(export.router)
 app.include_router(imports.router)
 app.include_router(graph.router)
+app.include_router(time.router)
 
 
 @app.get("/api/health")

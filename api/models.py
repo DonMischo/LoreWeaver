@@ -26,6 +26,8 @@ class Project(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
+    time_config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     acts: Mapped[list["Act"]] = relationship(
         "Act", back_populates="project", cascade="all, delete-orphan",
         order_by="Act.order_index"
@@ -77,6 +79,7 @@ class Scene(Base):
     chapter_id: Mapped[int] = mapped_column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"))
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="")
+    scene_time: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
     word_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

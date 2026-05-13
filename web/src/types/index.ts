@@ -22,6 +22,8 @@ export interface Chapter {
   created_at: string;
 }
 
+export type SceneTime = Record<string, number>;  // unit_id → value
+
 export interface Scene {
   id: number;
   chapter_id: number;
@@ -29,9 +31,46 @@ export interface Scene {
   content: string | null;
   order_index: number;
   word_count: number;
+  scene_time: SceneTime | null;
   created_at: string;
   updated_at: string;
 }
+
+// ── Time Config ───────────────────────────────────────────────────────────────
+
+export interface TimeUnit {
+  id: string;
+  singular: string;
+  plural: string;
+  count_per_parent: number | null;
+  value_names: string[];
+  enabled: boolean;
+}
+
+export interface DayNightConfig {
+  hours_per_day: number;
+  night_start_hour: number;
+  night_duration: number;
+}
+
+export interface TimeConfig {
+  units: TimeUnit[];
+  day_night: DayNightConfig;
+}
+
+export const DEFAULT_TIME_CONFIG: TimeConfig = {
+  units: [
+    { id: "age",    singular: "Age",    plural: "Ages",    count_per_parent: null, value_names: [],                                        enabled: false },
+    { id: "year",   singular: "Year",   plural: "Years",   count_per_parent: 1000, value_names: [],                                        enabled: true  },
+    { id: "season", singular: "Season", plural: "Seasons", count_per_parent: 4,    value_names: ["Spring","Summer","Autumn","Winter"],      enabled: false },
+    { id: "month",  singular: "Month",  plural: "Months",  count_per_parent: 12,   value_names: [],                                        enabled: true  },
+    { id: "day",    singular: "Day",    plural: "Days",    count_per_parent: 30,   value_names: [],                                        enabled: true  },
+    { id: "hour",   singular: "Hour",   plural: "Hours",   count_per_parent: 24,   value_names: [],                                        enabled: true  },
+    { id: "minute", singular: "Minute", plural: "Minutes", count_per_parent: 60,   value_names: [],                                        enabled: false },
+    { id: "second", singular: "Second", plural: "Seconds", count_per_parent: 60,   value_names: [],                                        enabled: false },
+  ],
+  day_night: { hours_per_day: 24, night_start_hour: 20, night_duration: 10 },
+};
 
 export type EntryType = "character" | "location" | "item" | "lore" | "custom";
 

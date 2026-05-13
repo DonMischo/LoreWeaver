@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
 from models import Project, Act, Chapter, CodexEntry, CodexRelation
-from services.tags import build_relations_graph, build_timeline
+from services.tags import build_relations_graph
 
 router = APIRouter(prefix="/api/projects", tags=["graph"])
 
@@ -42,7 +42,3 @@ def get_relations_graph(project_id: int, db: Session = Depends(get_db)):
     return build_relations_graph(project, codex)
 
 
-@router.get("/{project_id}/timeline")
-def get_timeline(project_id: int, db: Session = Depends(get_db)):
-    project = _load_project(project_id, db)
-    return build_timeline(project)

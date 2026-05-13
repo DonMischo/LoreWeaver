@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi } from "@/lib/api";
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -242,6 +242,31 @@ export const useDeleteRelation = (entryId: number) => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["codex-relations", entryId] }),
   });
 };
+
+// ── Time Config ───────────────────────────────────────────────────────────────
+
+export const useTimeConfig = (projectId: number) =>
+  useQuery({
+    queryKey: ["time-config", projectId],
+    queryFn: () => timeApi.getConfig(projectId),
+    enabled: !!projectId,
+  });
+
+export const useUpdateTimeConfig = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (config: Parameters<typeof timeApi.updateConfig>[1]) =>
+      timeApi.updateConfig(projectId, config),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["time-config", projectId] }),
+  });
+};
+
+export const useTimeline = (projectId: number) =>
+  useQuery({
+    queryKey: ["timeline", projectId],
+    queryFn: () => timeApi.getTimeline(projectId),
+    enabled: !!projectId,
+  });
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 

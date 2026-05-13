@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronDown, ChevronRight, Plus, Trash2, BookOpen,
-  GripVertical, Settings, Book, Download, Network, Calendar,
+  GripVertical, Settings, Book, Download, Network, Calendar, Clock,
 } from "lucide-react";
 import {
   DndContext, closestCenter, DragEndEvent,
@@ -26,9 +26,12 @@ import {
   useDeleteAct, useDeleteChapter, useDeleteScene,
   useReorderActs, useReorderChapters, useReorderScenes,
   useUpdateAct, useUpdateChapter, useProject,
+  useTimeConfig, useUpdateTimeConfig,
 } from "@/store/queries";
 import { useExport } from "@/hooks/useExport";
 import { ImportButton } from "@/components/layout/ImportButton";
+import { TimeConfigDialog } from "@/components/time/TimeConfigDialog";
+import { DEFAULT_TIME_CONFIG } from "@/types";
 import type { Act, Chapter, Scene } from "@/types";
 
 interface Props { projectId: number }
@@ -80,6 +83,9 @@ function SceneItem({
       >
         <span className="text-muted-foreground/50 text-[10px] tabular-nums shrink-0 w-4 text-right">{index}.</span>
         <span className="truncate">{scene.title || "Untitled Scene"}</span>
+        {scene.scene_time && Object.keys(scene.scene_time).length > 0 && (
+          <Clock className="h-2.5 w-2.5 shrink-0 text-primary/60" title="Has scene time" />
+        )}
       </Link>
       <button
         className="opacity-0 group-hover:opacity-60 hover:opacity-100 hover:text-destructive"
@@ -350,6 +356,10 @@ export function ProjectSidebar({ projectId }: Props) {
   const { data: acts = [] } = useActs(projectId);
   const createAct = useCreateAct(projectId);
   const reorderActs = useReorderActs(projectId);
+  const { data: timeConfigData } = useTimeConfig(projectId);
+  const updateTimeConfig = useUpdateTimeConfig(projectId);
+  const [timeConfigOpen, setTimeConfigOpen] = useState(false);
+  const timeConfig = timeConfigData ?? DEFAULT_TIME_CONFIG;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -430,6 +440,13 @@ export function ProjectSidebar({ projectId }: Props) {
           <Calendar className="h-4 w-4" />
           Timeline
         </Link>
+        <button
+          onClick={() => setTimeConfigOpen(true)}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+        >
+          <Clock className="h-4 w-4" />
+          Time System
+        </button>
 
         <div className="border-t border-border/50 my-1" />
 
@@ -463,6 +480,13 @@ export function ProjectSidebar({ projectId }: Props) {
           Settings
         </Link>
       </div>
+
+      <TimeConfigDialog
+        open={timeConfigOpen}
+        onClose={() => setTimeConfigOpen(false)}
+        initial={timeConfig}
+        onSave={(cfg) => updateTimeConfig.mutate(cfg)}
+      />
     </aside>
   );
 }

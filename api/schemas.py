@@ -1,6 +1,7 @@
+import json
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field
+from typing import Optional, Any
+from pydantic import BaseModel, Field, model_validator
 from models import EntryType
 
 
@@ -102,16 +103,30 @@ class SceneUpdate(BaseModel):
     content: Optional[str] = None
     order_index: Optional[int] = None
     word_count: Optional[int] = None
+    scene_time: Optional[Any] = None  # JSON dict or None to clear
 
 
 class SceneOut(SceneBase):
     id: int
     chapter_id: int
     word_count: int
+    scene_time: Optional[Any] = None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _parse_scene_time(cls, data):
+        if hasattr(data, "__dict__"):
+            raw = getattr(data, "scene_time", None)
+            if isinstance(raw, str):
+                try:
+                    object.__setattr__(data, "scene_time", json.loads(raw))
+                except Exception:
+                    pass
+        return data
 
 
 # ── Codex Entries ─────────────────────────────────────────────────────────────
@@ -217,3 +232,47 @@ class AIGenerateRequest(BaseModel):
     mode: str  # continue | rewrite | brainstorm | ask | custom
     custom_prompt: Optional[str] = None
     model: Optional[str] = None
+
+
+# ── Time Config ───────────────────────────────────────────────────────────────
+
+class TimeUnit(BaseModel):
+    id: str
+    singular: str
+    plural: str
+    count_per_parent: Optional[int] = None  # None = top-level unit
+    value_names: list[str] = Field(default_factory=list)
+    enabled: bool = True
+
+
+class DayNightConfig(BaseModel):
+    hours_per_day: int = 24
+    night_start_hour: float = 20.0   # 0–hours_per_day
+    night_duration: float = 10.0     # hours of darkness
+
+
+DEFAULT_TIME_UNITS: list[dict] = [
+    {"id": "age",    "singular": "Age",    "plural": "Ages",    "count_per_parent": None, "value_names": [], "enabled": False},
+    {"id": "year",   "singular": "Year",   "plural": "Years",   "count_per_parent": 1000, "value_names": [], "enabled": True},
+    {"id": "season", "singular": "Season", "plural": "Seasons", "count_per_parent": 4,    "value_names": ["Spring","Summer","Autumn","Winter"], "enabled": False},
+    {"id": "month",  "singular": "Month",  "plural": "Months",  "count_per_parent": 12,   "value_names": [], "enabled": True},
+    {"id": "day",    "singular": "Day",    "plural": "Days",    "count_per_parent": 30,   "value_names": [], "enabled": True},
+    {"id": "hour",   "singular": "Hour",   "plural": "Hours",   "count_per_parent": 24,   "value_names": [], "enabled": True},
+    {"id": "minute", "singular": "Minute", "plural": "Minutes", "count_per_parent": 60,   "value_names": [], "enabled": False},
+    {"id": "second", "singular": "Second", "plural": "Seconds", "count_per_parent": 60,   "value_names": [], "enabled": False},
+]
+
+DEFAULT_DAY_NIGHT: dict = {
+    "hours_per_day": 24,
+    "night_start_hour": 20.0,
+    "night_duration": 10.0,
+}
+
+
+class TimeConfig(BaseModel):
+    units: list[TimeUnit] = Field(default_factory=lambda: [TimeUnit(**u) for u in DEFAULT_TIME_UNITS])
+    day_night: DayNightConfig = Field(default_factory=DayNightConfig)
+
+
+class TimeConfigOut(TimeConfig):
+    pass

@@ -1,6 +1,6 @@
 import type {
   Project, Act, Chapter, Scene, CodexEntry, CodexRelation, CodexRelationResolved,
-  Settings, ChapterReadData, ActReadData,
+  Settings, ChapterReadData, ActReadData, TimeConfig, SceneTime,
 } from "@/types";
 
 const BASE = "/api";
@@ -67,7 +67,7 @@ export const scenesApi = {
   get: (id: number) => req<Scene>(`/scenes/${id}`),
   create: (data: { chapter_id: number; title?: string; content?: string; order_index?: number }) =>
     req<Scene>("/scenes", { method: "POST", body: JSON.stringify(data) }),
-  update: (id: number, data: Partial<Pick<Scene, "title" | "content" | "order_index" | "word_count">>) =>
+  update: (id: number, data: Partial<Pick<Scene, "title" | "content" | "order_index" | "word_count" | "scene_time">>) =>
     req<Scene>(`/scenes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: number) => req<void>(`/scenes/${id}`, { method: "DELETE" }),
   reorder: (items: { id: number; order_index: number }[]) =>
@@ -122,6 +122,31 @@ export const importApi = {
       });
   },
 };
+
+// ── Time Config ───────────────────────────────────────────────────────────────
+
+export const timeApi = {
+  getConfig: (projectId: number) => req<TimeConfig>(`/projects/${projectId}/time-config`),
+  updateConfig: (projectId: number, config: TimeConfig) =>
+    req<TimeConfig>(`/projects/${projectId}/time-config`, { method: "PATCH", body: JSON.stringify(config) }),
+  getTimeline: (projectId: number) => req<TimelineData>(`/projects/${projectId}/timeline`),
+};
+
+export interface TimelineEntry {
+  scene_id: number;
+  scene_title: string;
+  act_title: string;
+  chapter_title: string;
+  scene_time: SceneTime;
+  time_display: string;
+  day_night: "Day" | "Night" | null;
+  sort_key: number[];
+}
+
+export interface TimelineData {
+  config: TimeConfig;
+  entries: TimelineEntry[];
+}
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 

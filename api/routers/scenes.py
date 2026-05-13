@@ -1,4 +1,5 @@
 import re
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -59,6 +60,10 @@ def update_scene(scene_id: int, body: SceneUpdate, db: Session = Depends(get_db)
         if not scene.title and not body.title:
             scene.title = _auto_title(data["content"])
         data["word_count"] = _count_words(data["content"])
+    # Handle scene_time separately — None means "clear it", so bypass exclude_none
+    if "scene_time" in body.model_fields_set:
+        st = body.scene_time
+        data["scene_time"] = json.dumps(st) if st is not None else None
     for k, v in data.items():
         setattr(scene, k, v)
     db.commit()

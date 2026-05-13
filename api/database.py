@@ -70,6 +70,8 @@ def migrate_new_columns():
         ("codex_entries", "species",     "TEXT"),
         ("codex_entries", "subtype",     "TEXT"),
         ("codex_entries", "tags",        "TEXT DEFAULT '[]'"),
+        ("projects",      "time_config", "TEXT"),
+        ("scenes",        "scene_time",  "TEXT"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in new_columns:
