@@ -13,7 +13,7 @@ class ProjectBase(BaseModel):
 
 
 class ProjectCreate(ProjectBase):
-    pass
+    copy_codex_from: Optional[int] = None  # project_id to copy codex from
 
 
 class ProjectUpdate(BaseModel):

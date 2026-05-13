@@ -23,7 +23,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 export const projectsApi = {
   list: () => req<Project[]>("/projects"),
   get: (id: number) => req<Project>(`/projects/${id}`),
-  create: (data: { title: string; description?: string }) =>
+  create: (data: { title: string; description?: string; copy_codex_from?: number }) =>
     req<Project>("/projects", { method: "POST", body: JSON.stringify(data) }),
   update: (id: number, data: Partial<Pick<Project, "title" | "description">>) =>
     req<Project>(`/projects/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
