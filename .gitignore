@@ -2,21 +2,22 @@
 __pycache__/
 *.py[cod]
 *.pyo
-*.pyd
 .venv/
 venv/
 *.egg-info/
 dist/
 build/
 .eggs/
-.uv/
-uv.lock
 
 # Database & secrets
+api/loreweaver.db
+api/.secret_key
 *.db
 *.db-shm
 *.db-wal
-api/.secret_key
+
+# Alembic auto-generated (keep versions folder but ignore cache)
+api/alembic/__pycache__/
 
 # ── Node / Frontend ───────────────────────────────────────────────────────────
 node_modules/
@@ -25,38 +26,23 @@ out/
 .cache/
 *.tsbuildinfo
 next-env.d.ts
-.npm/
 
-# ── OS ────────────────────────────────────────────────────────────────────────
+# ── OS & editor ───────────────────────────────────────────────────────────────
 .DS_Store
-.DS_Store?
-._*
 Thumbs.db
-Thumbs.db:encryptable
 desktop.ini
-$RECYCLE.BIN/
-
-# ── Editor ────────────────────────────────────────────────────────────────────
 .idea/
 .vscode/
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
 *.swp
 *.swo
-*~
 
-# ── Env & secrets ─────────────────────────────────────────────────────────────
+# ── Env files ─────────────────────────────────────────────────────────────────
 .env
 .env.local
 .env.*.local
-*.pem
-*.key
 
-# ── Logs & diagnostics ────────────────────────────────────────────────────────
+# ── Logs ──────────────────────────────────────────────────────────────────────
 *.log
-logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -70,3 +56,5 @@ coverage/
 .mypy_cache/
 .ruff_cache/
 api/loreweaver.db-wal
+*.db
+api/uv.lock
