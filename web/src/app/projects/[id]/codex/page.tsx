@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import {
   Plus, Pencil, Trash2, User, MapPin, Package, Scroll, Tag,
-  LayoutGrid, LayoutList, FolderOpen, Upload, Loader2, CheckCircle2, X,
+  LayoutGrid, LayoutList, FolderOpen, Loader2, CheckCircle2, X,
+  ChevronDown, ChevronUp, ChevronsUpDown, CheckSquare, Square,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CodexEntryDialog } from "@/components/codex/CodexEntryDialog";
+import { BulkEditDialog } from "@/components/codex/BulkEditDialog";
 import { ImportButton } from "@/components/layout/ImportButton";
 import { useCodexEntries, useCreateCodexEntry, useUpdateCodexEntry, useDeleteCodexEntry } from "@/store/queries";
 import { importApi } from "@/lib/api";
@@ -26,13 +28,120 @@ const TYPE_LABELS: Record<EntryType, string> = {
   character: "Character", location: "Location", item: "Item", lore: "Lore", custom: "Custom",
 };
 
+// ── Sort types ────────────────────────────────────────────────────────────────
+
+type SortKey = "name" | "color" | "group" | "type";
+type SortDir = "asc" | "desc";
+
+// ── SortTh — sortable <th> for the list table ─────────────────────────────────
+
+function SortTh({
+  col, label, sortBy, sortDir, onSort, className,
+}: {
+  col: SortKey; label: string;
+  sortBy: SortKey; sortDir: SortDir;
+  onSort: (col: SortKey) => void;
+  className?: string;
+}) {
+  const active = sortBy === col;
+  return (
+    <th
+      onClick={() => onSort(col)}
+      className={cn(
+        "px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer select-none whitespace-nowrap hover:text-foreground transition-colors",
+        active && "text-primary",
+        className,
+      )}
+    >
+      <span className="flex items-center gap-1">
+        {label}
+        {active
+          ? sortDir === "asc"
+            ? <ChevronUp className="h-3 w-3 shrink-0" />
+            : <ChevronDown className="h-3 w-3 shrink-0" />
+          : <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-30" />
+        }
+      </span>
+    </th>
+  );
+}
+
+// ── FilterDropdown ─────────────────────────────────────────────────────────────
+
+interface FilterDropdownProps {
+  label: string;
+  options: string[];
+  selected: string[];
+  onToggle: (v: string) => void;
+  onClear: () => void;
+  renderOption?: (v: string) => React.ReactNode;
+}
+
+function FilterDropdown({ label, options, selected, onToggle, onClear, renderOption }: FilterDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const active = selected.length > 0;
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={cn(
+          "flex items-center gap-1 text-xs px-2.5 py-1 rounded-full transition-colors",
+          active
+            ? "bg-primary/20 text-primary border border-primary/30"
+            : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+        )}
+      >
+        {label}{active && ` (${selected.length})`}
+        <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 z-50 mt-1 min-w-44 bg-popover border border-border rounded-lg shadow-lg py-1 max-h-56 overflow-y-auto">
+          {options.map(opt => (
+            <label
+              key={opt}
+              className="flex items-center gap-2 px-3 py-1.5 hover:bg-secondary cursor-pointer text-sm"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(opt)}
+                onChange={() => onToggle(opt)}
+                className="accent-primary"
+              />
+              {renderOption ? renderOption(opt) : opt}
+            </label>
+          ))}
+          {active && (
+            <button
+              onClick={onClear}
+              className="w-full text-left text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 border-t border-border mt-1"
+            >
+              Clear filter
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Directory import hook ─────────────────────────────────────────────────────
 
 function useDirImport(projectId: number) {
   const qc = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const [result, setResult]   = useState<{ ok: boolean; msg: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const all = Array.from(e.target.files ?? []).filter(f => f.name.endsWith(".md"));
@@ -41,22 +150,17 @@ function useDirImport(projectId: number) {
 
     setProgress({ done: 0, total: all.length });
     let created = 0, skipped = 0, errors = 0;
-
     for (let i = 0; i < all.length; i++) {
       try {
         const r = await importApi.codex(projectId, all[i]);
         created += r.created ?? 0;
         skipped += r.skipped ?? 0;
-      } catch {
-        errors++;
-      }
+      } catch { errors++; }
       setProgress({ done: i + 1, total: all.length });
     }
-
     qc.invalidateQueries({ queryKey: ["codex", projectId] });
     setProgress(null);
-    const msg = `${created} entries imported, ${skipped} skipped${errors ? `, ${errors} file error(s)` : ""} from ${all.length} file(s).`;
-    setResult({ ok: errors < all.length, msg });
+    setResult({ ok: errors < all.length, msg: `${created} imported, ${skipped} skipped${errors ? `, ${errors} error(s)` : ""} from ${all.length} file(s).` });
     setTimeout(() => setResult(null), 5000);
   };
 
@@ -74,41 +178,119 @@ export default function CodexPage() {
   const updateEntry = useUpdateCodexEntry(projectId);
   const deleteEntry = useDeleteCodexEntry(projectId);
 
-  // ── View / filter state ──────────────────────────────────────────────────
-  const [view, setView]             = useState<"grid" | "list">("grid");
-  const [search, setSearch]         = useState("");
-  const [typeFilter, setTypeFilter] = useState<EntryType | "all">("all");
+  // ── View / sort state (persisted) ────────────────────────────────────────
+  const [view, setViewState] = useState<"grid" | "list">(() =>
+    (typeof window !== "undefined" ? (localStorage.getItem("codex-view") as "grid" | "list") : null) ?? "list"
+  );
+  const setView = (v: "grid" | "list") => { setViewState(v); localStorage.setItem("codex-view", v); };
+
+  const [sortBy, setSortByState] = useState<SortKey>(() =>
+    (typeof window !== "undefined" ? (localStorage.getItem("codex-sort") as SortKey) : null) ?? "name"
+  );
+  const [sortDir, setSortDirState] = useState<SortDir>(() =>
+    (typeof window !== "undefined" ? (localStorage.getItem("codex-sort-dir") as SortDir) : null) ?? "asc"
+  );
+
+  const handleSort = (col: SortKey) => {
+    if (col === sortBy) {
+      const next: SortDir = sortDir === "asc" ? "desc" : "asc";
+      setSortDirState(next);
+      localStorage.setItem("codex-sort-dir", next);
+    } else {
+      setSortByState(col);
+      localStorage.setItem("codex-sort", col);
+      setSortDirState("asc");
+      localStorage.setItem("codex-sort-dir", "asc");
+    }
+  };
+
+  // ── Filter state ─────────────────────────────────────────────────────────
+  const [search, setSearch]           = useState("");
+  const [typeFilter, setTypeFilter]   = useState<EntryType | "all">("all");
   const [colorFilter, setColorFilter] = useState<string | null>(null);
-  const [groupFilter, setGroupFilter] = useState<string | null>(null);
-  const [speciesFilter, setSpeciesFilter] = useState<string | null>(null);
+  const [groupFilter, setGroupFilter]     = useState<string[]>([]);
+  const [speciesFilter, setSpeciesFilter] = useState<string[]>([]);
+  const [subtypeFilter, setSubtypeFilter] = useState<string[]>([]);
+  const [tagFilter, setTagFilter]         = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   // ── Dialog state ─────────────────────────────────────────────────────────
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing]       = useState<CodexEntry | null>(null);
+  const [dialogOpen, setDialogOpen]   = useState(false);
+  const [editing, setEditing]         = useState<CodexEntry | null>(null);
+  const [bulkOpen, setBulkOpen]       = useState(false);
+
+  // ── Selection state ───────────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   // ── Dir import ───────────────────────────────────────────────────────────
   const dir = useDirImport(projectId);
 
   // ── Derived filter options ───────────────────────────────────────────────
-  const uniqueColors  = [...new Set(entries.map(e => e.color))].sort();
-  const uniqueGroups  = [...new Set(entries.map(e => e.group).filter(Boolean) as string[])].sort();
-  const uniqueSpecies = [...new Set(entries.map(e => e.species).filter(Boolean) as string[])].sort();
-
-  const hasExtraFilters = uniqueGroups.length > 0 || uniqueSpecies.length > 0 || uniqueColors.length > 1;
+  const uniqueColors   = [...new Set(entries.map(e => e.color))].sort();
+  const uniqueGroups   = [...new Set(entries.map(e => e.group).filter(Boolean) as string[])].sort();
+  const uniqueSpecies  = [...new Set(entries.map(e => e.species).filter(Boolean) as string[])].sort();
+  const uniqueSubtypes = [...new Set(entries.map(e => e.subtype).filter(Boolean) as string[])].sort();
+  const uniqueTags     = [...new Set(entries.flatMap(e => e.tags))].sort();
+  const hasExtraFilters = uniqueGroups.length > 0 || uniqueSpecies.length > 0 || uniqueSubtypes.length > 0 || uniqueColors.length > 1 || uniqueTags.length > 0;
 
   // ── Filtering ────────────────────────────────────────────────────────────
   const filtered = entries.filter(e => {
     if (typeFilter !== "all" && e.entry_type !== typeFilter) return false;
     if (colorFilter && e.color !== colorFilter) return false;
-    if (groupFilter && e.group !== groupFilter) return false;
-    if (speciesFilter && e.species !== speciesFilter) return false;
+    if (groupFilter.length > 0 && !groupFilter.includes(e.group ?? "")) return false;
+    if (speciesFilter.length > 0 && !speciesFilter.includes(e.species ?? "")) return false;
+    if (subtypeFilter.length > 0 && !subtypeFilter.includes(e.subtype ?? "")) return false;
+    if (tagFilter.length > 0 && !tagFilter.every(t => e.tags.includes(t))) return false;
     const q = search.toLowerCase();
-    if (q && !e.name.toLowerCase().includes(q) && !e.aliases.some(a => a.toLowerCase().includes(q))) return false;
+    if (q && !e.name.toLowerCase().includes(q) && !e.aliases.some(a => a.toLowerCase().includes(q)) && !e.tags.some(t => t.includes(q))) return false;
     return true;
   });
 
-  const activeFilterCount = [colorFilter, groupFilter, speciesFilter].filter(Boolean).length;
+  const sorted = [...filtered].sort((a, b) => {
+    let cmp = 0;
+    switch (sortBy) {
+      case "color": cmp = a.color.localeCompare(b.color); break;
+      case "group": cmp = (a.group ?? "").localeCompare(b.group ?? ""); break;
+      case "type":  cmp = a.entry_type.localeCompare(b.entry_type); break;
+      default:      cmp = a.name.localeCompare(b.name);
+    }
+    if (cmp === 0) cmp = a.name.localeCompare(b.name); // stable secondary
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  const activeFilterCount = (colorFilter ? 1 : 0) + groupFilter.length + speciesFilter.length + subtypeFilter.length + tagFilter.length;
+  const clearAllFilters = () => { setColorFilter(null); setGroupFilter([]); setSpeciesFilter([]); setSubtypeFilter([]); setTagFilter([]); };
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  const openEdit = useCallback((entry: CodexEntry) => {
+    setEditing(entry);
+    setDialogOpen(true);
+  }, []);
+
+  const handleCardClick = useCallback((entry: CodexEntry, e: React.MouseEvent) => {
+    if (selectedIds.size > 0) {
+      // Selection mode: toggle
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(entry.id)) next.delete(entry.id); else next.add(entry.id);
+        return next;
+      });
+    } else {
+      openEdit(entry);
+    }
+  }, [selectedIds.size, openEdit]);
+
+  const toggleSelect = useCallback((id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAll = () => setSelectedIds(new Set(filtered.map(e => e.id)));
+  const clearSelection = () => setSelectedIds(new Set());
 
   const handleSave = (data: Partial<CodexEntry>) => {
     if (editing) {
@@ -119,9 +301,12 @@ export default function CodexPage() {
     setEditing(null);
   };
 
+  const selectedEntries = entries.filter(e => selectedIds.has(e.id));
+  const selectionActive = selectedIds.size > 0;
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden relative">
 
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
@@ -145,33 +330,20 @@ export default function CodexPage() {
               }
             </span>
           )}
-
-          {/* Import folder */}
           <input
-            ref={dir.inputRef}
-            type="file"
-            // @ts-ignore – webkitdirectory is non-standard but widely supported
-            webkitdirectory=""
-            multiple
-            className="hidden"
+            ref={dir.inputRef} type="file"
+            // @ts-ignore
+            webkitdirectory="" multiple className="hidden"
             onChange={dir.handleChange}
           />
-          <Button
-            size="sm"
-            variant="ghost"
-            className="gap-1.5 text-xs text-muted-foreground"
-            title="Import all .md files from a folder (searches all sub-folders)"
+          <Button size="sm" variant="ghost" className="gap-1.5 text-xs text-muted-foreground"
+            title="Import all .md files from a folder"
             onClick={() => dir.inputRef.current?.click()}
             disabled={!!dir.progress}
           >
-            <FolderOpen className="h-3.5 w-3.5" />
-            Import folder
+            <FolderOpen className="h-3.5 w-3.5" /> Import folder
           </Button>
-
-          {/* Single-file import */}
           <ImportButton projectId={projectId} mode="codex" className="w-auto" />
-
-          {/* View toggle */}
           <button
             onClick={() => setView(v => v === "grid" ? "list" : "grid")}
             className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
@@ -179,24 +351,23 @@ export default function CodexPage() {
           >
             {view === "grid" ? <LayoutList className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
           </button>
-
           <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
-            <Plus className="h-4 w-4" />
-            New Entry
+            <Plus className="h-4 w-4" /> New Entry
           </Button>
         </div>
       </header>
 
       {/* Filter bar */}
       <div className="px-6 py-2 border-b border-border space-y-2 shrink-0">
-        {/* Row 1: search + type chips + filter toggle */}
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <Input
             className="max-w-xs h-8 text-sm"
             placeholder="Search…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
+
+          {/* Type chips */}
           <div className="flex gap-1 flex-wrap">
             {(["all", "character", "location", "item", "lore", "custom"] as const).map(t => (
               <button
@@ -214,11 +385,12 @@ export default function CodexPage() {
             ))}
           </div>
 
+          {/* Extra filters toggle */}
           {hasExtraFilters && (
             <button
               onClick={() => setFiltersOpen(o => !o)}
               className={cn(
-                "ml-auto text-xs px-2.5 py-1 rounded-full flex items-center gap-1 transition-colors",
+                "text-xs px-2.5 py-1 rounded-full flex items-center gap-1 transition-colors",
                 (filtersOpen || activeFilterCount > 0)
                   ? "bg-primary/20 text-primary border border-primary/30"
                   : "bg-secondary text-muted-foreground hover:bg-secondary/80"
@@ -230,7 +402,7 @@ export default function CodexPage() {
 
           {activeFilterCount > 0 && (
             <button
-              onClick={() => { setColorFilter(null); setGroupFilter(null); setSpeciesFilter(null); }}
+              onClick={clearAllFilters}
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5"
             >
               <X className="h-3 w-3" /> Clear
@@ -238,15 +410,15 @@ export default function CodexPage() {
           )}
         </div>
 
-        {/* Row 2: extra filters (collapsible) */}
+        {/* Extra filter dropdowns */}
         {filtersOpen && hasExtraFilters && (
-          <div className="flex flex-wrap gap-4 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1 items-center">
 
-            {/* Color filter */}
+            {/* Color (keep as swatches) */}
             {uniqueColors.length > 1 && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground shrink-0">Color</span>
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-1">
                   {uniqueColors.map(c => (
                     <button
                       key={c}
@@ -263,74 +435,119 @@ export default function CodexPage() {
               </div>
             )}
 
-            {/* Group filter */}
+            {/* Group dropdown */}
             {uniqueGroups.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground shrink-0">Group</span>
-                <div className="flex gap-1 flex-wrap">
-                  {uniqueGroups.map(g => (
-                    <button
-                      key={g}
-                      onClick={() => setGroupFilter(groupFilter === g ? null : g)}
-                      className={cn(
-                        "text-xs px-2 py-0.5 rounded-full transition-colors",
-                        groupFilter === g
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-                      )}
-                    >
-                      {g}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <FilterDropdown
+                label="Group"
+                options={uniqueGroups}
+                selected={groupFilter}
+                onToggle={v => setGroupFilter(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
+                onClear={() => setGroupFilter([])}
+              />
             )}
 
-            {/* Species filter */}
+            {/* Species dropdown */}
             {uniqueSpecies.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground shrink-0">Species</span>
-                <div className="flex gap-1 flex-wrap">
-                  {uniqueSpecies.map(s => (
-                    <button
-                      key={s}
-                      onClick={() => setSpeciesFilter(speciesFilter === s ? null : s)}
-                      className={cn(
-                        "text-xs px-2 py-0.5 rounded-full transition-colors",
-                        speciesFilter === s
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-                      )}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <FilterDropdown
+                label="Species"
+                options={uniqueSpecies}
+                selected={speciesFilter}
+                onToggle={v => setSpeciesFilter(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
+                onClear={() => setSpeciesFilter([])}
+              />
+            )}
+
+            {/* Subtype dropdown */}
+            {uniqueSubtypes.length > 0 && (
+              <FilterDropdown
+                label="Subtype"
+                options={uniqueSubtypes}
+                selected={subtypeFilter}
+                onToggle={v => setSubtypeFilter(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
+                onClear={() => setSubtypeFilter([])}
+              />
+            )}
+
+            {/* Tags dropdown */}
+            {uniqueTags.length > 0 && (
+              <FilterDropdown
+                label="Tags"
+                options={uniqueTags}
+                selected={tagFilter}
+                onToggle={v => setTagFilter(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
+                onClear={() => setTagFilter([])}
+                renderOption={v => <span className="text-primary">#{v}</span>}
+              />
             )}
           </div>
         )}
       </div>
 
       {/* Entry list / grid */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-6 pb-20">
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {[...Array(6)].map((_, i) => <div key={i} className="h-28 rounded-lg bg-card animate-pulse" />)}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground text-sm">
             {entries.length === 0
               ? "No codex entries yet. Create one or import a folder."
               : "No entries match your filters."}
           </div>
         ) : view === "grid" ? (
-          // ── Grid view ──────────────────────────────────────────────────────
+          <>
+          {/* Grid sort bar */}
+          <div className="flex items-center gap-1 mb-3 flex-wrap">
+            <span className="text-xs text-muted-foreground mr-1">Sort:</span>
+            {(["name","type","group","color"] as SortKey[]).map(col => (
+              <button
+                key={col}
+                onClick={() => handleSort(col)}
+                className={cn(
+                  "flex items-center gap-0.5 text-xs px-2 py-1 rounded transition-colors",
+                  sortBy === col
+                    ? "bg-primary/20 text-primary"
+                    : "bg-secondary text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {col.charAt(0).toUpperCase() + col.slice(1)}
+                {sortBy === col
+                  ? sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                  : <ChevronsUpDown className="h-3 w-3 opacity-30" />
+                }
+              </button>
+            ))}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filtered.map(entry => {
+            {sorted.map(entry => {
               const Icon = TYPE_ICONS[entry.entry_type as EntryType] ?? Tag;
+              const isSelected = selectedIds.has(entry.id);
               return (
-                <div key={entry.id} className="group bg-card border border-border rounded-lg p-4 relative">
+                <div
+                  key={entry.id}
+                  onClick={e => handleCardClick(entry, e)}
+                  className={cn(
+                    "group bg-card border rounded-lg p-4 relative cursor-pointer transition-colors",
+                    isSelected
+                      ? "border-primary ring-1 ring-primary/30 bg-primary/5"
+                      : "border-border hover:border-border/80 hover:bg-secondary/20"
+                  )}
+                >
+                  {/* Selection checkbox */}
+                  <button
+                    onClick={e => toggleSelect(entry.id, e)}
+                    className={cn(
+                      "absolute top-2 left-2 transition-opacity",
+                      isSelected || selectionActive ? "opacity-100" : "opacity-0 group-hover:opacity-60"
+                    )}
+                  >
+                    {isSelected
+                      ? <CheckSquare className="h-4 w-4 text-primary" />
+                      : <Square className="h-4 w-4 text-muted-foreground" />
+                    }
+                  </button>
+
                   <div className="flex items-start gap-3">
                     <div className="w-3 h-3 rounded-full mt-1 shrink-0" style={{ backgroundColor: entry.color }} />
                     <div className="min-w-0 flex-1">
@@ -358,60 +575,212 @@ export default function CodexPage() {
                       )}
                     </div>
                   </div>
-                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 flex gap-1">
-                    <button className="p-1 hover:text-primary rounded" onClick={() => { setEditing(entry); setDialogOpen(true); }}>
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                    <button className="p-1 hover:text-destructive rounded" onClick={() => { if (confirm(`Delete "${entry.name}"?`)) deleteEntry.mutate(entry.id); }}>
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
+
+                  {/* Action buttons */}
+                  {!selectionActive && (
+                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 flex gap-1">
+                      <button
+                        className="p-1 hover:text-primary rounded"
+                        onClick={e => { e.stopPropagation(); openEdit(entry); }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button
+                        className="p-1 hover:text-destructive rounded"
+                        onClick={e => { e.stopPropagation(); if (confirm(`Delete "${entry.name}"?`)) deleteEntry.mutate(entry.id); }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
+          </>
         ) : (
-          // ── List view ──────────────────────────────────────────────────────
-          <div className="divide-y divide-border/50 border border-border rounded-lg overflow-hidden">
-            {filtered.map(entry => {
-              const Icon = TYPE_ICONS[entry.entry_type as EntryType] ?? Tag;
-              return (
-                <div key={entry.id} className="group flex items-center gap-3 px-4 py-2.5 bg-card hover:bg-secondary/30 transition-colors">
-                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
-                  <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <span className="font-medium text-sm w-36 shrink-0 truncate">{entry.name}</span>
-                  {entry.aliases.length > 0 && (
-                    <span className="text-xs text-muted-foreground w-32 shrink-0 truncate">{entry.aliases.join(", ")}</span>
-                  )}
-                  {entry.group && (
-                    <span className="text-xs bg-secondary px-1.5 py-0.5 rounded shrink-0">{entry.group}</span>
-                  )}
-                  {(entry.species || entry.subtype) && (
-                    <span className="text-xs bg-secondary px-1.5 py-0.5 rounded shrink-0">
-                      {entry.species || entry.subtype}
-                    </span>
-                  )}
-                  {entry.tags.slice(0, 3).map(t => (
-                    <span key={t} className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full shrink-0">#{t}</span>
-                  ))}
-                  {entry.description && (
-                    <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{entry.description}</span>
-                  )}
-                  <div className="opacity-0 group-hover:opacity-100 flex gap-1 shrink-0 ml-auto">
-                    <button className="p-1 hover:text-primary rounded" onClick={() => { setEditing(entry); setDialogOpen(true); }}>
-                      <Pencil className="h-3 w-3" />
+          <div className="border border-border rounded-lg overflow-hidden">
+            <table className="w-full text-sm border-collapse">
+              <thead className="bg-secondary/50 border-b border-border sticky top-0 z-10">
+                <tr>
+                  {/* Checkbox col */}
+                  <th className="w-8 px-3 py-2">
+                    <button
+                      onClick={() => selectedIds.size === sorted.length ? clearSelection() : selectAll()}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      {selectedIds.size === sorted.length && sorted.length > 0
+                        ? <CheckSquare className="h-3.5 w-3.5 text-primary" />
+                        : <Square className="h-3.5 w-3.5" />
+                      }
                     </button>
-                    <button className="p-1 hover:text-destructive rounded" onClick={() => { if (confirm(`Delete "${entry.name}"?`)) deleteEntry.mutate(entry.id); }}>
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                  </th>
+                  {/* Color col */}
+                  <SortTh col="color" label="Color" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-16" />
+                  {/* Name col */}
+                  <SortTh col="name"  label="Name"  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                  {/* Type col */}
+                  <SortTh col="type"  label="Type / Subtype" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-40" />
+                  {/* Group col */}
+                  <SortTh col="group" label="Group" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-32" />
+                  {/* Tags col */}
+                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-48">Tags</th>
+                  {/* Description col */}
+                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</th>
+                  {/* Actions col */}
+                  <th className="w-16" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {sorted.map(entry => {
+                  const Icon = TYPE_ICONS[entry.entry_type as EntryType] ?? Tag;
+                  const isSelected = selectedIds.has(entry.id);
+                  const subtypeLabel = entry.entry_type === "character" ? entry.species : entry.subtype;
+                  return (
+                    <tr
+                      key={entry.id}
+                      onClick={e => handleCardClick(entry, e)}
+                      className={cn(
+                        "group cursor-pointer transition-colors",
+                        isSelected ? "bg-primary/10" : "bg-card hover:bg-secondary/30"
+                      )}
+                    >
+                      {/* Checkbox */}
+                      <td className="px-3 py-2.5 w-8">
+                        <button
+                          onClick={e => toggleSelect(entry.id, e)}
+                          className={cn(
+                            "transition-opacity",
+                            isSelected || selectionActive ? "opacity-100" : "opacity-0 group-hover:opacity-60"
+                          )}
+                        >
+                          {isSelected
+                            ? <CheckSquare className="h-3.5 w-3.5 text-primary" />
+                            : <Square className="h-3.5 w-3.5 text-muted-foreground" />
+                          }
+                        </button>
+                      </td>
+
+                      {/* Color */}
+                      <td className="px-3 py-2.5">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
+                      </td>
+
+                      {/* Name */}
+                      <td className="px-3 py-2.5 max-w-[180px]">
+                        <div className="font-medium truncate">{entry.name}</div>
+                        {entry.aliases.length > 0 && (
+                          <div className="text-xs text-muted-foreground truncate">{entry.aliases.join(", ")}</div>
+                        )}
+                      </td>
+
+                      {/* Type / Subtype */}
+                      <td className="px-3 py-2.5 w-40">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span>{TYPE_LABELS[entry.entry_type as EntryType]}</span>
+                        </div>
+                        {subtypeLabel && (
+                          <div className="text-xs text-muted-foreground mt-0.5">{subtypeLabel}</div>
+                        )}
+                      </td>
+
+                      {/* Group */}
+                      <td className="px-3 py-2.5 w-32">
+                        {entry.group && (
+                          <span className="text-xs bg-secondary px-1.5 py-0.5 rounded">{entry.group}</span>
+                        )}
+                      </td>
+
+                      {/* Tags */}
+                      <td className="px-3 py-2.5 w-48">
+                        <div className="flex flex-wrap gap-0.5">
+                          {entry.tags.slice(0, 4).map(t => (
+                            <span key={t} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0 rounded-full">#{t}</span>
+                          ))}
+                          {entry.tags.length > 4 && (
+                            <span className="text-[10px] text-muted-foreground">+{entry.tags.length - 4}</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Description */}
+                      <td className="px-3 py-2.5 max-w-xs">
+                        {entry.description && (
+                          <span className="text-xs text-muted-foreground line-clamp-1">{entry.description}</span>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-3 py-2.5 w-16">
+                        {!selectionActive && (
+                          <div className="opacity-0 group-hover:opacity-100 flex gap-1 justify-end">
+                            <button
+                              className="p-1 hover:text-primary rounded"
+                              onClick={e => { e.stopPropagation(); openEdit(entry); }}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              className="p-1 hover:text-destructive rounded"
+                              onClick={e => { e.stopPropagation(); if (confirm(`Delete "${entry.name}"?`)) deleteEntry.mutate(entry.id); }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
 
+      {/* ── Selection action bar ──────────────────────────────────────────────── */}
+      {selectionActive && (
+        <div className="absolute bottom-0 left-0 right-0 flex items-center gap-3 px-6 py-3 bg-card border-t border-border shadow-lg z-20">
+          <span className="text-sm font-medium text-primary">
+            {selectedIds.size} selected
+          </span>
+          <button
+            onClick={selectAll}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Select all ({filtered.length})
+          </button>
+          <button
+            onClick={clearSelection}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+          >
+            <X className="h-3 w-3" /> Deselect
+          </button>
+          <div className="ml-auto flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setBulkOpen(true)}
+            >
+              Edit {selectedIds.size} {selectedIds.size === 1 ? "entry" : "entries"}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                if (!confirm(`Delete ${selectedIds.size} entries?`)) return;
+                selectedEntries.forEach(e => deleteEntry.mutate(e.id));
+                clearSelection();
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dialogs ────────────────────────────────────────────────────────────── */}
       <CodexEntryDialog
         open={dialogOpen}
         onClose={() => { setDialogOpen(false); setEditing(null); }}
@@ -419,6 +788,14 @@ export default function CodexPage() {
         initial={editing ?? undefined}
         title={editing ? "Edit Entry" : "New Codex Entry"}
         allEntries={entries}
+      />
+
+      <BulkEditDialog
+        open={bulkOpen}
+        onClose={() => { setBulkOpen(false); clearSelection(); }}
+        selectedEntries={selectedEntries}
+        allEntries={entries}
+        projectId={projectId}
       />
     </div>
   );
