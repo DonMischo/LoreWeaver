@@ -118,6 +118,28 @@ export interface Settings {
   theme: string;
 }
 
+// ── Fragments ─────────────────────────────────────────────────────────────────
+
+export const BUILTIN_TABS = ["snippets", "ideas", "archive"] as const;
+export type BuiltinTab = typeof BUILTIN_TABS[number];
+
+export interface Fragment {
+  id: number;
+  project_id: number;
+  tab: string;
+  title: string | null;
+  content: string | null;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FragmentTabs {
+  builtin: string[];
+  custom: string[];
+  all: string[];
+}
+
 export type SaveStatus = "saved" | "saving" | "error" | "idle";
 
 // Flowing read view shapes

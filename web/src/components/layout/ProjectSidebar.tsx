@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronDown, ChevronRight, Plus, Trash2, BookOpen,
-  GripVertical, Settings, Book, Download, Network, Calendar, Clock,
+  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors,
 } from "lucide-react";
 import {
   DndContext, closestCenter, DragEndEvent,
@@ -439,6 +439,13 @@ export function ProjectSidebar({ projectId }: Props) {
         >
           <Calendar className="h-4 w-4" />
           Timeline
+        </Link>
+        <Link
+          href={`/projects/${projectId}/fragments`}
+          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+        >
+          <Scissors className="h-4 w-4" />
+          Fragments
         </Link>
         <button
           onClick={() => setTimeConfigOpen(true)}

@@ -27,6 +27,7 @@ class Project(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
     time_config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    fragment_tabs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: ["tab-id", ...]
 
     acts: Mapped[list["Act"]] = relationship(
         "Act", back_populates="project", cascade="all, delete-orphan",
@@ -34,6 +35,9 @@ class Project(Base):
     )
     codex_entries: Mapped[list["CodexEntry"]] = relationship(
         "CodexEntry", back_populates="project", cascade="all, delete-orphan"
+    )
+    fragments: Mapped[list["Fragment"]] = relationship(
+        "Fragment", back_populates="project", cascade="all, delete-orphan"
     )
 
 
@@ -160,6 +164,22 @@ class CodexRelation(Base):
     target: Mapped["CodexEntry"] = relationship(
         "CodexEntry", foreign_keys=[target_id], back_populates="relations_to"
     )
+
+
+class Fragment(Base):
+    """Small text piece stored in a project tab (snippets, ideas, archive, custom)."""
+    __tablename__ = "fragments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    project_id: Mapped[int] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    tab: Mapped[str] = mapped_column(String(100), default="snippets")
+    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="")
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    project: Mapped["Project"] = relationship("Project", back_populates="fragments")
 
 
 class UserSettings(Base):

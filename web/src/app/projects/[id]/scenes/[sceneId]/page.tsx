@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
-import { BookOpen, Sparkles, Clock, Moon, Sun } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { BookOpen, Sparkles, Clock, Moon, Sun, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
@@ -18,6 +18,7 @@ import {
   useScene, useUpdateScene, useCodexEntries,
   useCreateCodexEntry, useProject,
   useTimeConfig, useUpdateTimeConfig,
+  useCreateFragment, useDeleteScene,
 } from "@/store/queries";
 import type { SceneTime } from "@/types";
 import { DEFAULT_TIME_CONFIG } from "@/types";
@@ -44,6 +45,7 @@ function getDayNightLabel(config: typeof DEFAULT_TIME_CONFIG, time: SceneTime | 
 
 export default function ScenePage() {
   const { id, sceneId } = useParams();
+  const router = useRouter();
   const projectId = Number(id);
   const sceneIdNum = Number(sceneId);
 
@@ -54,6 +56,9 @@ export default function ScenePage() {
   const updateScene = useUpdateScene(sceneIdNum);
   const updateTimeConfig = useUpdateTimeConfig(projectId);
   const createEntry = useCreateCodexEntry(projectId);
+  const createFragment = useCreateFragment(projectId);
+  // chapter_id is on scene; hook needs it — use 0 until scene loads, only called after
+  const deleteScene = useDeleteScene(scene?.chapter_id ?? 0);
 
   const timeConfig = timeConfigData ?? DEFAULT_TIME_CONFIG;
 
@@ -113,6 +118,20 @@ export default function ScenePage() {
     setTimeConfigOpen(true);
   };
 
+  const handleArchiveScene = async () => {
+    if (!scene) return;
+    if (!confirm(`Archive "${scene.title || "Untitled Scene"}"?\n\nThis will save the content as a fragment in the Archive tab. You can then choose to delete the scene.`)) return;
+    await createFragment.mutateAsync({
+      tab: "archive",
+      title: scene.title || "Untitled Scene",
+      content: scene.content || "",
+    });
+    if (confirm("Scene archived. Delete the original scene from the story?")) {
+      deleteScene.mutate(sceneIdNum);
+      router.push(`/projects/${projectId}`);
+    }
+  };
+
   // Day/night indicator for toolbar
   const dayNight = getDayNightLabel(timeConfig, scene?.scene_time ?? null);
   const hasTime = !!(scene?.scene_time && Object.keys(scene.scene_time).length > 0);
@@ -163,6 +182,16 @@ export default function ScenePage() {
         >
           <Clock className="h-3.5 w-3.5" />
           Time
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={handleArchiveScene}
+          className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          title="Archive this scene to Fragments"
+        >
+          <Archive className="h-3.5 w-3.5" />
+          Archive
         </Button>
         <Button
           size="sm"

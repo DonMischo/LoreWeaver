@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi } from "@/lib/api";
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -267,6 +267,56 @@ export const useTimeline = (projectId: number) =>
     queryFn: () => timeApi.getTimeline(projectId),
     enabled: !!projectId,
   });
+
+// ── Fragments ─────────────────────────────────────────────────────────────────
+
+export const useFragmentTabs = (projectId: number) =>
+  useQuery({
+    queryKey: ["fragment-tabs", projectId],
+    queryFn: () => fragmentsApi.getTabs(projectId),
+    enabled: !!projectId,
+  });
+
+export const useUpdateFragmentTabs = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (customTabs: string[]) => fragmentsApi.updateTabs(projectId, customTabs),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["fragment-tabs", projectId] }),
+  });
+};
+
+export const useFragments = (projectId: number) =>
+  useQuery({
+    queryKey: ["fragments", projectId],
+    queryFn: () => fragmentsApi.list(projectId),
+    enabled: !!projectId,
+  });
+
+export const useCreateFragment = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Parameters<typeof fragmentsApi.create>[1]) =>
+      fragmentsApi.create(projectId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["fragments", projectId] }),
+  });
+};
+
+export const useUpdateFragment = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof fragmentsApi.update>[1] }) =>
+      fragmentsApi.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["fragments", projectId] }),
+  });
+};
+
+export const useDeleteFragment = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fragmentsApi.delete,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["fragments", projectId] }),
+  });
+};
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 

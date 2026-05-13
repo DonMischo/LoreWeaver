@@ -1,6 +1,7 @@
 import type {
   Project, Act, Chapter, Scene, CodexEntry, CodexRelation, CodexRelationResolved,
   Settings, ChapterReadData, ActReadData, TimeConfig, SceneTime,
+  Fragment, FragmentTabs,
 } from "@/types";
 
 const BASE = "/api";
@@ -147,6 +148,24 @@ export interface TimelineData {
   config: TimeConfig;
   entries: TimelineEntry[];
 }
+
+// ── Fragments ─────────────────────────────────────────────────────────────────
+
+export const fragmentsApi = {
+  getTabs: (projectId: number) =>
+    req<FragmentTabs>(`/projects/${projectId}/fragment-tabs`),
+  updateTabs: (projectId: number, customTabs: string[]) =>
+    req<FragmentTabs>(`/projects/${projectId}/fragment-tabs`, {
+      method: "PATCH", body: JSON.stringify({ custom_tabs: customTabs }),
+    }),
+  list: (projectId: number, tab?: string) =>
+    req<Fragment[]>(`/projects/${projectId}/fragments${tab ? `?tab=${encodeURIComponent(tab)}` : ""}`),
+  create: (projectId: number, data: { tab: string; title?: string; content?: string }) =>
+    req<Fragment>(`/projects/${projectId}/fragments`, { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<Pick<Fragment, "tab" | "title" | "content" | "order_index">>) =>
+    req<Fragment>(`/fragments/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: number) => req<void>(`/fragments/${id}`, { method: "DELETE" }),
+};
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
