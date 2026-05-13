@@ -53,8 +53,8 @@ function SceneDivider({ onInsert }: { onInsert: () => void }) {
 // ── Scene item ────────────────────────────────────────────────────────────────
 
 function SceneItem({
-  scene, projectId, currentSceneId,
-}: { scene: Scene; projectId: number; currentSceneId?: number }) {
+  scene, projectId, currentSceneId, index,
+}: { scene: Scene; projectId: number; currentSceneId?: number; index: number }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: scene.id });
   const deleteScene = useDeleteScene(scene.chapter_id);
@@ -76,9 +76,10 @@ function SceneItem({
       </button>
       <Link
         href={`/projects/${projectId}/scenes/${scene.id}`}
-        className="flex-1 truncate text-muted-foreground hover:text-foreground"
+        className="flex-1 truncate text-muted-foreground hover:text-foreground flex items-center gap-1.5"
       >
-        {scene.title || "Untitled Scene"}
+        <span className="text-muted-foreground/50 text-[10px] tabular-nums shrink-0 w-4 text-right">{index}.</span>
+        <span className="truncate">{scene.title || "Untitled Scene"}</span>
       </Link>
       <button
         className="opacity-0 group-hover:opacity-60 hover:opacity-100 hover:text-destructive"
@@ -208,7 +209,7 @@ function ChapterItem({
           <SortableContext items={scenes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
             {scenes.map((scene, idx) => (
               <div key={scene.id}>
-                <SceneItem scene={scene} projectId={projectId} currentSceneId={currentSceneId} />
+                <SceneItem scene={scene} projectId={projectId} currentSceneId={currentSceneId} index={idx + 1} />
                 {idx < scenes.length - 1 && (
                   <SceneDivider onInsert={() => handleInsertAfter(idx)} />
                 )}
