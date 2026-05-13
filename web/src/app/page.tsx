@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, Plus, Trash2, Calendar, FileText, BookCopy, Sparkles } from "lucide-react";
+import { BookOpen, Plus, Trash2, Calendar, FileText, BookCopy, Sparkles, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 
 type CodexOption = "fresh" | "copy";
 
+interface DeleteTarget { id: number; title: string }
+
 export default function Dashboard() {
   const router = useRouter();
   const { data: projects = [], isLoading } = useProjects();
@@ -27,6 +29,9 @@ export default function Dashboard() {
   const [description, setDescription] = useState("");
   const [codexOption, setCodexOption] = useState<CodexOption>("fresh");
   const [copyFromId, setCopyFromId] = useState<number | "">("");
+
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
 
   const otherProjects = projects; // all projects available as copy sources
 
@@ -108,9 +113,8 @@ export default function Dashboard() {
                   className="absolute top-3 right-3 opacity-0 group-hover:opacity-60 hover:opacity-100 hover:text-destructive transition-opacity"
                   onClick={(e) => {
                     e.preventDefault();
-                    if (confirm(`Delete "${project.title}"? This cannot be undone.`)) {
-                      deleteProject.mutate(project.id);
-                    }
+                    setDeleteTarget({ id: project.id, title: project.title });
+                    setDeleteConfirm("");
                   }}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -238,6 +242,62 @@ export default function Dashboard() {
                 }
               >
                 {createProject.isPending ? "Creating…" : "Create Project"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete confirmation dialog ── */}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteConfirm(""); } }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <TriangleAlert className="h-5 w-5 shrink-0" />
+              Delete project
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete <strong className="text-foreground">{deleteTarget?.title}</strong> and all its acts, chapters, scenes, and codex entries. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">
+                Type <span className="font-mono font-semibold text-foreground">DELETE</span> to confirm
+              </Label>
+              <Input
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && deleteConfirm === "DELETE" && deleteTarget) {
+                    deleteProject.mutate(deleteTarget.id);
+                    setDeleteTarget(null);
+                    setDeleteConfirm("");
+                  }
+                }}
+                placeholder="DELETE"
+                autoFocus
+                className="font-mono"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirm(""); }}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={deleteConfirm !== "DELETE" || deleteProject.isPending}
+                onClick={() => {
+                  if (!deleteTarget) return;
+                  deleteProject.mutate(deleteTarget.id);
+                  setDeleteTarget(null);
+                  setDeleteConfirm("");
+                }}
+              >
+                Delete project
               </Button>
             </div>
           </div>
