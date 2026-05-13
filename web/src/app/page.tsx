@@ -121,6 +121,21 @@ export default function Dashboard() {
         )}
       </main>
 
+      <footer className="text-center pb-4 pt-2">
+        <a
+          href="https://tanstack.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+        >
+          <svg width="12" height="12" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="256" height="256" rx="48" fill="currentColor"/>
+            <path d="M64 80h128M128 80v96" stroke="white" strokeWidth="28" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Powered by TanStack
+        </a>
+      </footer>
+
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
