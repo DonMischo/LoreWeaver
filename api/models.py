@@ -29,6 +29,7 @@ class Project(Base):
     time_config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     fragment_tabs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: ["tab-id", ...]
     book_meta: Mapped[Optional[str]] = mapped_column(Text, nullable=True)      # JSON: BookMeta dict
+    shared_codex_project_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # FK to projects.id (no cascade)
 
     acts: Mapped[list["Act"]] = relationship(
         "Act", back_populates="project", cascade="all, delete-orphan",
@@ -114,10 +115,12 @@ class CodexEntry(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="")
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     color: Mapped[str] = mapped_column(String(7), default="#eab308")
-    entry_group: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    entry_group: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array of group strings
     species:     Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     subtype:     Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     tags:        Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="[]")
+    is_main_char: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    inventory:   Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: CharacterInventory
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
@@ -148,6 +151,19 @@ class CodexEntry(Base):
 
     def set_tags(self, tags: list[str]) -> None:
         self.tags = json.dumps(tags)
+
+    def get_groups(self) -> list[str]:
+        try:
+            val = json.loads(self.entry_group or "[]")
+            if isinstance(val, list):
+                return [str(v) for v in val if v]
+            # Legacy: plain string value
+            return [str(val)] if val else []
+        except (json.JSONDecodeError, TypeError):
+            return [self.entry_group] if self.entry_group else []
+
+    def set_groups(self, groups: list[str]) -> None:
+        self.entry_group = json.dumps(groups)
 
 
 class CodexRelation(Base):

@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 
@@ -11,26 +12,42 @@ from schemas import (
 router = APIRouter(tags=["codex"])
 
 
+def _codex_owner_id(project: Project) -> int:
+    """Return the project_id whose codex entries to use (follows sharing link)."""
+    return project.shared_codex_project_id or project.id
+
+
 @router.get("/api/projects/{project_id}/codex", response_model=list[CodexEntryOut])
 def list_codex(project_id: int, db: Session = Depends(get_db)):
-    if not db.get(Project, project_id):
+    project = db.get(Project, project_id)
+    if not project:
         raise HTTPException(404, "Project not found")
-    entries = db.query(CodexEntry).filter(CodexEntry.project_id == project_id).all()
+    owner_id = _codex_owner_id(project)
+    entries = db.query(CodexEntry).filter(CodexEntry.project_id == owner_id).all()
     return [CodexEntryOut.from_orm_entry(e) for e in entries]
 
 
 @router.post("/api/codex", response_model=CodexEntryOut, status_code=201)
 def create_codex_entry(body: CodexEntryCreate, db: Session = Depends(get_db)):
-    if not db.get(Project, body.project_id):
+    project = db.get(Project, body.project_id)
+    if not project:
         raise HTTPException(404, "Project not found")
     data = body.model_dump()
-    aliases = data.pop("aliases", [])
-    tags    = data.pop("tags", [])
-    group   = data.pop("group", None)
-    data["entry_group"] = group
+    data["project_id"] = _codex_owner_id(project)  # redirect writes to owner
+    aliases   = data.pop("aliases", [])
+    tags      = data.pop("tags", [])
+    groups    = data.pop("groups", [])
+    inventory = data.pop("inventory", None)
+    data.pop("is_main_char", None)  # handled via setattr below
+    is_main_char = body.is_main_char
+    data.pop("entry_group", None)  # not a schema field; set via set_groups
     entry = CodexEntry(**data)
     entry.set_aliases(aliases)
     entry.set_tags(tags)
+    entry.set_groups(groups)
+    entry.is_main_char = int(is_main_char)
+    if inventory is not None:
+        entry.inventory = json.dumps(inventory)
     db.add(entry)
     db.commit()
     db.refresh(entry)
@@ -55,8 +72,13 @@ def update_codex_entry(entry_id: int, body: CodexEntryUpdate, db: Session = Depe
         entry.set_aliases(data.pop("aliases"))
     if "tags" in data:
         entry.set_tags(data.pop("tags"))
-    if "group" in data:
-        entry.entry_group = data.pop("group")
+    if "groups" in data:
+        entry.set_groups(data.pop("groups"))
+    if "inventory" in data:
+        inv = data.pop("inventory")
+        entry.inventory = json.dumps(inv) if inv is not None else None
+    if "is_main_char" in data:
+        entry.is_main_char = int(data.pop("is_main_char"))
     for k, v in data.items():
         setattr(entry, k, v)
     db.commit()

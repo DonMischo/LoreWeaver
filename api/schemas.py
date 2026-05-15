@@ -36,13 +36,15 @@ class ProjectBase(BaseModel):
 
 
 class ProjectCreate(ProjectBase):
-    copy_codex_from: Optional[int] = None  # project_id to copy codex from
+    copy_codex_from: Optional[int] = None   # project_id to deep-copy codex from
+    share_codex_from: Optional[int] = None  # project_id to live-share codex with
 
 
 class ProjectUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     book_meta: Optional[BookMeta] = None
+    shared_codex_project_id: Optional[int] = None
 
 
 class ProjectOut(ProjectBase):
@@ -50,6 +52,7 @@ class ProjectOut(ProjectBase):
     created_at: datetime
     updated_at: datetime
     book_meta: Optional[BookMeta] = None
+    shared_codex_project_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 
@@ -176,10 +179,12 @@ class CodexEntryBase(BaseModel):
     description: Optional[str] = ""
     notes: Optional[str] = None
     color: str = "#eab308"
-    group: Optional[str] = Field(None, alias=None)
+    groups: list[str] = Field(default_factory=list)
     species: Optional[str] = None
     subtype: Optional[str] = None
     tags: list[str] = Field(default_factory=list)
+    is_main_char: bool = False
+    inventory: Optional[Any] = None  # CharacterInventory JSON or None
 
 
 class CodexEntryCreate(CodexEntryBase):
@@ -193,10 +198,12 @@ class CodexEntryUpdate(BaseModel):
     description: Optional[str] = None
     notes: Optional[str] = None
     color: Optional[str] = None
-    group: Optional[str] = None
+    groups: Optional[list[str]] = None
     species: Optional[str] = None
     subtype: Optional[str] = None
     tags: Optional[list[str]] = None
+    is_main_char: Optional[bool] = None
+    inventory: Optional[Any] = None
 
 
 class CodexEntryOut(CodexEntryBase):
@@ -209,6 +216,12 @@ class CodexEntryOut(CodexEntryBase):
 
     @classmethod
     def from_orm_entry(cls, entry) -> "CodexEntryOut":
+        inv = None
+        if entry.inventory:
+            try:
+                inv = json.loads(entry.inventory)
+            except (json.JSONDecodeError, TypeError):
+                pass
         data = {
             "id": entry.id,
             "project_id": entry.project_id,
@@ -218,10 +231,12 @@ class CodexEntryOut(CodexEntryBase):
             "description": entry.description,
             "notes": entry.notes,
             "color": entry.color,
-            "group": entry.entry_group,
+            "groups": entry.get_groups(),
             "species": entry.species,
             "subtype": entry.subtype,
             "tags": entry.get_tags(),
+            "is_main_char": bool(entry.is_main_char),
+            "inventory": inv,
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
         }

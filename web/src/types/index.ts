@@ -23,6 +23,7 @@ export interface Project {
   title: string;
   description: string | null;
   book_meta: BookMeta | null;
+  shared_codex_project_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -95,6 +96,22 @@ export const DEFAULT_TIME_CONFIG: TimeConfig = {
 
 export type EntryType = "character" | "location" | "item" | "lore" | "custom";
 
+export interface Currency {
+  name: string;
+  amount: number;
+}
+
+export interface Possession {
+  entry_id: number;
+  quantity: number;
+  notes?: string;
+}
+
+export interface CharacterInventory {
+  currencies: Currency[];
+  possessions: Possession[];
+}
+
 export interface CodexEntry {
   id: number;
   project_id: number;
@@ -104,10 +121,12 @@ export interface CodexEntry {
   description: string | null;
   notes: string | null;
   color: string;
-  group: string | null;
+  groups: string[];
   species: string | null;
   subtype: string | null;
   tags: string[];
+  is_main_char: boolean;
+  inventory: CharacterInventory | null;
   created_at: string;
   updated_at: string;
 }

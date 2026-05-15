@@ -227,7 +227,7 @@ export default function CodexPage() {
 
   // ── Derived filter options ───────────────────────────────────────────────
   const uniqueColors   = [...new Set(entries.map(e => e.color))].sort();
-  const uniqueGroups   = [...new Set(entries.map(e => e.group).filter(Boolean) as string[])].sort();
+  const uniqueGroups   = [...new Set(entries.flatMap(e => e.groups ?? []))].sort();
   const uniqueSpecies  = [...new Set(entries.map(e => e.species).filter(Boolean) as string[])].sort();
   const uniqueSubtypes = [...new Set(entries.map(e => e.subtype).filter(Boolean) as string[])].sort();
   const uniqueTags     = [...new Set(entries.flatMap(e => e.tags))].sort();
@@ -237,7 +237,7 @@ export default function CodexPage() {
   const filtered = entries.filter(e => {
     if (typeFilter !== "all" && e.entry_type !== typeFilter) return false;
     if (colorFilter && e.color !== colorFilter) return false;
-    if (groupFilter.length > 0 && !groupFilter.includes(e.group ?? "")) return false;
+    if (groupFilter.length > 0 && !groupFilter.some(g => (e.groups ?? []).includes(g))) return false;
     if (speciesFilter.length > 0 && !speciesFilter.includes(e.species ?? "")) return false;
     if (subtypeFilter.length > 0 && !subtypeFilter.includes(e.subtype ?? "")) return false;
     if (tagFilter.length > 0 && !tagFilter.every(t => e.tags.includes(t))) return false;
@@ -250,7 +250,7 @@ export default function CodexPage() {
     let cmp = 0;
     switch (sortBy) {
       case "color": cmp = a.color.localeCompare(b.color); break;
-      case "group": cmp = (a.group ?? "").localeCompare(b.group ?? ""); break;
+      case "group": cmp = (a.groups[0] ?? "").localeCompare(b.groups[0] ?? ""); break;
       case "type":  cmp = a.entry_type.localeCompare(b.entry_type); break;
       default:      cmp = a.name.localeCompare(b.name);
     }
@@ -558,9 +558,9 @@ export default function CodexPage() {
                       {entry.aliases.length > 0 && (
                         <p className="text-xs text-muted-foreground mb-1">{entry.aliases.join(", ")}</p>
                       )}
-                      {(entry.group || entry.species || entry.subtype) && (
+                      {((entry.groups?.length) || entry.species || entry.subtype) && (
                         <p className="text-xs text-muted-foreground/70 mb-1">
-                          {[entry.group, entry.species, entry.subtype].filter(Boolean).join(" · ")}
+                          {[...(entry.groups ?? []), entry.species, entry.subtype].filter(Boolean).join(" · ")}
                         </p>
                       )}
                       {entry.tags.length > 0 && (
@@ -687,9 +687,11 @@ export default function CodexPage() {
 
                       {/* Group */}
                       <td className="px-3 py-2.5 w-32">
-                        {entry.group && (
-                          <span className="text-xs bg-secondary px-1.5 py-0.5 rounded">{entry.group}</span>
-                        )}
+                        <div className="flex flex-wrap gap-0.5">
+                          {(entry.groups ?? []).map(g => (
+                            <span key={g} className="text-xs bg-secondary px-1.5 py-0.5 rounded">{g}</span>
+                          ))}
+                        </div>
                       </td>
 
                       {/* Tags */}

@@ -46,9 +46,9 @@ async def import_story(
                 description=entry.description,
                 notes=entry.notes,
                 color=entry.color,
-                entry_group=entry.entry_group,
                 species=entry.species,
             )
+            clone.set_groups(entry.get_groups())
             db.add(clone)
     else:
         target_project = source_project
@@ -132,10 +132,11 @@ async def import_codex(
             description=pe.description,
             notes=pe.notes,
             color=pe.color,
-            entry_group=pe.group,
             species=pe.species,
         )
         entry.set_aliases(pe.aliases)
+        if pe.group:
+            entry.set_groups([pe.group])
         db.add(entry)
         created += 1
 

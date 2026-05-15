@@ -75,13 +75,17 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd }: 
           </div>
           <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider">{TYPE_LABELS[selected.entry_type as EntryType]}</p>
 
-          {/* Group / Species / Subtype */}
-          {(selected.group || selected.species || selected.subtype) && (
+          {/* Groups / Species / Subtype */}
+          {((selected.groups?.length) || selected.species || selected.subtype) && (
             <div className="flex gap-3 mb-3 flex-wrap">
-              {selected.group && (
+              {(selected.groups?.length > 0) && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">Group</p>
-                  <p className="text-xs">{selected.group}</p>
+                  <p className="text-xs text-muted-foreground mb-0.5">Groups</p>
+                  <div className="flex flex-wrap gap-0.5">
+                    {selected.groups.map(g => (
+                      <span key={g} className="text-xs bg-secondary px-1.5 py-0.5 rounded">{g}</span>
+                    ))}
+                  </div>
                 </div>
               )}
               {selected.species && (

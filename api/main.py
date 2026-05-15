@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import engine, migrate_to_four_level, migrate_new_columns
+from database import engine, migrate_to_four_level, migrate_new_columns, migrate_entry_groups
 from models import Base
 from routers import projects, acts, chapters, scenes, codex, settings, ai, export, imports, graph, time, fragments
 
@@ -10,6 +10,7 @@ migrate_to_four_level()
 
 Base.metadata.create_all(bind=engine)
 migrate_new_columns()
+migrate_entry_groups()
 
 app = FastAPI(title="LoreWeaver API", version="0.1.0")
 

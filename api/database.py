@@ -1,3 +1,4 @@
+import json
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 
@@ -72,8 +73,11 @@ def migrate_new_columns():
         ("codex_entries", "tags",        "TEXT DEFAULT '[]'"),
         ("projects",      "time_config",    "TEXT"),
         ("projects",      "fragment_tabs",  "TEXT"),
-        ("projects",      "book_meta",      "TEXT"),
-        ("scenes",        "scene_time",     "TEXT"),
+        ("projects",      "book_meta",              "TEXT"),
+        ("projects",      "shared_codex_project_id", "INTEGER"),
+        ("scenes",        "scene_time",             "TEXT"),
+        ("codex_entries", "is_main_char",            "INTEGER DEFAULT 0"),
+        ("codex_entries", "inventory",               "TEXT"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in new_columns:
@@ -82,6 +86,21 @@ def migrate_new_columns():
                 conn.commit()
             except Exception:
                 pass  # column already exists
+
+
+def migrate_entry_groups():
+    """Convert entry_group plain-string values to JSON arrays (one-time migration)."""
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT id, entry_group FROM codex_entries WHERE entry_group IS NOT NULL"
+        )).fetchall()
+        for row_id, group in rows:
+            if group and not group.startswith("["):
+                conn.execute(
+                    text("UPDATE codex_entries SET entry_group = :val WHERE id = :id"),
+                    {"val": json.dumps([group]), "id": row_id},
+                )
+        conn.commit()
 
 
 def get_db():

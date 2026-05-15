@@ -49,20 +49,33 @@ Then open **http://localhost:3000** in your browser.
 
 ### 📚 Codex (World-building Database)
 - Entry types: **Character**, **Location**, **Item**, **Lore**, **Custom**
-- Fields: name, aliases, description, notes, colour tag, group, species (characters) / subtype (others), tags
+- Fields: name, aliases, description, notes, colour tag, groups (multi-value), species (characters) / subtype (others), tags
+- **Main character flag** — mark any character as a protagonist; main characters are starred (★) in relation dropdowns and used as the default centre of the Relations graph
+- **Character inventory** — track currencies (custom names + amounts) and possessions (linked to item/location/lore entries with quantity and notes)
+- **Multi-group** — assign an entry to any number of groups via a dropdown with existing group suggestions; filter by group in the Codex list
 - Inline **Codex highlighting** in the editor — any word matching a Codex entry name or alias gets a coloured underline; click it to open the entry in the sidebar
-- **List view** (default) — sortable table with columns for type/subtype, group, tags, description; click column headers to sort ↑↓
+- **List view** (default) — sortable table with columns for type/subtype, groups, tags, description; click column headers to sort ↑↓
 - **Grid view** — colour-coded cards with sort pill-bar
 - **Filters**: entry type, group, species, subtype, tags — each a multi-select dropdown with checkboxes; combine freely
 - **Multi-select**: check entries (or click while another is selected) to enter selection mode; floating action bar lets you bulk-edit type, subtype/species, add shared tags, add shared relations, or delete
-- Click any entry name or card to open the full edit dialog
-- **Relations**: link any two entries with a typed relation (Friend, Enemy, Ally, Rival, Family, Mentor, Student, Possession, Home, Origin, Member Of, Leads, or a custom label); direction-aware — shows "→ target" and "← source" in the detail view
-- **Import Codex** from CSV/JSON
+- Click any entry name or card to open the full edit dialog (two-column layout: options left, description right)
+- **Relations**: link any two entries with a typed relation (Friend, Enemy, Ally, Rival, Family, Mentor, Student, Possession, Home, Origin, Member Of, Leads, or a custom label); direction-aware — shows "→ target" and "← source" in the detail view; relation target dropdown defaults to the first main character
+- **Import Codex** from CSV/JSON or a folder of `.md` files
+
+### 🔗 Shared Codex
+- When creating a project, choose **Share codex** to live-link it to an existing project's world bible — both projects read and write the same codex entries
+- Or choose **Copy codex** to start with an independent snapshot that can diverge freely
+- Projects that share a codex also share a **combined timeline** spanning scenes from all sibling projects
+- The source project is protected from deletion while any other project links to its codex; unlink first to delete
+- Shared codex shown with a link badge on the dashboard project cards
 
 ### 🕸️ Relations Graph
-- SVG radial mindmap — one entry at the centre, linked entries on the outer ring
-- Click any outer node to re-centre the graph on that entry
+- SVG radial mindmap — one entry at the centre, linked entries on the inner ring, second-degree connections on the outer ring
+- Defaults to centring on the first **main character** (★) in the codex; falls back to the first character, then the first node
+- Click any **node in the SVG** to re-centre the graph on that entry
+- Click any **entry in the left panel** to open its full edit dialog inline — edit name, description, relations, inventory, and more without leaving the page
 - Colour-coded by entry type; relation type shown on the connecting line
+- Solid lines = Codex relations; dashed lines = inline `[rel:]` tags from scene text
 
 ### 🕐 Time System
 - Per-project **configurable time units** — choose any combination of Age, Year, Season, Month, Day, Hour, Minute, Second; rename them to fit your world (e.g. "Cycle" instead of "Year")
@@ -82,6 +95,7 @@ Then open **http://localhost:3000** in your browser.
 - Column headers show the formatted time label and a ☀/🌙 Day/Night badge
 - Click any cell to navigate directly to that scene
 - Hover to see the full Act → Chapter → Scene breadcrumb
+- When codex is shared between projects, the timeline **spans all sibling projects** with a project label on each row
 - Empty-state prompt with a direct link to configure the time system
 - **Time config** button in the header to adjust the time system without leaving the page
 
@@ -117,6 +131,10 @@ Open `/settings` or click **Settings** in the sidebar to:
 | Add custom month/season names | Time System → unit row → **Custom names** |
 | Export the whole project | Sidebar → **Export .md** or **.tex** |
 | Import a Markdown draft | Sidebar → **Import** — headings `##` / `###` / `####` map to acts / chapters / scenes |
+| Mark a protagonist | Codex entry → **Main character** checkbox (character type only) |
+| Edit an entry from the Relations graph | Click its name in the left panel |
+| Share a world bible across projects | New Project → **Share codex** → pick the source project |
+| Track what a character owns | Codex entry (character) → **Inventory** section |
 
 ---
 
@@ -132,7 +150,7 @@ loreweaver/
 │   └── services/         # Tag parsing, AI streaming, export templates
 └── web/                  # Next.js 14 frontend
     └── src/
-        ├── app/          # App Router pages (projects, codex, timeline, settings…)
+        ├── app/          # App Router pages (projects, codex, timeline, relations, settings…)
         ├── components/   # Editor, Codex, AI panel, Time panel, layout
         ├── store/        # Zustand UI store + TanStack Query hooks
         ├── hooks/        # useAutosave, useExport

@@ -16,15 +16,33 @@ def list_projects(db: Session = Depends(get_db)):
 
 @router.post("", response_model=ProjectOut, status_code=201)
 def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
-    data = body.model_dump(exclude={"copy_codex_from"})
+    data = body.model_dump(exclude={"copy_codex_from", "share_codex_from"})
     project = Project(**data)
 
-    # Copy time config from source project if requested
-    source_id = body.copy_codex_from
-    if source_id:
-        source = db.get(Project, source_id)
+    copy_id  = body.copy_codex_from
+    share_id = body.share_codex_from
+
+    if share_id:
+        # Live-share: point to the canonical codex owner
+        source = db.get(Project, share_id)
         if not source:
-            raise HTTPException(404, f"Source project {source_id} not found")
+            raise HTTPException(404, f"Source project {share_id} not found")
+        # Follow chain: if source is itself sharing, point to its owner
+        owner_id = source.shared_codex_project_id or source.id
+        project.shared_codex_project_id = owner_id
+        # Inherit time config from codex owner
+        owner = db.get(Project, owner_id)
+        if owner and owner.time_config:
+            project.time_config = owner.time_config
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+        return project
+
+    if copy_id:
+        source = db.get(Project, copy_id)
+        if not source:
+            raise HTTPException(404, f"Source project {copy_id} not found")
         if source.time_config:
             project.time_config = source.time_config
 
@@ -33,10 +51,12 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
     db.refresh(project)
 
     # Deep-copy codex entries + relations from source project
-    if source_id:
+    if copy_id:
+        # Resolve to actual codex owner in case source is sharing
+        actual_copy_id = source.shared_codex_project_id or copy_id  # type: ignore[possibly-undefined]
         source_entries = (
             db.query(CodexEntry)
-            .filter(CodexEntry.project_id == source_id)
+            .filter(CodexEntry.project_id == actual_copy_id)
             .all()
         )
         old_to_new: dict[int, int] = {}
@@ -49,16 +69,17 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
                 description=src.description,
                 notes=src.notes,
                 color=src.color,
-                entry_group=src.entry_group,
                 species=src.species,
                 subtype=src.subtype,
                 tags=src.tags,
+                is_main_char=src.is_main_char,
+                inventory=src.inventory,
             )
+            new_entry.set_groups(src.get_groups())
             db.add(new_entry)
-            db.flush()  # get new id without full commit
+            db.flush()
             old_to_new[src.id] = new_entry.id
 
-        # Copy relations where both endpoints are within the copied set
         source_relations = (
             db.query(CodexRelation)
             .filter(
@@ -110,5 +131,13 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
+    # Block deletion if other projects live-share this project's codex
+    sharers = db.query(Project).filter(Project.shared_codex_project_id == project_id).count()
+    if sharers > 0:
+        raise HTTPException(
+            409,
+            f"Cannot delete: {sharers} other project(s) share this project's codex. "
+            "Remove the sharing link from those projects first."
+        )
     db.delete(project)
     db.commit()

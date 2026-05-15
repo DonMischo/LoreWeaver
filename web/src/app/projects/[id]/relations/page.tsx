@@ -5,6 +5,9 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { User, MapPin, Package, Scroll, Tag, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CodexEntryDialog } from "@/components/codex/CodexEntryDialog";
+import { useCodexEntries, useUpdateCodexEntry } from "@/store/queries";
+import type { CodexEntry } from "@/types";
 
 interface GraphNode {
   id: string;
@@ -121,14 +124,36 @@ export default function RelationsPage() {
     queryFn: () => fetch(`/api/projects/${projectId}/graph`).then(r => r.json()),
   });
 
+  const { data: codexEntries = [] } = useCodexEntries(projectId);
+  const updateEntry = useUpdateCodexEntry(projectId);
+
   const [centerId, setCenterId] = useState<string | null>(null);
   const [hoveredEdge, setHoveredEdge] = useState<GraphEdge | null>(null);
+  const [dialogEntry, setDialogEntry] = useState<CodexEntry | null>(null);
+
+  // Open the codex entry dialog for a graph node (if it has a codex_id)
+  const openEntryDialog = (node: GraphNode) => {
+    if (!node.codex_id) return;
+    const entry = codexEntries.find(e => e.id === node.codex_id);
+    if (entry) setDialogEntry(entry);
+  };
 
   const centerNode = useMemo(() => {
     if (!data) return null;
-    const id = centerId ?? data.nodes.find(n => n.entry_type === "character")?.id ?? data.nodes[0]?.id ?? null;
-    return data.nodes.find(n => n.id === id) ?? null;
-  }, [data, centerId]);
+    let defaultId = centerId;
+    if (!defaultId) {
+      // Prefer is_main_char=true characters
+      const mainChar = codexEntries.find(e => e.is_main_char && e.entry_type === "character");
+      if (mainChar) {
+        const node = data.nodes.find(n => n.codex_id === mainChar.id);
+        if (node) defaultId = node.id;
+      }
+      if (!defaultId) {
+        defaultId = data.nodes.find(n => n.entry_type === "character")?.id ?? data.nodes[0]?.id ?? null;
+      }
+    }
+    return data.nodes.find(n => n.id === defaultId) ?? null;
+  }, [data, centerId, codexEntries]);
 
   // Layout: center node + connected nodes arranged radially
   const layout = useMemo(() => {
@@ -200,18 +225,26 @@ export default function RelationsPage() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Node list */}
+        {/* Node list — click opens codex dialog (if entry exists), SVG node click re-centres */}
         <aside className="w-48 border-r border-border overflow-y-auto py-2 shrink-0">
           {data.nodes.map(n => {
             const Icon = TYPE_ICONS[n.entry_type] ?? Tag;
+            const hasCodexEntry = !!n.codex_id && codexEntries.some(e => e.id === n.codex_id);
             return (
               <button
                 key={n.id}
-                onClick={() => setCenterId(n.id)}
+                onClick={() => {
+                  if (hasCodexEntry) {
+                    openEntryDialog(n);
+                  } else {
+                    setCenterId(n.id);
+                  }
+                }}
                 className={cn(
                   "w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-secondary/50 text-left",
                   centerNode?.id === n.id && "bg-secondary font-medium"
                 )}
+                title={hasCodexEntry ? "Click to edit entry" : undefined}
               >
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: n.color }} />
                 <Icon className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -221,7 +254,7 @@ export default function RelationsPage() {
           })}
         </aside>
 
-        {/* SVG canvas */}
+        {/* SVG canvas — clicking a node re-centres */}
         <div className="flex-1 overflow-auto bg-background/50">
           <svg
             viewBox={`0 0 ${W} ${H}`}
@@ -284,6 +317,21 @@ export default function RelationsPage() {
           <span className="inline-block w-6 border-t border-dashed border-muted-foreground" /> Inline <code>[rel:]</code> tag
         </span>
       </div>
+
+      {/* Codex entry edit dialog — opened by clicking left panel entries */}
+      {dialogEntry && (
+        <CodexEntryDialog
+          open={!!dialogEntry}
+          onClose={() => setDialogEntry(null)}
+          onSave={(data) => {
+            updateEntry.mutate({ id: dialogEntry.id, data });
+            setDialogEntry(null);
+          }}
+          initial={dialogEntry}
+          title="Edit Entry"
+          allEntries={codexEntries}
+        />
+      )}
     </div>
   );
 }
