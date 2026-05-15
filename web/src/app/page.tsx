@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, Plus, Trash2, Calendar, FileText, BookCopy, Sparkles, TriangleAlert } from "lucide-react";
+import { BookOpen, Plus, Trash2, Calendar, FileText, BookCopy, Sparkles, TriangleAlert, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +14,7 @@ import {
 import { useProjects, useCreateProject, useDeleteProject } from "@/store/queries";
 import { cn } from "@/lib/utils";
 
-type CodexOption = "fresh" | "copy";
+type CodexOption = "fresh" | "copy" | "share";
 
 interface DeleteTarget { id: number; title: string }
 
@@ -29,9 +29,11 @@ export default function Dashboard() {
   const [description, setDescription] = useState("");
   const [codexOption, setCodexOption] = useState<CodexOption>("fresh");
   const [copyFromId, setCopyFromId] = useState<number | "">("");
+  const [shareFromId, setShareFromId] = useState<number | "">("");
 
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const otherProjects = projects; // all projects available as copy sources
 
@@ -40,17 +42,21 @@ export default function Dashboard() {
     setDescription("");
     setCodexOption("fresh");
     setCopyFromId("");
+    setShareFromId("");
     setDialogOpen(true);
   };
 
   const handleCreate = async () => {
     if (!title.trim()) return;
-    const payload: { title: string; description?: string; copy_codex_from?: number } = {
+    const payload: { title: string; description?: string; copy_codex_from?: number; share_codex_from?: number } = {
       title: title.trim(),
       description: description.trim() || undefined,
     };
     if (codexOption === "copy" && copyFromId !== "") {
       payload.copy_codex_from = Number(copyFromId);
+    }
+    if (codexOption === "share" && shareFromId !== "") {
+      payload.share_codex_from = Number(shareFromId);
     }
     const project = await createProject.mutateAsync(payload);
     setDialogOpen(false);
@@ -104,9 +110,17 @@ export default function Dashboard() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Calendar className="h-3 w-3" />
-                    {new Date(project.updated_at).toLocaleDateString()}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(project.updated_at).toLocaleDateString()}
+                    </span>
+                    {project.shared_codex_project_id && (
+                      <span className="flex items-center gap-1 text-primary/70">
+                        <Link2 className="h-3 w-3" />
+                        Shared codex
+                      </span>
+                    )}
                   </div>
                 </Link>
                 <button
@@ -175,7 +189,7 @@ export default function Dashboard() {
             {/* Codex option */}
             <div className="space-y-2">
               <Label>Codex</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setCodexOption("fresh")}
@@ -188,7 +202,7 @@ export default function Dashboard() {
                 >
                   <Sparkles className="h-5 w-5" />
                   <span className="font-medium">Fresh codex</span>
-                  <span className="text-[10px] opacity-70">Start with an empty world bible</span>
+                  <span className="text-[10px] opacity-70 text-center">Start with an empty world bible</span>
                 </button>
                 <button
                   type="button"
@@ -203,8 +217,24 @@ export default function Dashboard() {
                   )}
                 >
                   <BookCopy className="h-5 w-5" />
-                  <span className="font-medium">Copy from project</span>
-                  <span className="text-[10px] opacity-70">Reuse characters, places & lore</span>
+                  <span className="font-medium">Copy codex</span>
+                  <span className="text-[10px] opacity-70 text-center">Independent snapshot</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCodexOption("share")}
+                  disabled={otherProjects.length === 0}
+                  className={cn(
+                    "flex flex-col items-center gap-1.5 rounded-lg border p-3 text-xs transition-colors",
+                    codexOption === "share"
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground",
+                    otherProjects.length === 0 && "opacity-40 cursor-not-allowed"
+                  )}
+                >
+                  <Link2 className="h-5 w-5" />
+                  <span className="font-medium">Share codex</span>
+                  <span className="text-[10px] opacity-70 text-center">Live link — same world</span>
                 </button>
               </div>
 
@@ -225,7 +255,30 @@ export default function Dashboard() {
                     ))}
                   </select>
                   <p className="text-[11px] text-muted-foreground pt-0.5">
-                    All entries, relations, and the time system will be copied. Changes won't affect the original.
+                    All entries and relations are copied. Changes won't affect the original.
+                  </p>
+                </div>
+              )}
+
+              {codexOption === "share" && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Share codex from</Label>
+                  <select
+                    value={shareFromId}
+                    onChange={(e) => setShareFromId(e.target.value === "" ? "" : Number(e.target.value))}
+                    className={cn(
+                      "w-full h-9 rounded-md border border-input bg-background px-3 text-sm",
+                      "focus:outline-none focus:ring-1 focus:ring-ring"
+                    )}
+                  >
+                    <option value="">— select a project —</option>
+                    {otherProjects.map((p) => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground pt-0.5">
+                    Both projects see the same codex entries. The timeline will span all shared projects.
+                    The source project cannot be deleted while this link exists.
                   </p>
                 </div>
               )}
@@ -238,7 +291,8 @@ export default function Dashboard() {
                 disabled={
                   !title.trim() ||
                   createProject.isPending ||
-                  (codexOption === "copy" && copyFromId === "")
+                  (codexOption === "copy" && copyFromId === "") ||
+                  (codexOption === "share" && shareFromId === "")
                 }
               >
                 {createProject.isPending ? "Creating…" : "Create Project"}
@@ -251,7 +305,7 @@ export default function Dashboard() {
       {/* ── Delete confirmation dialog ── */}
       <Dialog
         open={!!deleteTarget}
-        onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteConfirm(""); } }}
+        onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteConfirm(""); setDeleteError(null); } }}
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -264,18 +318,28 @@ export default function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 pt-1">
+            {deleteError && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {deleteError}
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">
                 Type <span className="font-mono font-semibold text-foreground">DELETE</span> to confirm
               </Label>
               <Input
                 value={deleteConfirm}
-                onChange={(e) => setDeleteConfirm(e.target.value)}
-                onKeyDown={(e) => {
+                onChange={(e) => { setDeleteConfirm(e.target.value); setDeleteError(null); }}
+                onKeyDown={async (e) => {
                   if (e.key === "Enter" && deleteConfirm === "DELETE" && deleteTarget) {
-                    deleteProject.mutate(deleteTarget.id);
-                    setDeleteTarget(null);
-                    setDeleteConfirm("");
+                    try {
+                      await deleteProject.mutateAsync(deleteTarget.id);
+                      setDeleteTarget(null);
+                      setDeleteConfirm("");
+                      setDeleteError(null);
+                    } catch (err) {
+                      setDeleteError(err instanceof Error ? err.message.replace(/^\d+: /, "") : "Delete failed.");
+                    }
                   }
                 }}
                 placeholder="DELETE"
@@ -284,17 +348,22 @@ export default function Dashboard() {
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirm(""); }}>
+              <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirm(""); setDeleteError(null); }}>
                 Cancel
               </Button>
               <Button
                 variant="destructive"
                 disabled={deleteConfirm !== "DELETE" || deleteProject.isPending}
-                onClick={() => {
+                onClick={async () => {
                   if (!deleteTarget) return;
-                  deleteProject.mutate(deleteTarget.id);
-                  setDeleteTarget(null);
-                  setDeleteConfirm("");
+                  try {
+                    await deleteProject.mutateAsync(deleteTarget.id);
+                    setDeleteTarget(null);
+                    setDeleteConfirm("");
+                    setDeleteError(null);
+                  } catch (err) {
+                    setDeleteError(err instanceof Error ? err.message.replace(/^\d+: /, "") : "Delete failed.");
+                  }
                 }}
               >
                 Delete project
