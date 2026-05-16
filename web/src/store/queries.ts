@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi } from "@/lib/api";
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -315,6 +315,46 @@ export const useDeleteFragment = (projectId: number) => {
   return useMutation({
     mutationFn: fragmentsApi.delete,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["fragments", projectId] }),
+  });
+};
+
+// ── Images ────────────────────────────────────────────────────────────────────
+
+export const useUploadProjectCover = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => imagesApi.uploadProjectCover(projectId, file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects", projectId] });
+    },
+  });
+};
+
+export const useDeleteProjectCover = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => imagesApi.deleteProjectCover(projectId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects", projectId] });
+    },
+  });
+};
+
+export const useUploadCodexImage = (entryId: number, projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => imagesApi.uploadCodexImage(entryId, file),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["codex", projectId] }),
+  });
+};
+
+export const useDeleteCodexImage = (entryId: number, projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => imagesApi.deleteCodexImage(entryId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["codex", projectId] }),
   });
 };
 

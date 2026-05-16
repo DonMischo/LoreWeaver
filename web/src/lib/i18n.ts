@@ -147,6 +147,15 @@ const en: Record<string, string> = {
   bulk_apply_to: "Apply to",
   bulk_select_entry: "Select entry…",
   bulk_custom_relation: "Custom…",
+
+  // Images
+  img_cover: "Cover Image",
+  img_portrait: "Portrait",
+  img_upload: "Upload image",
+  img_change: "Change image",
+  img_remove: "Remove image",
+  img_formats: "JPG, PNG, WebP",
+  img_new_entry_hint: "Save the entry first to upload an image.",
 };
 
 const de: Record<string, string> = {
@@ -269,6 +278,13 @@ const de: Record<string, string> = {
   bulk_apply_to: "Anwenden auf",
   bulk_select_entry: "Eintrag auswählen…",
   bulk_custom_relation: "Benutzerdefiniert…",
+  img_cover: "Titelbild",
+  img_portrait: "Porträt",
+  img_upload: "Bild hochladen",
+  img_change: "Bild ändern",
+  img_remove: "Bild entfernen",
+  img_formats: "JPG, PNG, WebP",
+  img_new_entry_hint: "Eintrag zuerst speichern, um ein Bild hochzuladen.",
 };
 
 const es: Record<string, string> = {
@@ -391,6 +407,13 @@ const es: Record<string, string> = {
   bulk_apply_to: "Aplicar a",
   bulk_select_entry: "Seleccionar entrada…",
   bulk_custom_relation: "Personalizado…",
+  img_cover: "Imagen de portada",
+  img_portrait: "Retrato",
+  img_upload: "Subir imagen",
+  img_change: "Cambiar imagen",
+  img_remove: "Quitar imagen",
+  img_formats: "JPG, PNG, WebP",
+  img_new_entry_hint: "Guarda la entrada primero para subir una imagen.",
 };
 
 const fr: Record<string, string> = {
@@ -513,6 +536,13 @@ const fr: Record<string, string> = {
   bulk_apply_to: "Appliquer à",
   bulk_select_entry: "Sélectionner une entrée…",
   bulk_custom_relation: "Personnalisé…",
+  img_cover: "Image de couverture",
+  img_portrait: "Portrait",
+  img_upload: "Télécharger une image",
+  img_change: "Changer l'image",
+  img_remove: "Supprimer l'image",
+  img_formats: "JPG, PNG, WebP",
+  img_new_entry_hint: "Enregistrez d'abord l'entrée pour télécharger une image.",
 };
 
 const pt: Record<string, string> = {
@@ -635,6 +665,13 @@ const pt: Record<string, string> = {
   bulk_apply_to: "Aplicar a",
   bulk_select_entry: "Selecionar entrada…",
   bulk_custom_relation: "Personalizado…",
+  img_cover: "Imagem de capa",
+  img_portrait: "Retrato",
+  img_upload: "Carregar imagem",
+  img_change: "Alterar imagem",
+  img_remove: "Remover imagem",
+  img_formats: "JPG, PNG, WebP",
+  img_new_entry_hint: "Guarda a entrada primeiro para carregar uma imagem.",
 };
 
 const sv: Record<string, string> = {
@@ -757,6 +794,13 @@ const sv: Record<string, string> = {
   bulk_apply_to: "Tillämpa på",
   bulk_select_entry: "Välj post…",
   bulk_custom_relation: "Anpassad…",
+  img_cover: "Omslagsbild",
+  img_portrait: "Porträtt",
+  img_upload: "Ladda upp bild",
+  img_change: "Byt bild",
+  img_remove: "Ta bort bild",
+  img_formats: "JPG, PNG, WebP",
+  img_new_entry_hint: "Spara posten först för att ladda upp en bild.",
 };
 
 const da: Record<string, string> = {
@@ -879,6 +923,13 @@ const da: Record<string, string> = {
   bulk_apply_to: "Anvend på",
   bulk_select_entry: "Vælg post…",
   bulk_custom_relation: "Brugerdefineret…",
+  img_cover: "Omslagsbillede",
+  img_portrait: "Portræt",
+  img_upload: "Upload billede",
+  img_change: "Skift billede",
+  img_remove: "Fjern billede",
+  img_formats: "JPG, PNG, WebP",
+  img_new_entry_hint: "Gem posten først for at uploade et billede.",
 };
 
 const no: Record<string, string> = {
@@ -1001,6 +1052,13 @@ const no: Record<string, string> = {
   bulk_apply_to: "Bruk på",
   bulk_select_entry: "Velg post…",
   bulk_custom_relation: "Egendefinert…",
+  img_cover: "Omslagsbilde",
+  img_portrait: "Portrett",
+  img_upload: "Last opp bilde",
+  img_change: "Bytt bilde",
+  img_remove: "Fjern bilde",
+  img_formats: "JPG, PNG, WebP",
+  img_new_entry_hint: "Lagre posten forst for a laste opp et bilde.",
 };
 
 const zh: Record<string, string> = {
@@ -1123,6 +1181,13 @@ const zh: Record<string, string> = {
   bulk_apply_to: "应用到",
   bulk_select_entry: "选择条目…",
   bulk_custom_relation: "自定义…",
+  img_cover: "封面图片",
+  img_portrait: "肖像",
+  img_upload: "上传图片",
+  img_change: "更换图片",
+  img_remove: "删除图片",
+  img_formats: "JPG, PNG, WebP",
+  img_new_entry_hint: "请先保存条目，然后再上传图片。",
 };
 
 export const translations: Record<Locale, Record<string, string>> = {

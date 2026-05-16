@@ -1,9 +1,12 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from database import engine, migrate_to_four_level, migrate_new_columns, migrate_entry_groups
 from models import Base
-from routers import projects, acts, chapters, scenes, codex, settings, ai, export, imports, graph, time, fragments
+from routers import projects, acts, chapters, scenes, codex, settings, ai, export, imports, graph, time, fragments, images
 
 # ── Run migrations BEFORE create_all so table renames happen first ────────────
 migrate_to_four_level()
@@ -11,6 +14,8 @@ migrate_to_four_level()
 Base.metadata.create_all(bind=engine)
 migrate_new_columns()
 migrate_entry_groups()
+
+os.makedirs("uploads", exist_ok=True)
 
 app = FastAPI(title="LoreWeaver API", version="0.1.0")
 
@@ -34,6 +39,9 @@ app.include_router(imports.router)
 app.include_router(graph.router)
 app.include_router(time.router)
 app.include_router(fragments.router)
+app.include_router(images.router)
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 @app.get("/api/health")

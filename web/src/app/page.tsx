@@ -3,7 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, Plus, Trash2, Calendar, FileText, BookCopy, Sparkles, TriangleAlert, Link2 } from "lucide-react";
+import { BookOpen, Plus, Trash2, Calendar, BookCopy, Sparkles, TriangleAlert, Link2, ImageIcon } from "lucide-react";
+import { imagesApi } from "@/lib/api";
+import { useUploadProjectCover, useDeleteProjectCover } from "@/store/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +18,91 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 
 type CodexOption = "fresh" | "copy" | "share";
+
+function ProjectCard({
+  project,
+  onDelete,
+}: {
+  project: import("@/types").Project;
+  onDelete: (id: number, title: string) => void;
+}) {
+  const { t } = useLanguage();
+  const uploadCover = useUploadProjectCover(project.id);
+  const deleteCover = useDeleteProjectCover(project.id);
+
+  const handleCoverClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/jpeg,image/png,image/webp,image/gif";
+    input.onchange = () => {
+      if (input.files?.[0]) uploadCover.mutate(input.files[0]);
+    };
+    input.click();
+  };
+
+  return (
+    <div className="group relative bg-card border border-border rounded-lg overflow-hidden hover:border-primary/50 transition-colors">
+      {/* Cover image area */}
+      <div
+        className="relative w-full h-32 bg-muted/40 flex items-center justify-center cursor-pointer overflow-hidden"
+        onClick={handleCoverClick}
+        title={project.cover_image ? t("img_change") : t("img_upload")}
+      >
+        {project.cover_image ? (
+          <>
+            <img
+              src={imagesApi.url(project.cover_image)}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+            <button
+              className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 bg-background/80 rounded p-0.5 hover:text-destructive transition-opacity"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteCover.mutate(); }}
+              title={t("img_remove")}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-1 text-muted-foreground/50 group-hover:text-muted-foreground/80 transition-colors">
+            <ImageIcon className="h-8 w-8" />
+            <span className="text-[10px]">{t("img_upload")}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Card content */}
+      <Link href={`/projects/${project.id}`} className="block p-4">
+        <div className="mb-2 min-w-0">
+          <h3 className="font-semibold truncate">{project.title}</h3>
+          {project.description && (
+            <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{project.description}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Calendar className="h-3 w-3" />
+            {new Date(project.updated_at).toLocaleDateString()}
+          </span>
+          {project.shared_codex_project_id && (
+            <span className="flex items-center gap-1 text-primary/70">
+              <Link2 className="h-3 w-3" />
+              {t("dash_shared_codex")}
+            </span>
+          )}
+        </div>
+      </Link>
+
+      <button
+        className="absolute top-2 left-2 opacity-0 group-hover:opacity-60 hover:opacity-100 hover:text-destructive transition-opacity bg-background/70 rounded p-0.5"
+        onClick={(e) => { e.preventDefault(); onDelete(project.id, project.title); }}
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
 
 interface DeleteTarget { id: number; title: string }
 
@@ -98,44 +185,11 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {projects.map((project) => (
-              <div
+              <ProjectCard
                 key={project.id}
-                className="group relative bg-card border border-border rounded-lg p-5 hover:border-primary/50 transition-colors"
-              >
-                <Link href={`/projects/${project.id}`} className="block">
-                  <div className="flex items-start gap-3 mb-3">
-                    <FileText className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                    <div className="min-w-0">
-                      <h3 className="font-semibold truncate">{project.title}</h3>
-                      {project.description && (
-                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{project.description}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(project.updated_at).toLocaleDateString()}
-                    </span>
-                    {project.shared_codex_project_id && (
-                      <span className="flex items-center gap-1 text-primary/70">
-                        <Link2 className="h-3 w-3" />
-                        {t("dash_shared_codex")}
-                      </span>
-                    )}
-                  </div>
-                </Link>
-                <button
-                  className="absolute top-3 right-3 opacity-0 group-hover:opacity-60 hover:opacity-100 hover:text-destructive transition-opacity"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setDeleteTarget({ id: project.id, title: project.title });
-                    setDeleteConfirm("");
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
+                project={project}
+                onDelete={(id, title) => { setDeleteTarget({ id, title }); setDeleteConfirm(""); }}
+              />
             ))}
           </div>
         )}

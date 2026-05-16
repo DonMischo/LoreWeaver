@@ -24,6 +24,7 @@ export interface Project {
   description: string | null;
   book_meta: BookMeta | null;
   shared_codex_project_id: number | null;
+  cover_image: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -127,6 +128,7 @@ export interface CodexEntry {
   tags: string[];
   is_main_char: boolean;
   inventory: CharacterInventory | null;
+  image_path: string | null;
   created_at: string;
   updated_at: string;
 }

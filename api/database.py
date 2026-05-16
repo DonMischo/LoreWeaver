@@ -78,6 +78,8 @@ def migrate_new_columns():
         ("scenes",        "scene_time",             "TEXT"),
         ("codex_entries", "is_main_char",            "INTEGER DEFAULT 0"),
         ("codex_entries", "inventory",               "TEXT"),
+        ("projects",      "cover_image",             "TEXT"),
+        ("codex_entries", "image_path",              "TEXT"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in new_columns:

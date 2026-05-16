@@ -53,6 +53,7 @@ class ProjectOut(ProjectBase):
     updated_at: datetime
     book_meta: Optional[BookMeta] = None
     shared_codex_project_id: Optional[int] = None
+    cover_image: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -185,6 +186,7 @@ class CodexEntryBase(BaseModel):
     tags: list[str] = Field(default_factory=list)
     is_main_char: bool = False
     inventory: Optional[Any] = None  # CharacterInventory JSON or None
+    image_path: Optional[str] = None
 
 
 class CodexEntryCreate(CodexEntryBase):
@@ -237,6 +239,7 @@ class CodexEntryOut(CodexEntryBase):
             "tags": entry.get_tags(),
             "is_main_char": bool(entry.is_main_char),
             "inventory": inv,
+            "image_path": entry.image_path,
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
         }

@@ -120,6 +120,34 @@ export const codexApi = {
   deleteRelation: (id: number) => req<void>(`/codex/relations/${id}`, { method: "DELETE" }),
 };
 
+// ── Images ────────────────────────────────────────────────────────────────────
+
+async function upload<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}${path}`, { method: "POST", body: form });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function deleteImage(path: string): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) throw new Error(await res.text());
+}
+
+export const imagesApi = {
+  uploadProjectCover: (projectId: number, file: File) =>
+    upload<{ cover_image: string }>(`/projects/${projectId}/cover`, file),
+  deleteProjectCover: (projectId: number) =>
+    deleteImage(`/projects/${projectId}/cover`),
+  uploadCodexImage: (entryId: number, file: File) =>
+    upload<{ image_path: string }>(`/codex/${entryId}/image`, file),
+  deleteCodexImage: (entryId: number) =>
+    deleteImage(`/codex/${entryId}/image`),
+  /** Convert a stored relative path to an absolute URL for <img src> */
+  url: (path: string) => `/${path}`,
+};
+
 // ── Import ────────────────────────────────────────────────────────────────────
 
 export interface ImportResult {

@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Plus, Trash2, Link2 } from "lucide-react";
+import { X, Plus, Trash2, Link2, ImageIcon } from "lucide-react";
+import { imagesApi } from "@/lib/api";
+import { useUploadCodexImage, useDeleteCodexImage } from "@/store/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -83,10 +85,15 @@ export function CodexEntryDialog({
   const { t } = useLanguage();
   const isExisting = !!initial?.id;
   const entryId    = initial?.id ?? 0;
+  const projectId  = initial?.project_id ?? 0;
 
   const { data: relations = [] } = useEntryRelations(isExisting ? entryId : 0);
-  const createRel  = useCreateRelation(entryId);
-  const deleteRel  = useDeleteRelation(entryId);
+  const createRel    = useCreateRelation(entryId);
+  const deleteRel    = useDeleteRelation(entryId);
+  const uploadImg    = useUploadCodexImage(entryId, projectId);
+  const deleteImg    = useDeleteCodexImage(entryId, projectId);
+
+  const [imagePath, setImagePath] = useState<string | null>(initial?.image_path ?? null);
 
   // Click-outside to close group dropdown
   useEffect(() => {
@@ -124,6 +131,7 @@ export function CodexEntryDialog({
       setRelTarget(mainChar ? String(mainChar.id) : "");
       setRelPreset(PRESET_RELATIONS[0]);
       setRelCustom("");
+      setImagePath(initial?.image_path ?? null);
     }
   }, [open, initial, allEntries]);
 
@@ -377,6 +385,50 @@ export function CodexEntryDialog({
                       </span>
                     ))}
                   </div>
+                )}
+              </div>
+
+              {/* Image */}
+              <div className="space-y-1.5">
+                <Label>{t("img_portrait")}</Label>
+                {isExisting ? (
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="relative w-20 h-24 rounded border border-border bg-muted/40 flex items-center justify-center overflow-hidden cursor-pointer shrink-0"
+                      onClick={() => {
+                        const input = document.createElement("input");
+                        input.type = "file";
+                        input.accept = "image/jpeg,image/png,image/webp,image/gif";
+                        input.onchange = () => {
+                          if (input.files?.[0]) {
+                            uploadImg.mutateAsync(input.files[0]).then((data) => setImagePath(data.image_path));
+                          }
+                        };
+                        input.click();
+                      }}
+                      title={imagePath ? t("img_change") : t("img_upload")}
+                    >
+                      {imagePath ? (
+                        <img src={imagesApi.url(imagePath)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1.5 pt-1">
+                      <p className="text-xs text-muted-foreground">{t("img_formats")}</p>
+                      {imagePath && (
+                        <button
+                          type="button"
+                          className="text-xs text-destructive hover:underline text-left"
+                          onClick={() => deleteImg.mutateAsync().then(() => setImagePath(null))}
+                        >
+                          {t("img_remove")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t("img_new_entry_hint")}</p>
                 )}
               </div>
 

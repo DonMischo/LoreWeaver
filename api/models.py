@@ -30,6 +30,7 @@ class Project(Base):
     fragment_tabs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: ["tab-id", ...]
     book_meta: Mapped[Optional[str]] = mapped_column(Text, nullable=True)      # JSON: BookMeta dict
     shared_codex_project_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # FK to projects.id (no cascade)
+    cover_image: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     acts: Mapped[list["Act"]] = relationship(
         "Act", back_populates="project", cascade="all, delete-orphan",
@@ -121,6 +122,7 @@ class CodexEntry(Base):
     tags:        Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="[]")
     is_main_char: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     inventory:   Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: CharacterInventory
+    image_path:  Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
