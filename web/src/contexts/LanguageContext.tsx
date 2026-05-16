@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useEffect } from "react";
 import type { ReactNode } from "react";
 import { type Locale, translate } from "@/lib/i18n";
 
@@ -17,10 +17,13 @@ const LanguageContext = createContext<LanguageContextValue>({
 });
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window === "undefined") return "en";
-    return (localStorage.getItem("lw-language") as Locale | null) ?? "en";
-  });
+  // Always start with "en" to match the server render, then sync after mount.
+  const [locale, setLocaleState] = useState<Locale>("en");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("lw-language") as Locale | null;
+    if (stored) setLocaleState(stored);
+  }, []);
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);
