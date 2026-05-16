@@ -261,7 +261,7 @@ const de: Record<string, string> = {
   bulk_note: "Nur ausgefüllte Felder werden angewendet. Leere Felder bleiben unverändert.",
   bulk_change_type: "Typ ändern",
   bulk_subtype_species: "Untertyp / Spezies festlegen",
-  bulk_subtype_note: "Wird als „Spezies" für Charaktere und als „Untertyp" für alle anderen angewendet.",
+  bulk_subtype_note: "Wird als 'Spezies' für Charaktere und als 'Untertyp' für alle anderen angewendet.",
   bulk_add_tags: "Tags hinzufügen",
   bulk_add_relation: "Beziehung zu allen hinzufügen",
   bulk_tag_placeholder: "Tag für alle hinzufügen…",
