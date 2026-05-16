@@ -17,9 +17,16 @@ const ENTRY_TYPES: EntryType[] = ["character", "location", "item", "lore", "cust
 
 const PRESET_RELATIONS = [
   "friend", "enemy", "ally", "rival",
-  "family", "mentor", "student",
-  "possession", "home", "origin",
+  "mentor", "student",
+  "home", "origin",
   "member of", "leads",
+  "parent", "child",
+  "mother", "father",
+  "grandmother", "grandfather",
+  "aunt", "uncle",
+  "sister", "brother",
+  "spouse", "partner",
+  "cousin",
   "custom…",
 ];
 
