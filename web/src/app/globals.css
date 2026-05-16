@@ -95,6 +95,16 @@
   pointer-events: none;
 }
 
+/* Reset indentation inside command node frames */
+.ProseMirror [data-type="note"] p,
+.ProseMirror [data-type="currency"] p,
+.ProseMirror [data-type="item"] p,
+.ProseMirror [data-type="scene-image"] p {
+  text-indent: 0;
+  text-align: left;
+  margin-bottom: 0;
+}
+
 /* Codex highlight marks */
 .codex-highlight {
   border-bottom: 2px solid;

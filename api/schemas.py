@@ -296,6 +296,47 @@ class TabsUpdate(BaseModel):
     custom_tabs: list[str]  # names of custom (non-builtin) tabs
 
 
+# ── Scene Commands ────────────────────────────────────────────────────────────
+
+class SceneCommandIn(BaseModel):
+    command_type: str            # "currency" | "item"
+    character_id: int
+    item_id: Optional[int] = None
+    data: Optional[dict] = None  # {currencyName, delta} or {qty}
+    order_index: int = 0
+
+
+class SceneCommandSyncRequest(BaseModel):
+    commands: list[SceneCommandIn]
+
+
+class SceneCommandOut(BaseModel):
+    id: int
+    scene_id: int
+    command_type: str
+    character_id: int
+    item_id: Optional[int]
+    data: Optional[Any]
+    scene_time: Optional[Any]
+    order_index: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _parse_json(cls, data):
+        if hasattr(data, "__dict__"):
+            for field in ("data", "scene_time"):
+                raw = getattr(data, field, None)
+                if isinstance(raw, str):
+                    try:
+                        object.__setattr__(data, field, json.loads(raw))
+                    except Exception:
+                        pass
+        return data
+
+
 # ── Settings ──────────────────────────────────────────────────────────────────
 
 class SettingsUpdate(BaseModel):

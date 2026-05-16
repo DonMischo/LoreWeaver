@@ -181,6 +181,30 @@ export const importApi = {
   },
 };
 
+// ── Scene Commands ────────────────────────────────────────────────────────────
+
+export interface SceneCommandIn {
+  command_type: "currency" | "item";
+  character_id: number;
+  item_id?: number | null;
+  data?: Record<string, unknown> | null;
+  order_index: number;
+}
+
+export const sceneCommandsApi = {
+  sync: (sceneId: number, commands: SceneCommandIn[]) =>
+    req(`/scenes/${sceneId}/commands/sync`, {
+      method: "POST",
+      body: JSON.stringify({ commands }),
+    }),
+  history: (projectId: number, params?: { command_type?: string; character_id?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.command_type) qs.set("command_type", params.command_type);
+    if (params?.character_id) qs.set("character_id", String(params.character_id));
+    return req<unknown[]>(`/projects/${projectId}/command-history?${qs}`);
+  },
+};
+
 // ── Time Config ───────────────────────────────────────────────────────────────
 
 export const timeApi = {

@@ -93,6 +93,10 @@ class Scene(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
     chapter: Mapped["Chapter"] = relationship("Chapter", back_populates="scenes")
+    commands: Mapped[list["SceneCommand"]] = relationship(
+        "SceneCommand", back_populates="scene", cascade="all, delete-orphan",
+        order_by="SceneCommand.order_index"
+    )
 
 
 class EntryType(str, enum.Enum):
@@ -199,6 +203,23 @@ class Fragment(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
     project: Mapped["Project"] = relationship("Project", back_populates="fragments")
+
+
+class SceneCommand(Base):
+    """Tracks currency/item changes embedded as commands in a scene's text."""
+    __tablename__ = "scene_commands"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    scene_id: Mapped[int] = mapped_column(Integer, ForeignKey("scenes.id", ondelete="CASCADE"))
+    command_type: Mapped[str] = mapped_column(String(50))   # "currency" | "item"
+    character_id: Mapped[int] = mapped_column(Integer)       # codex_entries.id
+    item_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # codex_entries.id (item type)
+    data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)        # JSON
+    scene_time: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON SceneTime snapshot
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    scene: Mapped["Scene"] = relationship("Scene", back_populates="commands")
 
 
 class UserSettings(Base):

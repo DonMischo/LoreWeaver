@@ -59,3 +59,4 @@ api/loreweaver.db-wal
 *.db
 api/uv.lock
 CLAUDE.md
+/api/uploads

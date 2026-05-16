@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi } from "@/lib/api";
+import type { SceneCommandIn } from "@/lib/api";
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -317,6 +318,13 @@ export const useDeleteFragment = (projectId: number) => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["fragments", projectId] }),
   });
 };
+
+// ── Scene Commands ────────────────────────────────────────────────────────────
+
+export const useSyncSceneCommands = (sceneId: number) =>
+  useMutation({
+    mutationFn: (commands: SceneCommandIn[]) => sceneCommandsApi.sync(sceneId, commands),
+  });
 
 // ── Images ────────────────────────────────────────────────────────────────────
 

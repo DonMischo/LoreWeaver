@@ -1,11 +1,12 @@
 import os
 import shutil
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Project, CodexEntry
+from models import Project, CodexEntry, Scene
 
 router = APIRouter(tags=["images"])
 
@@ -85,3 +86,22 @@ def delete_codex_image(entry_id: int, db: Session = Depends(get_db)):
     _delete_file(entry.image_path or "")
     entry.image_path = None
     db.commit()
+
+
+# ── Scene inline images (illustrated novel) ───────────────────────────────────
+
+@router.post("/api/scenes/{scene_id}/images")
+def upload_scene_image(
+    scene_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Upload an inline illustration image for use inside scene text."""
+    scene = db.get(Scene, scene_id)
+    if not scene:
+        raise HTTPException(404, "Scene not found")
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(400, "Unsupported image type. Use JPG, PNG, WebP, or GIF.")
+    stem = uuid.uuid4().hex[:12]
+    rel_path = _save_upload(file, f"scenes/{scene_id}", stem)
+    return {"src": rel_path}

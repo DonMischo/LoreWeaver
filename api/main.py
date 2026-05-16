@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from database import engine, migrate_to_four_level, migrate_new_columns, migrate_entry_groups
 from models import Base
-from routers import projects, acts, chapters, scenes, codex, settings, ai, export, imports, graph, time, fragments, images
+from routers import projects, acts, chapters, scenes, codex, settings, ai, export, imports, graph, time, fragments, images, scene_commands
 
 # ── Run migrations BEFORE create_all so table renames happen first ────────────
 migrate_to_four_level()
@@ -40,6 +40,7 @@ app.include_router(graph.router)
 app.include_router(time.router)
 app.include_router(fragments.router)
 app.include_router(images.router)
+app.include_router(scene_commands.router)
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 

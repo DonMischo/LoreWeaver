@@ -19,8 +19,10 @@ import {
   useCreateCodexEntry, useProject,
   useTimeConfig, useUpdateTimeConfig,
   useCreateFragment, useDeleteScene,
+  useSyncSceneCommands,
 } from "@/store/queries";
 import type { SceneTime } from "@/types";
+import type { SceneCommandIn } from "@/lib/api";
 import { DEFAULT_TIME_CONFIG } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +61,7 @@ export default function ScenePage() {
   const createFragment = useCreateFragment(projectId);
   // chapter_id is on scene; hook needs it — use 0 until scene loads, only called after
   const deleteScene = useDeleteScene(scene?.chapter_id ?? 0);
+  const syncCommands = useSyncSceneCommands(sceneIdNum);
 
   const timeConfig = timeConfigData ?? DEFAULT_TIME_CONFIG;
 
@@ -86,11 +89,50 @@ export default function ScenePage() {
     }
   }, [scene?.id]);
 
+  // Extract trackable commands from HTML content
+  const extractCommands = useCallback((html: string): SceneCommandIn[] => {
+    if (!html || typeof document === "undefined") return [];
+    const dom = new DOMParser().parseFromString(html, "text/html");
+    const cmds: SceneCommandIn[] = [];
+    let order = 0;
+    dom.querySelectorAll('[data-type="currency"],[data-type="item"]').forEach((el) => {
+      const type = el.getAttribute("data-type") as "currency" | "item";
+      if (type === "currency") {
+        cmds.push({
+          command_type: "currency",
+          character_id: parseInt(el.getAttribute("data-char-id") ?? "0"),
+          data: {
+            currencyName: el.getAttribute("data-currency-name") ?? "",
+            delta: parseInt(el.getAttribute("data-delta") ?? "0"),
+          },
+          order_index: order++,
+        });
+      } else {
+        cmds.push({
+          command_type: "item",
+          character_id: parseInt(el.getAttribute("data-char-id") ?? "0"),
+          item_id: parseInt(el.getAttribute("data-item-id") ?? "0") || null,
+          data: { qty: parseInt(el.getAttribute("data-qty") ?? "1") },
+          order_index: order++,
+        });
+      }
+    });
+    return cmds;
+  }, []);
+
+  // Debounced command sync (fires 2s after last change, same rhythm as autosave)
+  const syncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleContentChange = useCallback((html: string) => {
     setContent(html);
     const text = html.replace(/<[^>]+>/g, "");
     setWordCount(text.trim().split(/\s+/).filter(Boolean).length);
-  }, []);
+    // Debounce command sync
+    if (syncRef.current) clearTimeout(syncRef.current);
+    syncRef.current = setTimeout(() => {
+      const commands = extractCommands(html);
+      syncCommands.mutate(commands);
+    }, 2000);
+  }, [extractCommands, syncCommands]);
 
   const handleTitleBlur = () => {
     if (scene && title !== scene.title) {
@@ -228,6 +270,7 @@ export default function ScenePage() {
             onChange={handleContentChange}
             codexEntries={codexEntries}
             onCodexEntryClick={handleCodexEntryClick}
+            sceneId={sceneIdNum}
           />
           <StatusBar sceneWordCount={wordCount} />
         </div>
