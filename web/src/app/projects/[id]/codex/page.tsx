@@ -17,6 +17,7 @@ import { useCodexEntries, useCreateCodexEntry, useUpdateCodexEntry, useDeleteCod
 import { importApi } from "@/lib/api";
 import type { CodexEntry, EntryType } from "@/types";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -24,9 +25,7 @@ const TYPE_ICONS: Record<EntryType, React.ElementType> = {
   character: User, location: MapPin, item: Package, lore: Scroll, custom: Tag,
 };
 
-const TYPE_LABELS: Record<EntryType, string> = {
-  character: "Character", location: "Location", item: "Item", lore: "Lore", custom: "Custom",
-};
+// TYPE_LABELS built via t() inside the component; see typeLabel() helper below
 
 // ── Sort types ────────────────────────────────────────────────────────────────
 
@@ -80,6 +79,7 @@ interface FilterDropdownProps {
 function FilterDropdown({ label, options, selected, onToggle, onClear, renderOption }: FilterDropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const { t } = useLanguage();
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -126,7 +126,7 @@ function FilterDropdown({ label, options, selected, onToggle, onClear, renderOpt
               onClick={onClear}
               className="w-full text-left text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 border-t border-border mt-1"
             >
-              Clear filter
+              {t("codex_clear_filter")}
             </button>
           )}
         </div>
@@ -172,6 +172,9 @@ function useDirImport(projectId: number) {
 export default function CodexPage() {
   const { id } = useParams();
   const projectId = Number(id);
+
+  const { t } = useLanguage();
+  const typeLabel = (type: EntryType) => t(`type_${type}`);
 
   const { data: entries = [], isLoading } = useCodexEntries(projectId);
   const createEntry = useCreateCodexEntry(projectId);
@@ -313,8 +316,8 @@ export default function CodexPage() {
         <div>
           <h1 className="text-lg font-semibold">Codex</h1>
           <p className="text-xs text-muted-foreground">
-            {entries.length} {entries.length === 1 ? "entry" : "entries"}
-            {filtered.length !== entries.length && ` · ${filtered.length} shown`}
+            {entries.length} {entries.length === 1 ? t("codex_entry") : t("codex_entries")}
+            {filtered.length !== entries.length && ` · ${filtered.length} ${t("codex_shown")}`}
           </p>
         </div>
         <div className="flex items-center gap-1.5">
@@ -341,7 +344,7 @@ export default function CodexPage() {
             onClick={() => dir.inputRef.current?.click()}
             disabled={!!dir.progress}
           >
-            <FolderOpen className="h-3.5 w-3.5" /> Import folder
+            <FolderOpen className="h-3.5 w-3.5" /> {t("codex_import_folder")}
           </Button>
           <ImportButton projectId={projectId} mode="codex" className="w-auto" />
           <button
@@ -352,7 +355,7 @@ export default function CodexPage() {
             {view === "grid" ? <LayoutList className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
           </button>
           <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
-            <Plus className="h-4 w-4" /> New Entry
+            <Plus className="h-4 w-4" /> {t("codex_new_entry")}
           </Button>
         </div>
       </header>
@@ -362,25 +365,25 @@ export default function CodexPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <Input
             className="max-w-xs h-8 text-sm"
-            placeholder="Search…"
+            placeholder={t("codex_search")}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
 
           {/* Type chips */}
           <div className="flex gap-1 flex-wrap">
-            {(["all", "character", "location", "item", "lore", "custom"] as const).map(t => (
+            {(["all", "character", "location", "item", "lore", "custom"] as const).map(tp => (
               <button
-                key={t}
-                onClick={() => setTypeFilter(t)}
+                key={tp}
+                onClick={() => setTypeFilter(tp)}
                 className={cn(
                   "text-xs px-2.5 py-1 rounded-full transition-colors",
-                  typeFilter === t
+                  typeFilter === tp
                     ? "bg-primary text-primary-foreground"
                     : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                 )}
               >
-                {t === "all" ? "All" : TYPE_LABELS[t]}
+                {tp === "all" ? t("codex_all") : typeLabel(tp)}
               </button>
             ))}
           </div>
@@ -396,7 +399,7 @@ export default function CodexPage() {
                   : "bg-secondary text-muted-foreground hover:bg-secondary/80"
               )}
             >
-              Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}
+              {t("codex_filters")}{activeFilterCount > 0 && ` (${activeFilterCount})`}
             </button>
           )}
 
@@ -405,7 +408,7 @@ export default function CodexPage() {
               onClick={clearAllFilters}
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5"
             >
-              <X className="h-3 w-3" /> Clear
+              <X className="h-3 w-3" /> {t("common_clear")}
             </button>
           )}
         </div>
@@ -417,7 +420,7 @@ export default function CodexPage() {
             {/* Color (keep as swatches) */}
             {uniqueColors.length > 1 && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground shrink-0">Color</span>
+                <span className="text-xs text-muted-foreground shrink-0">{t("codex_color")}</span>
                 <div className="flex gap-1">
                   {uniqueColors.map(c => (
                     <button
@@ -438,7 +441,7 @@ export default function CodexPage() {
             {/* Group dropdown */}
             {uniqueGroups.length > 0 && (
               <FilterDropdown
-                label="Group"
+                label={t("codex_group")}
                 options={uniqueGroups}
                 selected={groupFilter}
                 onToggle={v => setGroupFilter(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
@@ -449,7 +452,7 @@ export default function CodexPage() {
             {/* Species dropdown */}
             {uniqueSpecies.length > 0 && (
               <FilterDropdown
-                label="Species"
+                label={t("codex_species")}
                 options={uniqueSpecies}
                 selected={speciesFilter}
                 onToggle={v => setSpeciesFilter(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
@@ -460,7 +463,7 @@ export default function CodexPage() {
             {/* Subtype dropdown */}
             {uniqueSubtypes.length > 0 && (
               <FilterDropdown
-                label="Subtype"
+                label={t("codex_subtype")}
                 options={uniqueSubtypes}
                 selected={subtypeFilter}
                 onToggle={v => setSubtypeFilter(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
@@ -471,7 +474,7 @@ export default function CodexPage() {
             {/* Tags dropdown */}
             {uniqueTags.length > 0 && (
               <FilterDropdown
-                label="Tags"
+                label={t("codex_tags")}
                 options={uniqueTags}
                 selected={tagFilter}
                 onToggle={v => setTagFilter(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])}
@@ -491,15 +494,13 @@ export default function CodexPage() {
           </div>
         ) : sorted.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground text-sm">
-            {entries.length === 0
-              ? "No codex entries yet. Create one or import a folder."
-              : "No entries match your filters."}
+            {entries.length === 0 ? t("codex_empty") : t("codex_no_match")}
           </div>
         ) : view === "grid" ? (
           <>
           {/* Grid sort bar */}
           <div className="flex items-center gap-1 mb-3 flex-wrap">
-            <span className="text-xs text-muted-foreground mr-1">Sort:</span>
+            <span className="text-xs text-muted-foreground mr-1">{t("codex_sort")}</span>
             {(["name","type","group","color"] as SortKey[]).map(col => (
               <button
                 key={col}
@@ -511,7 +512,7 @@ export default function CodexPage() {
                     : "bg-secondary text-muted-foreground hover:text-foreground"
                 )}
               >
-                {col.charAt(0).toUpperCase() + col.slice(1)}
+                {col === "name" ? t("codex_col_name") : col === "type" ? t("codex_col_type") : col === "group" ? t("codex_group") : t("codex_color")}
                 {sortBy === col
                   ? sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                   : <ChevronsUpDown className="h-3 w-3 opacity-30" />
@@ -565,8 +566,8 @@ export default function CodexPage() {
                       )}
                       {entry.tags.length > 0 && (
                         <div className="flex flex-wrap gap-0.5 mb-1">
-                          {entry.tags.map(t => (
-                            <span key={t} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0 rounded-full">#{t}</span>
+                          {entry.tags.map(tag => (
+                            <span key={tag} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0 rounded-full">#{tag}</span>
                           ))}
                         </div>
                       )}
@@ -616,17 +617,17 @@ export default function CodexPage() {
                     </button>
                   </th>
                   {/* Color col */}
-                  <SortTh col="color" label="Color" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-16" />
+                  <SortTh col="color" label={t("codex_color")} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-16" />
                   {/* Name col */}
-                  <SortTh col="name"  label="Name"  sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                  <SortTh col="name"  label={t("codex_col_name")} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                   {/* Type col */}
-                  <SortTh col="type"  label="Type / Subtype" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-40" />
+                  <SortTh col="type"  label={t("codex_col_type")} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-40" />
                   {/* Group col */}
-                  <SortTh col="group" label="Group" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-32" />
+                  <SortTh col="group" label={t("codex_group")} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-32" />
                   {/* Tags col */}
-                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-48">Tags</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-48">{t("codex_tags")}</th>
                   {/* Description col */}
-                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("codex_col_description")}</th>
                   {/* Actions col */}
                   <th className="w-16" />
                 </tr>
@@ -678,7 +679,7 @@ export default function CodexPage() {
                       <td className="px-3 py-2.5 w-40">
                         <div className="flex items-center gap-1.5 text-xs">
                           <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span>{TYPE_LABELS[entry.entry_type as EntryType]}</span>
+                          <span>{typeLabel(entry.entry_type as EntryType)}</span>
                         </div>
                         {subtypeLabel && (
                           <div className="text-xs text-muted-foreground mt-0.5">{subtypeLabel}</div>
@@ -697,8 +698,8 @@ export default function CodexPage() {
                       {/* Tags */}
                       <td className="px-3 py-2.5 w-48">
                         <div className="flex flex-wrap gap-0.5">
-                          {entry.tags.slice(0, 4).map(t => (
-                            <span key={t} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0 rounded-full">#{t}</span>
+                          {entry.tags.slice(0, 4).map(tag => (
+                            <span key={tag} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0 rounded-full">#{tag}</span>
                           ))}
                           {entry.tags.length > 4 && (
                             <span className="text-[10px] text-muted-foreground">+{entry.tags.length - 4}</span>
@@ -745,19 +746,19 @@ export default function CodexPage() {
       {selectionActive && (
         <div className="absolute bottom-0 left-0 right-0 flex items-center gap-3 px-6 py-3 bg-card border-t border-border shadow-lg z-20">
           <span className="text-sm font-medium text-primary">
-            {selectedIds.size} selected
+            {selectedIds.size} {t("codex_selected")}
           </span>
           <button
             onClick={selectAll}
             className="text-xs text-muted-foreground hover:text-foreground"
           >
-            Select all ({filtered.length})
+            {t("codex_select_all")} ({filtered.length})
           </button>
           <button
             onClick={clearSelection}
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5"
           >
-            <X className="h-3 w-3" /> Deselect
+            <X className="h-3 w-3" /> {t("codex_deselect")}
           </button>
           <div className="ml-auto flex gap-2">
             <Button
@@ -765,7 +766,7 @@ export default function CodexPage() {
               variant="outline"
               onClick={() => setBulkOpen(true)}
             >
-              Edit {selectedIds.size} {selectedIds.size === 1 ? "entry" : "entries"}
+              {t("common_apply")} {selectedIds.size} {selectedIds.size === 1 ? t("codex_entry") : t("codex_entries")}
             </Button>
             <Button
               size="sm"
@@ -788,7 +789,7 @@ export default function CodexPage() {
         onClose={() => { setDialogOpen(false); setEditing(null); }}
         onSave={handleSave}
         initial={editing ?? undefined}
-        title={editing ? "Edit Entry" : "New Codex Entry"}
+        title={editing ? t("entry_edit_title") : t("entry_new_title")}
         allEntries={entries}
       />
 

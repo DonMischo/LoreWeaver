@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { useProjects, useCreateProject, useDeleteProject } from "@/store/queries";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 
 type CodexOption = "fresh" | "copy" | "share";
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const { data: projects = [], isLoading } = useProjects();
   const createProject = useCreateProject();
   const deleteProject = useDeleteProject();
+  const { t } = useLanguage();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -35,7 +37,7 @@ export default function Dashboard() {
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const otherProjects = projects; // all projects available as copy sources
+  const otherProjects = projects;
 
   const handleOpen = () => {
     setTitle("");
@@ -72,7 +74,7 @@ export default function Dashboard() {
         </div>
         <Button onClick={handleOpen} size="sm">
           <Plus className="h-4 w-4" />
-          New Project
+          {t("dash_new_project")}
         </Button>
       </header>
 
@@ -86,11 +88,11 @@ export default function Dashboard() {
         ) : projects.length === 0 ? (
           <div className="text-center py-20">
             <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-lg font-medium mb-2">No projects yet</h2>
-            <p className="text-muted-foreground mb-6 text-sm">Create your first project to start writing.</p>
+            <h2 className="text-lg font-medium mb-2">{t("dash_no_projects")}</h2>
+            <p className="text-muted-foreground mb-6 text-sm">{t("dash_no_projects_desc")}</p>
             <Button onClick={handleOpen}>
               <Plus className="h-4 w-4" />
-              New Project
+              {t("dash_new_project")}
             </Button>
           </div>
         ) : (
@@ -118,7 +120,7 @@ export default function Dashboard() {
                     {project.shared_codex_project_id && (
                       <span className="flex items-center gap-1 text-primary/70">
                         <Link2 className="h-3 w-3" />
-                        Shared codex
+                        {t("dash_shared_codex")}
                       </span>
                     )}
                   </div>
@@ -154,16 +156,16 @@ export default function Dashboard() {
         </a>
       </footer>
 
+      {/* ── New project dialog ── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>New Project</DialogTitle>
-            <DialogDescription>Give your story a title to get started.</DialogDescription>
+            <DialogTitle>{t("dash_new_project")}</DialogTitle>
+            <DialogDescription>{t("dash_project_subtitle")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            {/* Title */}
             <div className="space-y-1.5">
-              <Label htmlFor="title">Title</Label>
+              <Label htmlFor="title">{t("dash_project_title")}</Label>
               <Input
                 id="title"
                 placeholder="My Novel"
@@ -174,9 +176,10 @@ export default function Dashboard() {
               />
             </div>
 
-            {/* Description */}
             <div className="space-y-1.5">
-              <Label htmlFor="desc">Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Label htmlFor="desc">
+                {t("dash_project_desc")} <span className="text-muted-foreground font-normal">{t("dash_desc_optional")}</span>
+              </Label>
               <Textarea
                 id="desc"
                 placeholder="A brief synopsis..."
@@ -186,9 +189,8 @@ export default function Dashboard() {
               />
             </div>
 
-            {/* Codex option */}
             <div className="space-y-2">
-              <Label>Codex</Label>
+              <Label>{t("dash_codex_section")}</Label>
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
@@ -201,8 +203,8 @@ export default function Dashboard() {
                   )}
                 >
                   <Sparkles className="h-5 w-5" />
-                  <span className="font-medium">Fresh codex</span>
-                  <span className="text-[10px] opacity-70 text-center">Start with an empty world bible</span>
+                  <span className="font-medium">{t("dash_fresh_codex")}</span>
+                  <span className="text-[10px] opacity-70 text-center">{t("dash_fresh_codex_desc")}</span>
                 </button>
                 <button
                   type="button"
@@ -217,8 +219,8 @@ export default function Dashboard() {
                   )}
                 >
                   <BookCopy className="h-5 w-5" />
-                  <span className="font-medium">Copy codex</span>
-                  <span className="text-[10px] opacity-70 text-center">Independent snapshot</span>
+                  <span className="font-medium">{t("dash_copy_codex")}</span>
+                  <span className="text-[10px] opacity-70 text-center">{t("dash_copy_codex_desc")}</span>
                 </button>
                 <button
                   type="button"
@@ -233,14 +235,14 @@ export default function Dashboard() {
                   )}
                 >
                   <Link2 className="h-5 w-5" />
-                  <span className="font-medium">Share codex</span>
-                  <span className="text-[10px] opacity-70 text-center">Live link — same world</span>
+                  <span className="font-medium">{t("dash_share_codex")}</span>
+                  <span className="text-[10px] opacity-70 text-center">{t("dash_share_codex_desc")}</span>
                 </button>
               </div>
 
               {codexOption === "copy" && (
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Copy codex from</Label>
+                  <Label className="text-xs text-muted-foreground">{t("dash_copy_from")}</Label>
                   <select
                     value={copyFromId}
                     onChange={(e) => setCopyFromId(e.target.value === "" ? "" : Number(e.target.value))}
@@ -249,20 +251,18 @@ export default function Dashboard() {
                       "focus:outline-none focus:ring-1 focus:ring-ring"
                     )}
                   >
-                    <option value="">— select a project —</option>
+                    <option value="">{t("common_select_project")}</option>
                     {otherProjects.map((p) => (
                       <option key={p.id} value={p.id}>{p.title}</option>
                     ))}
                   </select>
-                  <p className="text-[11px] text-muted-foreground pt-0.5">
-                    All entries and relations are copied. Changes won't affect the original.
-                  </p>
+                  <p className="text-[11px] text-muted-foreground pt-0.5">{t("dash_copy_note")}</p>
                 </div>
               )}
 
               {codexOption === "share" && (
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Share codex from</Label>
+                  <Label className="text-xs text-muted-foreground">{t("dash_share_from")}</Label>
                   <select
                     value={shareFromId}
                     onChange={(e) => setShareFromId(e.target.value === "" ? "" : Number(e.target.value))}
@@ -271,21 +271,18 @@ export default function Dashboard() {
                       "focus:outline-none focus:ring-1 focus:ring-ring"
                     )}
                   >
-                    <option value="">— select a project —</option>
+                    <option value="">{t("common_select_project")}</option>
                     {otherProjects.map((p) => (
                       <option key={p.id} value={p.id}>{p.title}</option>
                     ))}
                   </select>
-                  <p className="text-[11px] text-muted-foreground pt-0.5">
-                    Both projects see the same codex entries. The timeline will span all shared projects.
-                    The source project cannot be deleted while this link exists.
-                  </p>
+                  <p className="text-[11px] text-muted-foreground pt-0.5">{t("dash_share_note")}</p>
                 </div>
               )}
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("common_cancel")}</Button>
               <Button
                 onClick={handleCreate}
                 disabled={
@@ -295,7 +292,7 @@ export default function Dashboard() {
                   (codexOption === "share" && shareFromId === "")
                 }
               >
-                {createProject.isPending ? "Creating…" : "Create Project"}
+                {createProject.isPending ? t("dash_creating") : t("dash_create_project")}
               </Button>
             </div>
           </div>
@@ -311,10 +308,10 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <TriangleAlert className="h-5 w-5 shrink-0" />
-              Delete project
+              {t("dash_delete_project")}
             </DialogTitle>
             <DialogDescription>
-              This will permanently delete <strong className="text-foreground">{deleteTarget?.title}</strong> and all its acts, chapters, scenes, and codex entries. This cannot be undone.
+              {t("dash_delete_warning", { title: deleteTarget?.title ?? "" })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 pt-1">
@@ -325,7 +322,7 @@ export default function Dashboard() {
             )}
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">
-                Type <span className="font-mono font-semibold text-foreground">DELETE</span> to confirm
+                {t("dash_type_delete")}
               </Label>
               <Input
                 value={deleteConfirm}
@@ -338,7 +335,7 @@ export default function Dashboard() {
                       setDeleteConfirm("");
                       setDeleteError(null);
                     } catch (err) {
-                      setDeleteError(err instanceof Error ? err.message.replace(/^\d+: /, "") : "Delete failed.");
+                      setDeleteError(err instanceof Error ? err.message.replace(/^\d+: /, "") : t("dash_delete_failed"));
                     }
                   }
                 }}
@@ -349,7 +346,7 @@ export default function Dashboard() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirm(""); setDeleteError(null); }}>
-                Cancel
+                {t("common_cancel")}
               </Button>
               <Button
                 variant="destructive"
@@ -362,11 +359,11 @@ export default function Dashboard() {
                     setDeleteConfirm("");
                     setDeleteError(null);
                   } catch (err) {
-                    setDeleteError(err instanceof Error ? err.message.replace(/^\d+: /, "") : "Delete failed.");
+                    setDeleteError(err instanceof Error ? err.message.replace(/^\d+: /, "") : t("dash_delete_failed"));
                   }
                 }}
               >
-                Delete project
+                {t("dash_delete_project")}
               </Button>
             </div>
           </div>

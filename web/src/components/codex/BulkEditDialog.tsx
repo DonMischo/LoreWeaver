@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import type { CodexEntry, EntryType } from "@/types";
 import { codexApi } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const ENTRY_TYPES: EntryType[] = ["character", "location", "item", "lore", "custom"];
 
@@ -40,6 +41,7 @@ interface Props {
 
 export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, projectId }: Props) {
   const qc = useQueryClient();
+  const { t } = useLanguage();
   const [entryType, setEntryType]   = useState<EntryType | "__none__">("__none__");
   const [subtype, setSubtype]       = useState("");
   const [tagInput, setTagInput]     = useState("");
@@ -135,23 +137,23 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            Bulk Edit — {selectedEntries.length} {selectedEntries.length === 1 ? "entry" : "entries"}
+            {t("bulk_apply_to")} {selectedEntries.length} {selectedEntries.length === 1 ? t("codex_entry") : t("codex_entries")}
           </DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground -mt-2 pb-1">
-          Only filled fields are applied. Blank fields are left unchanged.
+          {t("bulk_note")}
         </p>
 
         <div className="space-y-4">
           {/* Type */}
           <div className="space-y-1.5">
-            <Label>Change Type</Label>
+            <Label>{t("bulk_change_type")}</Label>
             <Select value={entryType} onValueChange={v => setEntryType(v as EntryType | "__none__")}>
-              <SelectTrigger><SelectValue placeholder="— no change —" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("common_no_change")} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">— no change —</SelectItem>
-                {ENTRY_TYPES.map(t => (
-                  <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
+                <SelectItem value="__none__">{t("common_no_change")}</SelectItem>
+                {ENTRY_TYPES.map(et => (
+                  <SelectItem key={et} value={et}>{t(`type_${et}`)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -159,35 +161,35 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
 
           {/* Subtype / Species */}
           <div className="space-y-1.5">
-            <Label>Set Subtype / Species</Label>
+            <Label>{t("bulk_subtype_species")}</Label>
             <Input
               value={subtype}
               onChange={e => setSubtype(e.target.value)}
               placeholder="Leave blank for no change…"
             />
             <p className="text-xs text-muted-foreground">
-              Applied as "Species" for characters, "Subtype" for all others.
+              {t("bulk_subtype_note")}
             </p>
           </div>
 
           {/* Add Tags */}
           <div className="space-y-1.5">
-            <Label>Add Tags</Label>
+            <Label>{t("bulk_add_tags")}</Label>
             <div className="flex gap-2">
               <Input
                 value={tagInput}
                 onChange={e => setTagInput(e.target.value)}
-                placeholder="Tag to add to all…"
+                placeholder={t("bulk_tag_placeholder")}
                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
               />
-              <Button type="button" variant="outline" size="sm" onClick={addTag}>Add</Button>
+              <Button type="button" variant="outline" size="sm" onClick={addTag}>{t("common_add")}</Button>
             </div>
             {tagsToAdd.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {tagsToAdd.map(t => (
-                  <span key={t} className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                    #{t}
-                    <button onClick={() => setTagsToAdd(tagsToAdd.filter(x => x !== t))}>
+                {tagsToAdd.map(tag => (
+                  <span key={tag} className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                    #{tag}
+                    <button onClick={() => setTagsToAdd(tagsToAdd.filter(x => x !== tag))}>
                       <X className="h-2.5 w-2.5" />
                     </button>
                   </span>
@@ -199,11 +201,11 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
           {/* Add Relations */}
           {targetOptions.length > 0 && (
             <div className="space-y-1.5">
-              <Label>Add Relation to All</Label>
+              <Label>{t("bulk_add_relation")}</Label>
               <div className="flex gap-2 flex-wrap">
                 <Select value={relTarget} onValueChange={setRelTarget}>
                   <SelectTrigger className="flex-1 min-w-0 h-8 text-xs">
-                    <SelectValue placeholder="Select entry…" />
+                    <SelectValue placeholder={t("bulk_select_entry")} />
                   </SelectTrigger>
                   <SelectContent>
                     {targetOptions.map(e => (
@@ -231,7 +233,7 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
                     className="h-8 text-xs flex-1 min-w-0"
                     value={relCustom}
                     onChange={e => setRelCustom(e.target.value)}
-                    placeholder="Custom…"
+                    placeholder={t("bulk_custom_relation")}
                     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addRelation(); } }}
                   />
                 )}
@@ -259,9 +261,9 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
           )}
 
           <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={handleClose}>Cancel</Button>
+            <Button variant="outline" onClick={handleClose}>{t("common_cancel")}</Button>
             <Button onClick={handleApply} disabled={!hasChanges || applying}>
-              {applying ? "Applying…" : `Apply to ${selectedEntries.length} ${selectedEntries.length === 1 ? "entry" : "entries"}`}
+              {applying ? t("bulk_applying") : `${t("bulk_apply_to")} ${selectedEntries.length} ${selectedEntries.length === 1 ? t("codex_entry") : t("codex_entries")}`}
             </Button>
           </div>
         </div>

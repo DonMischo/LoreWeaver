@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import type { CodexEntry, CodexRelationResolved, EntryType, Currency, Possession } from "@/types";
 import { useEntryRelations, useCreateRelation, useDeleteRelation } from "@/store/queries";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const ENTRY_TYPES: EntryType[] = ["character", "location", "item", "lore", "custom"];
 
@@ -79,6 +80,7 @@ export function CodexEntryDialog({
   const [relPreset, setRelPreset]     = useState(PRESET_RELATIONS[0]);
   const [relCustom, setRelCustom]     = useState("");
 
+  const { t } = useLanguage();
   const isExisting = !!initial?.id;
   const entryId    = initial?.id ?? 0;
 
@@ -224,7 +226,7 @@ export function CodexEntryDialog({
               {/* Name + Type */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Name *</Label>
+                  <Label>{t("entry_name")} *</Label>
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -233,13 +235,13 @@ export function CodexEntryDialog({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Type</Label>
+                  <Label>{t("entry_type")}</Label>
                   <Select value={entryType} onValueChange={(v) => setEntryType(v as EntryType)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {ENTRY_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t.charAt(0).toUpperCase() + t.slice(1)}
+                      {ENTRY_TYPES.map((et) => (
+                        <SelectItem key={et} value={et}>
+                          {t(`type_${et}`)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -256,14 +258,14 @@ export function CodexEntryDialog({
                     onChange={e => setIsMainChar(e.target.checked)}
                     className="accent-primary w-4 h-4"
                   />
-                  <span className="text-sm font-medium">Main character</span>
-                  <span className="text-xs text-muted-foreground">Mark as protagonist / major character</span>
+                  <span className="text-sm font-medium">{t("entry_main_char")}</span>
+                  <span className="text-xs text-muted-foreground">{t("entry_main_char_desc")}</span>
                 </label>
               )}
 
               {/* Groups */}
               <div className="space-y-1.5" ref={groupDropRef}>
-                <Label>Groups</Label>
+                <Label>{t("entry_groups")}</Label>
                 {groups.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {groups.map(g => (
@@ -281,11 +283,11 @@ export function CodexEntryDialog({
                     value={groupInput}
                     onChange={(e) => setGroupInput(e.target.value)}
                     onFocus={() => setGroupDropOpen(true)}
-                    placeholder="Add group…"
+                    placeholder={t("entry_add_group")}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addGroup(); } }}
                     className="flex-1"
                   />
-                  <Button type="button" variant="outline" size="sm" onClick={addGroup}>Add</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={addGroup}>{t("common_add")}</Button>
                   {groupDropOpen && groupSuggestions.length > 0 && (
                     <div className="absolute top-full left-0 z-50 mt-1 min-w-48 bg-popover border border-border rounded-lg shadow-lg py-1 max-h-40 overflow-y-auto">
                       {groupSuggestions.map(g => (
@@ -307,7 +309,7 @@ export function CodexEntryDialog({
               <div className="space-y-1.5">
                 {entryType === "character" ? (
                   <>
-                    <Label>Species</Label>
+                    <Label>{t("codex_species")}</Label>
                     <Input
                       value={species}
                       onChange={(e) => setSpecies(e.target.value)}
@@ -316,7 +318,7 @@ export function CodexEntryDialog({
                   </>
                 ) : (
                   <>
-                    <Label>Subtype</Label>
+                    <Label>{t("codex_subtype")}</Label>
                     <Input
                       value={subtype}
                       onChange={(e) => setSubtype(e.target.value)}
@@ -328,15 +330,15 @@ export function CodexEntryDialog({
 
               {/* Aliases */}
               <div className="space-y-1.5">
-                <Label>Aliases (alternate names)</Label>
+                <Label>{t("entry_aliases")}</Label>
                 <div className="flex gap-2">
                   <Input
                     value={aliasInput}
                     onChange={(e) => setAliasInput(e.target.value)}
-                    placeholder="Add alias…"
+                    placeholder={t("entry_add_alias")}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAlias(); } }}
                   />
-                  <Button type="button" variant="outline" size="sm" onClick={addAlias}>Add</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={addAlias}>{t("common_add")}</Button>
                 </div>
                 {aliases.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -354,15 +356,15 @@ export function CodexEntryDialog({
 
               {/* Tags */}
               <div className="space-y-1.5">
-                <Label>Tags</Label>
+                <Label>{t("codex_tags")}</Label>
                 <div className="flex gap-2">
                   <Input
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
-                    placeholder="Add tag…"
+                    placeholder={t("entry_add_tag")}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
                   />
-                  <Button type="button" variant="outline" size="sm" onClick={addTag}>Add</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={addTag}>{t("common_add")}</Button>
                 </div>
                 {tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -380,7 +382,7 @@ export function CodexEntryDialog({
 
               {/* Notes */}
               <div className="space-y-1.5">
-                <Label>Private Notes</Label>
+                <Label>{t("entry_notes")}</Label>
                 <Textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -391,7 +393,7 @@ export function CodexEntryDialog({
 
               {/* Color */}
               <div className="space-y-1.5">
-                <Label>Highlight Color</Label>
+                <Label>{t("entry_color")}</Label>
                 <div className="flex items-center gap-2">
                   {PRESET_COLORS.map((c) => (
                     <button
@@ -416,17 +418,17 @@ export function CodexEntryDialog({
               {/* Inventory — character only */}
               {entryType === "character" && (
                 <div className="space-y-3 rounded-lg border border-border p-3">
-                  <Label className="text-sm font-medium">Inventory</Label>
+                  <Label className="text-sm font-medium">{t("entry_inventory")}</Label>
 
                   {/* Currencies */}
                   <div className="space-y-1.5">
-                    <p className="text-xs text-muted-foreground font-medium">Currency</p>
+                    <p className="text-xs text-muted-foreground font-medium">{t("entry_currency")}</p>
                     {currencies.map((c, i) => (
                       <div key={i} className="flex gap-2 items-center">
                         <Input
                           value={c.name}
                           onChange={e => updateCurrency(i, "name", e.target.value)}
-                          placeholder="Currency name…"
+                          placeholder={t("entry_currency_name")}
                           className="flex-1 h-8 text-sm"
                         />
                         <Input
@@ -446,13 +448,13 @@ export function CodexEntryDialog({
                       </div>
                     ))}
                     <Button type="button" variant="outline" size="sm" onClick={addCurrency} className="h-7 text-xs gap-1">
-                      <Plus className="h-3 w-3" /> Add currency
+                      <Plus className="h-3 w-3" /> {t("entry_add_currency")}
                     </Button>
                   </div>
 
                   {/* Possessions */}
                   <div className="space-y-1.5">
-                    <p className="text-xs text-muted-foreground font-medium">Possessions</p>
+                    <p className="text-xs text-muted-foreground font-medium">{t("entry_possessions")}</p>
                     {possessions.map((p, i) => (
                       <div key={i} className="flex gap-2 items-center">
                         <select
@@ -463,7 +465,7 @@ export function CodexEntryDialog({
                             "focus:outline-none focus:ring-1 focus:ring-ring"
                           )}
                         >
-                          <option value="">Select item / location…</option>
+                          <option value="">{t("entry_select_item")}</option>
                           {possessableEntries.map(e => (
                             <option key={e.id} value={e.id}>{e.name}</option>
                           ))}
@@ -479,7 +481,7 @@ export function CodexEntryDialog({
                         <Input
                           value={p.notes ?? ""}
                           onChange={e => updatePossession(i, "notes", e.target.value || undefined)}
-                          placeholder="Notes…"
+                          placeholder={t("entry_possession_notes")}
                           className="flex-1 h-8 text-sm"
                         />
                         <button
@@ -492,7 +494,7 @@ export function CodexEntryDialog({
                       </div>
                     ))}
                     <Button type="button" variant="outline" size="sm" onClick={addPossession} className="h-7 text-xs gap-1">
-                      <Plus className="h-3 w-3" /> Add possession
+                      <Plus className="h-3 w-3" /> {t("entry_add_possession")}
                     </Button>
                   </div>
                 </div>
@@ -502,7 +504,7 @@ export function CodexEntryDialog({
               {isExisting && (
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5">
-                    <Link2 className="h-3.5 w-3.5" /> Relations
+                    <Link2 className="h-3.5 w-3.5" /> {t("entry_relations")}
                   </Label>
 
                   {/* Existing relations list */}
@@ -539,7 +541,7 @@ export function CodexEntryDialog({
                     <div className="flex gap-2 flex-wrap">
                       <Select value={relTarget} onValueChange={setRelTarget}>
                         <SelectTrigger className="flex-1 min-w-0 h-8 text-xs">
-                          <SelectValue placeholder="Select entry…" />
+                          <SelectValue placeholder={t("bulk_select_entry")} />
                         </SelectTrigger>
                         <SelectContent>
                           {otherEntries.map((e) => (
@@ -572,7 +574,7 @@ export function CodexEntryDialog({
                           className="h-8 text-xs flex-1 min-w-0"
                           value={relCustom}
                           onChange={(e) => setRelCustom(e.target.value)}
-                          placeholder="Custom relation…"
+                          placeholder={t("bulk_custom_relation")}
                           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addRelation(); } }}
                         />
                       )}
@@ -595,7 +597,7 @@ export function CodexEntryDialog({
 
             {/* ── Right column: Description ── */}
             <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-              <Label>Description</Label>
+              <Label>{t("entry_description")}</Label>
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -607,8 +609,8 @@ export function CodexEntryDialog({
           </div>{/* end two-column row */}
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={handleSave} disabled={!name.trim()}>Save Entry</Button>
+            <Button variant="outline" onClick={onClose}>{t("common_cancel")}</Button>
+            <Button onClick={handleSave} disabled={!name.trim()}>{t("entry_save")}</Button>
           </div>
         </div>
       </DialogContent>

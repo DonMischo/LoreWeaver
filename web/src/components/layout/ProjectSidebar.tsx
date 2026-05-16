@@ -34,6 +34,7 @@ import { ExportDialog } from "@/components/export/ExportDialog";
 import { BookMetaDialog } from "@/components/project/BookMetaDialog";
 import { DEFAULT_TIME_CONFIG } from "@/types";
 import type { Act, Chapter, Scene } from "@/types";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Props { projectId: number }
 
@@ -63,6 +64,7 @@ function SceneItem({
     useSortable({ id: scene.id });
   const deleteScene = useDeleteScene(scene.chapter_id);
   const router = useRouter();
+  const { t } = useLanguage();
   const style = { transform: CSS.Transform.toString(transform), transition };
 
   return (
@@ -83,7 +85,7 @@ function SceneItem({
         className="flex-1 truncate text-muted-foreground hover:text-foreground flex items-center gap-1.5"
       >
         <span className="text-muted-foreground/50 text-[10px] tabular-nums shrink-0 w-4 text-right">{index}.</span>
-        <span className="truncate">{scene.title || "Untitled Scene"}</span>
+        <span className="truncate">{scene.title || t("nav_untitled_scene")}</span>
         {scene.scene_time && Object.keys(scene.scene_time).length > 0 && (
           <Clock className="h-2.5 w-2.5 shrink-0 text-primary/60" aria-label="Has scene time" />
         )}
@@ -92,7 +94,7 @@ function SceneItem({
         className="opacity-0 group-hover:opacity-60 hover:opacity-100 hover:text-destructive"
         onClick={(e) => {
           e.preventDefault();
-          if (confirm("Delete this scene?")) {
+          if (confirm(t("common_delete") + "?")) {
             deleteScene.mutate(scene.id);
             if (currentSceneId === scene.id) router.push(`/projects/${projectId}`);
           }
@@ -116,6 +118,7 @@ function ChapterItem({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: chapter.id });
 
+  const { t } = useLanguage();
   const { data: scenes = [] } = useScenes(chapter.id);
   const createScene = useCreateScene(chapter.id);
   const deleteChapter = useDeleteChapter(chapter.act_id);
@@ -201,7 +204,7 @@ function ChapterItem({
           <button
             className="hover:text-destructive"
             onClick={() => {
-              if (confirm(`Delete chapter "${chapter.title}" and all its scenes?`))
+              if (confirm(`${t("common_delete")} "${chapter.title}"?`))
                 deleteChapter.mutate(chapter.id);
             }}
           >
@@ -241,6 +244,7 @@ function ActItem({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: act.id });
 
+  const { t } = useLanguage();
   const { data: chapters = [] } = useChapters(act.id);
   const createChapter = useCreateChapter(act.id);
   const deleteAct = useDeleteAct(projectId);
@@ -318,7 +322,7 @@ function ActItem({
           <button
             className="hover:text-destructive"
             onClick={() => {
-              if (confirm(`Delete act "${act.title}" and all its chapters and scenes?`))
+              if (confirm(`${t("common_delete")} "${act.title}"?`))
                 deleteAct.mutate(act.id);
             }}
           >
@@ -352,6 +356,7 @@ export function ProjectSidebar({ projectId }: Props) {
   const params = useParams();
   const currentSceneId = params?.sceneId ? Number(params.sceneId) : undefined;
 
+  const { t } = useLanguage();
   const { data: project } = useProject(projectId);
   const { data: acts = [] } = useActs(projectId);
   const createAct = useCreateAct(projectId);
@@ -389,7 +394,7 @@ export function ProjectSidebar({ projectId }: Props) {
       </div>
 
       <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground uppercase tracking-wider">
-        <span>Story</span>
+        <span>{t("nav_story")}</span>
         <button
           className="hover:text-foreground"
           title="Add act"
@@ -417,7 +422,7 @@ export function ProjectSidebar({ projectId }: Props) {
           </SortableContext>
         </DndContext>
         {acts.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-4">No acts yet</p>
+          <p className="text-xs text-muted-foreground text-center py-4">{t("nav_no_acts")}</p>
         )}
       </div>
 
@@ -427,42 +432,42 @@ export function ProjectSidebar({ projectId }: Props) {
           className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
         >
           <Book className="h-4 w-4" />
-          Codex
+          {t("nav_codex")}
         </Link>
         <Link
           href={`/projects/${projectId}/relations`}
           className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
         >
           <Network className="h-4 w-4" />
-          Relations
+          {t("nav_relations")}
         </Link>
         <Link
           href={`/projects/${projectId}/timeline`}
           className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
         >
           <Calendar className="h-4 w-4" />
-          Timeline
+          {t("nav_timeline")}
         </Link>
         <Link
           href={`/projects/${projectId}/fragments`}
           className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
         >
           <Scissors className="h-4 w-4" />
-          Fragments
+          {t("nav_fragments")}
         </Link>
         <button
           onClick={() => setTimeConfigOpen(true)}
           className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
         >
           <Clock className="h-4 w-4" />
-          Time System
+          {t("nav_time_system")}
         </button>
         <button
           onClick={() => setMetaOpen(true)}
           className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
         >
           <Info className="h-4 w-4" />
-          Project Info
+          {t("nav_project_info")}
         </button>
 
         <div className="border-t border-border/50 my-1" />
@@ -474,7 +479,7 @@ export function ProjectSidebar({ projectId }: Props) {
           className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
         >
           <Download className="h-4 w-4" />
-          Export…
+          {t("nav_export")}
         </button>
 
         <div className="border-t border-border/50 my-1" />
@@ -484,7 +489,7 @@ export function ProjectSidebar({ projectId }: Props) {
           className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
         >
           <Settings className="h-4 w-4" />
-          Settings
+          {t("nav_settings")}
         </Link>
       </div>
 
