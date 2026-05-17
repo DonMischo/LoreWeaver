@@ -118,12 +118,13 @@ function InventoryCurrencyRow({
 
 function InventoryItemRow({
   characterId, itemId, itemName, qty,
-  nativeQty, onNativeChange, onRemoveNative,
+  nativeQty, onNativeChange, onRemoveNative, onOpenEntry,
 }: {
   characterId: number; itemId: number; itemName: string; qty: number;
   nativeQty?: number;
   onNativeChange?: (qty: number) => void;
   onRemoveNative?: () => void;
+  onOpenEntry?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -135,7 +136,17 @@ function InventoryItemRow({
     <div>
       <div className="flex items-center gap-1.5 text-xs">
         <Package className="h-3 w-3 shrink-0 text-blue-400" />
-        <span className="flex-1 truncate">{itemName}</span>
+        {onOpenEntry ? (
+          <button
+            type="button"
+            onClick={onOpenEntry}
+            className="flex-1 truncate text-left hover:underline hover:text-foreground text-muted-foreground/90 transition-colors"
+          >
+            {itemName}
+          </button>
+        ) : (
+          <span className="flex-1 truncate">{itemName}</span>
+        )}
         {isNative && (
           <span className="text-muted-foreground/50 shrink-0 font-mono">base:{nativeQty}</span>
         )}
@@ -202,10 +213,12 @@ interface Props {
   title: string;
   /** All codex entries for the project (for the relation target dropdown and group suggestions) */
   allEntries?: CodexEntry[];
+  /** Called when the user clicks an inventory item name to jump to its entry */
+  onOpenEntry?: (id: number) => void;
 }
 
 export function CodexEntryDialog({
-  open, onClose, onSave, initial, title, allEntries = [],
+  open, onClose, onSave, initial, title, allEntries = [], onOpenEntry,
 }: Props) {
   const [name, setName]               = useState(initial?.name ?? "");
   const [aliasInput, setAliasInput]   = useState("");
@@ -696,6 +709,7 @@ export function CodexEntryDialog({
                               onRemoveNative={() =>
                                 setNativePossessions(prev => prev.filter(p => p.entry_id !== item_id))
                               }
+                              onOpenEntry={itemEntry && onOpenEntry ? () => onOpenEntry(item_id) : undefined}
                             />
                           );
                         })}

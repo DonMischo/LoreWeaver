@@ -799,6 +799,10 @@ export default function CodexPage() {
         initial={editing ?? undefined}
         title={editing ? t("entry_edit_title") : t("entry_new_title")}
         allEntries={entries}
+        onOpenEntry={(id) => {
+          const entry = entries.find(e => e.id === id);
+          if (entry) setEditing(entry);
+        }}
       />
 
       <BulkEditDialog
