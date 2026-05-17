@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins } from "lucide-react";
+import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins, History, ChevronUp } from "lucide-react";
 import { imagesApi } from "@/lib/api";
-import { useUploadCodexImage, useDeleteCodexImage, useInventorySummary, useEntryRelations, useCreateRelation, useDeleteRelation } from "@/store/queries";
+import { useUploadCodexImage, useDeleteCodexImage, useInventorySummary, useCharacterItemLog, useCharacterCurrencyLog, useEntryRelations, useCreateRelation, useDeleteRelation } from "@/store/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,6 +37,102 @@ const PRESET_RELATIONS = [
   "cousin",
   "custom…",
 ];
+
+// ── Log sub-components ────────────────────────────────────────────────────────
+
+function CurrencyLogRow({
+  characterId, name, balance,
+}: { characterId: number; name: string; balance: number }) {
+  const [open, setOpen] = useState(false);
+  const { data: log = [], isFetching } = useCharacterCurrencyLog(
+    open ? characterId : 0, name
+  );
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 text-xs">
+        <Coins className="h-3 w-3 shrink-0 text-yellow-500" />
+        <span className="flex-1 truncate">{name}</span>
+        <span className={cn("font-mono shrink-0", balance >= 0 ? "text-green-500" : "text-red-500")}>
+          {balance}
+        </span>
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          className="text-muted-foreground hover:text-foreground ml-1"
+          title="Show history"
+        >
+          {open ? <ChevronUp className="h-3 w-3" /> : <History className="h-3 w-3" />}
+        </button>
+      </div>
+      {open && (
+        <div className="ml-5 mt-1 mb-1 border-l border-border/50 pl-2 space-y-0.5">
+          {isFetching && <p className="text-xs text-muted-foreground">Loading…</p>}
+          {!isFetching && log.length === 0 && (
+            <p className="text-xs text-muted-foreground">No history</p>
+          )}
+          {log.map((entry, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="flex-1 truncate">{entry.scene_title}</span>
+              <span className={cn("font-mono shrink-0", entry.delta >= 0 ? "text-green-500" : "text-red-400")}>
+                {entry.delta >= 0 ? "+" : ""}{entry.delta}
+              </span>
+              <span className="font-mono shrink-0 text-foreground/60">→ {entry.balance}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ItemLogRow({
+  characterId, itemId, itemName, qty,
+}: { characterId: number; itemId: number; itemName: string; qty: number }) {
+  const [open, setOpen] = useState(false);
+  const { data: log = [], isFetching } = useCharacterItemLog(
+    open ? characterId : 0, itemId
+  );
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 text-xs">
+        <Package className="h-3 w-3 shrink-0 text-blue-400" />
+        <span className="flex-1 truncate">{itemName}</span>
+        <span className={cn("font-mono shrink-0", qty > 0 ? "text-green-500" : "text-red-500")}>
+          ×{qty}
+        </span>
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          className="text-muted-foreground hover:text-foreground ml-1"
+          title="Show history"
+        >
+          {open ? <ChevronUp className="h-3 w-3" /> : <History className="h-3 w-3" />}
+        </button>
+      </div>
+      {open && (
+        <div className="ml-5 mt-1 mb-1 border-l border-border/50 pl-2 space-y-0.5">
+          {isFetching && <p className="text-xs text-muted-foreground">Loading…</p>}
+          {!isFetching && log.length === 0 && (
+            <p className="text-xs text-muted-foreground">No history</p>
+          )}
+          {log.map((entry, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="flex-1 truncate">{entry.scene_title}</span>
+              <span className={cn("font-mono shrink-0", entry.delta >= 0 ? "text-green-500" : "text-red-400")}>
+                {entry.delta >= 0 ? "+" : ""}{entry.delta}
+              </span>
+              <span className="font-mono shrink-0 text-foreground/60">→ ×{entry.total}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main dialog ───────────────────────────────────────────────────────────────
 
 interface Props {
   open: boolean;
@@ -452,33 +548,30 @@ export function CodexEntryDialog({
                     <p className="text-xs text-muted-foreground">Tracked from scene commands</p>
 
                     {inventorySummary.currencies.length > 0 && (
-                      <div className="space-y-0.5">
+                      <div className="space-y-1">
                         {inventorySummary.currencies.map(({ name, balance }) => (
-                          <div key={name} className="flex items-center gap-2 text-xs">
-                            <Coins className="h-3 w-3 shrink-0 text-yellow-500" />
-                            <span className="flex-1 truncate">{name}</span>
-                            <span className={cn(
-                              "font-mono shrink-0",
-                              balance >= 0 ? "text-green-500" : "text-red-500"
-                            )}>{balance}</span>
-                          </div>
+                          <CurrencyLogRow
+                            key={name}
+                            characterId={entryId}
+                            name={name}
+                            balance={balance}
+                          />
                         ))}
                       </div>
                     )}
 
                     {inventorySummary.items.length > 0 && (
-                      <div className="space-y-0.5">
+                      <div className="space-y-1">
                         {inventorySummary.items.map(({ item_id, qty }) => {
-                          const entry = allEntries.find(e => e.id === item_id);
+                          const itemEntry = allEntries.find(e => e.id === item_id);
                           return (
-                            <div key={item_id} className="flex items-center gap-2 text-xs">
-                              <Package className="h-3 w-3 shrink-0 text-blue-400" />
-                              <span className="flex-1 truncate">{entry?.name ?? `Item #${item_id}`}</span>
-                              <span className={cn(
-                                "font-mono shrink-0",
-                                qty > 0 ? "text-green-500" : "text-red-500"
-                              )}>×{qty}</span>
-                            </div>
+                            <ItemLogRow
+                              key={item_id}
+                              characterId={entryId}
+                              itemId={item_id}
+                              itemName={itemEntry?.name ?? `Item #${item_id}`}
+                              qty={qty}
+                            />
                           );
                         })}
                       </div>

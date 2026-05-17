@@ -122,6 +122,10 @@ export const codexApi = {
     req<string[]>(`/codex/${characterId}/currencies`),
   getInventorySummary: (characterId: number) =>
     req<InventorySummary>(`/codex/${characterId}/inventory-summary`),
+  getCharacterItemLog: (characterId: number, itemId: number) =>
+    req<ProjectItemLogEntry[]>(`/codex/${characterId}/item-log?item_id=${itemId}`),
+  getCharacterCurrencyLog: (characterId: number, currencyName: string) =>
+    req<ProjectCurrencyLogEntry[]>(`/codex/${characterId}/currency-log?currency_name=${encodeURIComponent(currencyName)}`),
 };
 
 // ── Images ────────────────────────────────────────────────────────────────────
@@ -194,6 +198,20 @@ export interface ItemLogEntry {
   is_current_scene: boolean;
 }
 
+export interface ProjectItemLogEntry {
+  scene_id: number;
+  scene_title: string;
+  delta: number;
+  total: number;
+}
+
+export interface ProjectCurrencyLogEntry {
+  scene_id: number;
+  scene_title: string;
+  delta: number;
+  balance: number;
+}
+
 export interface InventorySummary {
   items: { item_id: number; qty: number }[];
   currencies: { name: string; balance: number }[];
@@ -227,6 +245,16 @@ export const sceneCommandsApi = {
     req<{ balance: number }>(
       `/scenes/${sceneId}/currency-balance?character_id=${characterId}&currency_name=${encodeURIComponent(currencyName)}`
     ),
+  getProjectItemLog: (projectId: number, itemId: number, characterId: number) =>
+    req<ProjectItemLogEntry[]>(
+      `/projects/${projectId}/item-log?item_id=${itemId}&character_id=${characterId}`
+    ),
+  getProjectCurrencyLog: (projectId: number, characterId: number, currencyName: string) =>
+    req<ProjectCurrencyLogEntry[]>(
+      `/projects/${projectId}/currency-log?character_id=${characterId}&currency_name=${encodeURIComponent(currencyName)}`
+    ),
+  resyncAll: (projectId: number) =>
+    req<{ ok: boolean }>(`/projects/${projectId}/commands/resync`, { method: "POST" }),
 };
 
 // ── Time Config ───────────────────────────────────────────────────────────────

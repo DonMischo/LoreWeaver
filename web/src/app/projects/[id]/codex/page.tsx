@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { CodexEntryDialog } from "@/components/codex/CodexEntryDialog";
 import { BulkEditDialog } from "@/components/codex/BulkEditDialog";
 import { ImportButton } from "@/components/layout/ImportButton";
-import { useCodexEntries, useCreateCodexEntry, useUpdateCodexEntry, useDeleteCodexEntry } from "@/store/queries";
+import { useCodexEntries, useCreateCodexEntry, useUpdateCodexEntry, useDeleteCodexEntry, useResyncProjectCommands } from "@/store/queries";
 import { importApi } from "@/lib/api";
 import type { CodexEntry, EntryType } from "@/types";
 import { cn } from "@/lib/utils";
@@ -180,6 +180,14 @@ export default function CodexPage() {
   const createEntry = useCreateCodexEntry(projectId);
   const updateEntry = useUpdateCodexEntry(projectId);
   const deleteEntry = useDeleteCodexEntry(projectId);
+  const resync = useResyncProjectCommands(projectId);
+
+  // Re-extract commands from all scene HTML on mount so inventory / logs are always
+  // current even if the debounced sync never fired in a previous session.
+  useEffect(() => {
+    if (projectId) resync.mutate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   // ── View / sort state (persisted) ────────────────────────────────────────
   const [view, setViewState] = useState<"grid" | "list">(() =>

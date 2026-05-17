@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi } from "@/lib/api";
-import type { SceneCommandIn } from "@/lib/api";
+import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry } from "@/lib/api";
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -366,6 +366,47 @@ export const useInventorySummary = (characterId: number) =>
     queryKey: ["inventory-summary", characterId],
     queryFn: () => codexApi.getInventorySummary(characterId),
     enabled: characterId > 0,
+  });
+
+export const useResyncProjectCommands = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => sceneCommandsApi.resyncAll(projectId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["inventory-summary"] });
+      qc.invalidateQueries({ queryKey: ["project-item-log"] });
+      qc.invalidateQueries({ queryKey: ["project-currency-log"] });
+      qc.invalidateQueries({ queryKey: ["codex"] });
+    },
+  });
+};
+
+export const useProjectItemLog = (projectId: number, itemId: number, characterId: number) =>
+  useQuery<ProjectItemLogEntry[]>({
+    queryKey: ["project-item-log", projectId, itemId, characterId],
+    queryFn: () => sceneCommandsApi.getProjectItemLog(projectId, itemId, characterId),
+    enabled: projectId > 0 && itemId > 0 && characterId > 0,
+  });
+
+export const useProjectCurrencyLog = (projectId: number, characterId: number, currencyName: string) =>
+  useQuery<ProjectCurrencyLogEntry[]>({
+    queryKey: ["project-currency-log", projectId, characterId, currencyName],
+    queryFn: () => sceneCommandsApi.getProjectCurrencyLog(projectId, characterId, currencyName),
+    enabled: projectId > 0 && characterId > 0 && !!currencyName,
+  });
+
+export const useCharacterItemLog = (characterId: number, itemId: number) =>
+  useQuery<ProjectItemLogEntry[]>({
+    queryKey: ["character-item-log", characterId, itemId],
+    queryFn: () => codexApi.getCharacterItemLog(characterId, itemId),
+    enabled: characterId > 0 && itemId > 0,
+  });
+
+export const useCharacterCurrencyLog = (characterId: number, currencyName: string) =>
+  useQuery<ProjectCurrencyLogEntry[]>({
+    queryKey: ["character-currency-log", characterId, currencyName],
+    queryFn: () => codexApi.getCharacterCurrencyLog(characterId, currencyName),
+    enabled: characterId > 0 && !!currencyName,
   });
 
 // ── Images ────────────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import json
+from html.parser import HTMLParser
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,6 +10,82 @@ from models import Scene, SceneCommand, CodexEntry, Act, Chapter
 from schemas import SceneCommandSyncRequest, SceneCommandOut
 
 router = APIRouter(tags=["scene_commands"])
+
+
+# ── HTML command extractor ────────────────────────────────────────────────────
+
+class _CommandExtractor(HTMLParser):
+    """Extracts currency/item command attrs from TipTap-serialised scene HTML."""
+
+    def __init__(self):
+        super().__init__()
+        self.commands: list[dict] = []
+        self._order = 0
+
+    def handle_starttag(self, tag: str, attrs):
+        if tag != "div":
+            return
+        d = dict(attrs)
+        dtype = d.get("data-type")
+        if dtype == "currency":
+            self.commands.append({
+                "command_type": "currency",
+                "character_id": int(d.get("data-char-id") or 0),
+                "item_id": None,
+                "data": json.dumps({
+                    "currencyName": d.get("data-currency-name", ""),
+                    "delta": int(d.get("data-delta") or 0),
+                }),
+                "order_index": self._order,
+            })
+            self._order += 1
+        elif dtype == "item":
+            raw_item = int(d.get("data-item-id") or 0)
+            self.commands.append({
+                "command_type": "item",
+                "character_id": int(d.get("data-char-id") or 0),
+                "item_id": raw_item or None,
+                "data": json.dumps({"qty": int(d.get("data-qty") or 1)}),
+                "order_index": self._order,
+            })
+            self._order += 1
+
+
+@router.post("/api/projects/{project_id}/commands/resync")
+def resync_all_project_commands(project_id: int, db: Session = Depends(get_db)):
+    """Re-extract commands from every scene's HTML and rebuild SceneCommand records.
+
+    Fixes the case where the 2-second debounced sync never fired (e.g. user
+    navigated away before it triggered).  Safe to call repeatedly — idempotent.
+    """
+    scenes = (
+        db.query(Scene)
+        .join(Chapter, Scene.chapter_id == Chapter.id)
+        .join(Act, Chapter.act_id == Act.id)
+        .filter(Act.project_id == project_id)
+        .all()
+    )
+
+    for scene in scenes:
+        db.query(SceneCommand).filter(SceneCommand.scene_id == scene.id).delete()
+        if not scene.content:
+            continue
+        extractor = _CommandExtractor()
+        extractor.feed(scene.content)
+        for cmd in extractor.commands:
+            db.add(SceneCommand(
+                scene_id=scene.id,
+                command_type=cmd["command_type"],
+                character_id=cmd["character_id"],
+                item_id=cmd["item_id"],
+                data=cmd["data"],
+                scene_time=scene.scene_time,
+                order_index=cmd["order_index"],
+            ))
+
+    _sync_character_inventories(project_id, db)
+    db.commit()
+    return {"ok": True}
 
 
 def _get_project_id_for_scene(scene_id: int, db: Session) -> Optional[int]:
@@ -272,6 +349,205 @@ def get_character_currencies(character_id: int, db: Session = Depends(get_db)):
         return sorted(c["name"] for c in inv.get("currencies", []) if c.get("name"))
     except (json.JSONDecodeError, TypeError, KeyError):
         return []
+
+
+@router.get("/api/projects/{project_id}/item-log")
+def get_project_item_log(
+    project_id: int,
+    item_id: int = Query(...),
+    character_id: int = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Full gain/loss log for an item-character pair across all project scenes in story order."""
+    scenes = (
+        db.query(Scene)
+        .join(Chapter, Scene.chapter_id == Chapter.id)
+        .join(Act, Chapter.act_id == Act.id)
+        .filter(Act.project_id == project_id)
+        .order_by(Act.order_index, Chapter.order_index, Scene.order_index)
+        .all()
+    )
+    pos = {s.id: i for i, s in enumerate(scenes)}
+    scene_map = {s.id: s for s in scenes}
+
+    cmds = (
+        db.query(SceneCommand)
+        .filter(
+            SceneCommand.command_type == "item",
+            SceneCommand.item_id == item_id,
+            SceneCommand.character_id == character_id,
+        )
+        .all()
+    )
+
+    result = []
+    running = 0
+    for cmd in sorted(cmds, key=lambda c: (pos.get(c.scene_id, 9999), c.order_index)):
+        s = scene_map.get(cmd.scene_id)
+        if not s:
+            continue
+        data = json.loads(cmd.data) if cmd.data else {}
+        delta = int(data.get("qty", 1))
+        running += delta
+        result.append({
+            "scene_id": cmd.scene_id,
+            "scene_title": s.title or "Untitled",
+            "delta": delta,
+            "total": running,
+        })
+    return result
+
+
+@router.get("/api/projects/{project_id}/currency-log")
+def get_project_currency_log(
+    project_id: int,
+    character_id: int = Query(...),
+    currency_name: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Full delta log for a character's currency across all project scenes in story order."""
+    scenes = (
+        db.query(Scene)
+        .join(Chapter, Scene.chapter_id == Chapter.id)
+        .join(Act, Chapter.act_id == Act.id)
+        .filter(Act.project_id == project_id)
+        .order_by(Act.order_index, Chapter.order_index, Scene.order_index)
+        .all()
+    )
+    pos = {s.id: i for i, s in enumerate(scenes)}
+    scene_map = {s.id: s for s in scenes}
+
+    cmds = (
+        db.query(SceneCommand)
+        .filter(
+            SceneCommand.command_type == "currency",
+            SceneCommand.character_id == character_id,
+        )
+        .all()
+    )
+
+    result = []
+    running = 0
+    for cmd in sorted(cmds, key=lambda c: (pos.get(c.scene_id, 9999), c.order_index)):
+        data = json.loads(cmd.data) if cmd.data else {}
+        if (data.get("currencyName") or "").strip() != currency_name:
+            continue
+        s = scene_map.get(cmd.scene_id)
+        if not s:
+            continue
+        delta = int(data.get("delta", 0))
+        running += delta
+        result.append({
+            "scene_id": cmd.scene_id,
+            "scene_title": s.title or "Untitled",
+            "delta": delta,
+            "balance": running,
+        })
+    return result
+
+
+@router.get("/api/codex/{character_id}/item-log")
+def get_character_item_log(
+    character_id: int,
+    item_id: int = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Full gain/loss log for an item-character pair in story order (no project filter)."""
+    cmds = (
+        db.query(SceneCommand)
+        .filter(
+            SceneCommand.command_type == "item",
+            SceneCommand.item_id == item_id,
+            SceneCommand.character_id == character_id,
+        )
+        .all()
+    )
+    if not cmds:
+        return []
+
+    scene_ids = list({c.scene_id for c in cmds})
+    scenes = (
+        db.query(Scene)
+        .join(Chapter, Scene.chapter_id == Chapter.id)
+        .join(Act, Chapter.act_id == Act.id)
+        .filter(Scene.id.in_(scene_ids))
+        .order_by(Act.order_index, Chapter.order_index, Scene.order_index)
+        .all()
+    )
+    pos = {s.id: i for i, s in enumerate(scenes)}
+    scene_map = {s.id: s for s in scenes}
+
+    result = []
+    running = 0
+    for cmd in sorted(cmds, key=lambda c: (pos.get(c.scene_id, 9999), c.order_index)):
+        s = scene_map.get(cmd.scene_id)
+        if not s:
+            continue
+        data = json.loads(cmd.data) if cmd.data else {}
+        delta = int(data.get("qty", 1))
+        running += delta
+        result.append({
+            "scene_id": cmd.scene_id,
+            "scene_title": s.title or "Untitled",
+            "delta": delta,
+            "total": running,
+        })
+    return result
+
+
+@router.get("/api/codex/{character_id}/currency-log")
+def get_character_currency_log(
+    character_id: int,
+    currency_name: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Full delta log for a character's currency in story order (no project filter)."""
+    all_cmds = (
+        db.query(SceneCommand)
+        .filter(
+            SceneCommand.command_type == "currency",
+            SceneCommand.character_id == character_id,
+        )
+        .all()
+    )
+
+    # Filter to the requested currency and keep parsed data alongside
+    matching: list[tuple[SceneCommand, dict]] = []
+    for cmd in all_cmds:
+        data = json.loads(cmd.data) if cmd.data else {}
+        if (data.get("currencyName") or "").strip() == currency_name:
+            matching.append((cmd, data))
+
+    if not matching:
+        return []
+
+    scene_ids = list({cmd.scene_id for cmd, _ in matching})
+    scenes = (
+        db.query(Scene)
+        .join(Chapter, Scene.chapter_id == Chapter.id)
+        .join(Act, Chapter.act_id == Act.id)
+        .filter(Scene.id.in_(scene_ids))
+        .order_by(Act.order_index, Chapter.order_index, Scene.order_index)
+        .all()
+    )
+    pos = {s.id: i for i, s in enumerate(scenes)}
+    scene_map = {s.id: s for s in scenes}
+
+    result = []
+    running = 0
+    for cmd, data in sorted(matching, key=lambda x: (pos.get(x[0].scene_id, 9999), x[0].order_index)):
+        s = scene_map.get(cmd.scene_id)
+        if not s:
+            continue
+        delta = int(data.get("delta", 0))
+        running += delta
+        result.append({
+            "scene_id": cmd.scene_id,
+            "scene_title": s.title or "Untitled",
+            "delta": delta,
+            "balance": running,
+        })
+    return result
 
 
 @router.get("/api/codex/{character_id}/inventory-summary")
