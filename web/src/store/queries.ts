@@ -109,7 +109,10 @@ export const useUpdateChapter = (actId: number) => {
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: Parameters<typeof chaptersApi.update>[1] }) =>
       chaptersApi.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["chapters", actId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chapters", actId] });
+      qc.invalidateQueries({ queryKey: ["acts"] }); // update chapter title in act views
+    },
   });
 };
 
@@ -167,6 +170,7 @@ export const useUpdateScene = (sceneId: number) => {
       scenesApi.update(sceneId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scene", sceneId] });
+      qc.invalidateQueries({ queryKey: ["scenes"] }); // update title in sidebar lists
     },
   });
 };
@@ -321,9 +325,47 @@ export const useDeleteFragment = (projectId: number) => {
 
 // ── Scene Commands ────────────────────────────────────────────────────────────
 
-export const useSyncSceneCommands = (sceneId: number) =>
-  useMutation({
+export const useSyncSceneCommands = (sceneId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
     mutationFn: (commands: SceneCommandIn[]) => sceneCommandsApi.sync(sceneId, commands),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["codex"] });           // refreshes CodexEntry.inventory
+      qc.invalidateQueries({ queryKey: ["codex-relations"] });
+      qc.invalidateQueries({ queryKey: ["item-log"] });
+      qc.invalidateQueries({ queryKey: ["currency-balance"] });
+      qc.invalidateQueries({ queryKey: ["character-currencies"] });
+      qc.invalidateQueries({ queryKey: ["inventory-summary"] });
+    },
+  });
+};
+
+export const useItemLog = (sceneId: number, itemId: number, characterId: number) =>
+  useQuery({
+    queryKey: ["item-log", sceneId, itemId, characterId],
+    queryFn: () => sceneCommandsApi.getItemLog(sceneId, itemId, characterId),
+    enabled: sceneId > 0 && itemId > 0 && characterId > 0,
+  });
+
+export const useCurrencyBalance = (sceneId: number, characterId: number, currencyName: string) =>
+  useQuery({
+    queryKey: ["currency-balance", sceneId, characterId, currencyName],
+    queryFn: () => sceneCommandsApi.getCurrencyBalance(sceneId, characterId, currencyName),
+    enabled: sceneId > 0 && characterId > 0 && !!currencyName,
+  });
+
+export const useCharacterCurrencies = (characterId: number) =>
+  useQuery({
+    queryKey: ["character-currencies", characterId],
+    queryFn: () => codexApi.getCharacterCurrencies(characterId),
+    enabled: characterId > 0,
+  });
+
+export const useInventorySummary = (characterId: number) =>
+  useQuery({
+    queryKey: ["inventory-summary", characterId],
+    queryFn: () => codexApi.getInventorySummary(characterId),
+    enabled: characterId > 0,
   });
 
 // ── Images ────────────────────────────────────────────────────────────────────

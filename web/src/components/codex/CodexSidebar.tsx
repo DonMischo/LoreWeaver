@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { X, Search, Plus, User, MapPin, Package, Scroll, Tag } from "lucide-react";
+import { useState, useMemo } from "react";
+import { X, Search, Plus, User, MapPin, Package, Scroll, Tag, Coins } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CodexEntry, EntryType } from "@/types";
-import { useEntryRelations } from "@/store/queries";
+import { useEntryRelations, useInventorySummary } from "@/store/queries";
 
 const TYPE_ICONS: Record<EntryType, React.ElementType> = {
   character: User,
@@ -30,22 +30,42 @@ interface Props {
   onSelect: (id: number) => void;
   onClose: () => void;
   onAdd: () => void;
+  sceneContent?: string;  // HTML of the current scene — used to filter relevant entries
 }
 
-export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd }: Props) {
+export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd, sceneContent }: Props) {
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<EntryType | "all">("all");
+  const [typeFilter, setTypeFilter] = useState<EntryType | "all" | "scene">(
+    sceneContent ? "scene" : "all"
+  );
+
+  // Strip HTML and compute which entry IDs are mentioned in the current scene
+  const relevantIds = useMemo(() => {
+    if (!sceneContent) return null;
+    const text = sceneContent.replace(/<[^>]+>/g, " ").toLowerCase();
+    return new Set(
+      entries
+        .filter((e) =>
+          text.includes(e.name.toLowerCase()) ||
+          e.aliases.some((a) => text.includes(a.toLowerCase()))
+        )
+        .map((e) => e.id)
+    );
+  }, [sceneContent, entries]);
 
   const filtered = entries.filter((e) => {
-    const matchesType = typeFilter === "all" || e.entry_type === typeFilter;
     const q = search.toLowerCase();
     const matchesSearch = !q || e.name.toLowerCase().includes(q) ||
       e.aliases.some((a) => a.toLowerCase().includes(q));
-    return matchesType && matchesSearch;
+    if (!matchesSearch) return false;
+    if (typeFilter === "scene") return relevantIds?.has(e.id) ?? false;
+    return typeFilter === "all" || e.entry_type === typeFilter;
   });
 
   const selected = entries.find((e) => e.id === selectedId);
   const { data: relations = [] } = useEntryRelations(selected?.id ?? 0);
+  const isCharacter = selected?.entry_type === "character";
+  const { data: inventory } = useInventorySummary(isCharacter ? (selected?.id ?? 0) : 0);
 
   return (
     <div className="flex flex-col w-72 border-l border-border bg-card h-full">
@@ -131,7 +151,7 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd }: 
           {selected.description && (
             <div className="mb-3">
               <p className="text-xs text-muted-foreground mb-1">Description</p>
-              <p className="text-sm leading-relaxed">{selected.description}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{selected.description}</p>
             </div>
           )}
 
@@ -139,16 +159,16 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd }: 
           {selected.notes && (
             <div className="mb-3">
               <p className="text-xs text-muted-foreground mb-1">Notes</p>
-              <p className="text-sm leading-relaxed text-muted-foreground">{selected.notes}</p>
+              <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">{selected.notes}</p>
             </div>
           )}
 
-          {/* Relations */}
-          {relations.length > 0 && (
-            <div>
+          {/* Relations — manual only, auto: entries live in Inventory */}
+          {relations.filter(r => !r.relation_type?.startsWith("auto:")).length > 0 && (
+            <div className="mb-3">
               <p className="text-xs text-muted-foreground mb-1">Relations</p>
               <div className="space-y-1">
-                {relations.map((r) => (
+                {relations.filter(r => !r.relation_type?.startsWith("auto:")).map((r) => (
                   <div key={r.id} className="flex items-center gap-2 text-xs">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.other_color }} />
                     <span className="font-medium">{r.other_name}</span>
@@ -159,6 +179,46 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd }: 
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Inventory — characters only */}
+          {isCharacter && inventory && (
+            (inventory.items.length > 0 || inventory.currencies.length > 0) && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Inventory</p>
+                {inventory.items.length > 0 && (
+                  <div className="mb-2 space-y-0.5">
+                    {inventory.items.map(({ item_id, qty }) => {
+                      const entry = entries.find((e) => e.id === item_id);
+                      return (
+                        <div key={item_id} className="flex items-center gap-2 text-xs">
+                          <Package className="h-3 w-3 shrink-0 text-blue-400" />
+                          <span className="flex-1 truncate">{entry?.name ?? `Item #${item_id}`}</span>
+                          <span className={cn(
+                            "font-mono shrink-0",
+                            qty > 0 ? "text-green-400" : "text-red-400"
+                          )}>×{qty}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {inventory.currencies.length > 0 && (
+                  <div className="space-y-0.5">
+                    {inventory.currencies.map(({ name, balance }) => (
+                      <div key={name} className="flex items-center gap-2 text-xs">
+                        <Coins className="h-3 w-3 shrink-0 text-green-400" />
+                        <span className="flex-1 truncate">{name}</span>
+                        <span className={cn(
+                          "font-mono shrink-0",
+                          balance >= 0 ? "text-green-400" : "text-red-400"
+                        )}>{balance}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
           )}
         </div>
       ) : (
@@ -176,6 +236,19 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd }: 
           </div>
 
           <div className="flex gap-1 px-3 py-2 border-b border-border flex-wrap">
+            {sceneContent && (
+              <button
+                onClick={() => setTypeFilter("scene")}
+                className={cn(
+                  "text-xs px-2 py-0.5 rounded-full transition-colors",
+                  typeFilter === "scene"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                )}
+              >
+                Scene
+              </button>
+            )}
             {(["all", "character", "location", "item", "lore", "custom"] as const).map((t) => (
               <button
                 key={t}

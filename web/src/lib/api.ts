@@ -118,6 +118,10 @@ export const codexApi = {
   createRelation: (data: { source_id: number; target_id: number; relation_type?: string }) =>
     req<CodexRelation>("/codex/relations", { method: "POST", body: JSON.stringify(data) }),
   deleteRelation: (id: number) => req<void>(`/codex/relations/${id}`, { method: "DELETE" }),
+  getCharacterCurrencies: (characterId: number) =>
+    req<string[]>(`/codex/${characterId}/currencies`),
+  getInventorySummary: (characterId: number) =>
+    req<InventorySummary>(`/codex/${characterId}/inventory-summary`),
 };
 
 // ── Images ────────────────────────────────────────────────────────────────────
@@ -183,6 +187,18 @@ export const importApi = {
 
 // ── Scene Commands ────────────────────────────────────────────────────────────
 
+export interface ItemLogEntry {
+  scene_id: number;
+  scene_title: string;
+  qty: number;
+  is_current_scene: boolean;
+}
+
+export interface InventorySummary {
+  items: { item_id: number; qty: number }[];
+  currencies: { name: string; balance: number }[];
+}
+
 export interface SceneCommandIn {
   command_type: "currency" | "item";
   character_id: number;
@@ -203,6 +219,14 @@ export const sceneCommandsApi = {
     if (params?.character_id) qs.set("character_id", String(params.character_id));
     return req<unknown[]>(`/projects/${projectId}/command-history?${qs}`);
   },
+  getItemLog: (sceneId: number, itemId: number, characterId: number) =>
+    req<ItemLogEntry[]>(
+      `/scenes/${sceneId}/item-log?item_id=${itemId}&character_id=${characterId}`
+    ),
+  getCurrencyBalance: (sceneId: number, characterId: number, currencyName: string) =>
+    req<{ balance: number }>(
+      `/scenes/${sceneId}/currency-balance?character_id=${characterId}&currency_name=${encodeURIComponent(currencyName)}`
+    ),
 };
 
 // ── Time Config ───────────────────────────────────────────────────────────────

@@ -12,7 +12,7 @@ import { NoteNode } from "./nodes/NoteNode";
 import { CurrencyNode } from "./nodes/CurrencyNode";
 import { ItemNode } from "./nodes/ItemNode";
 import { SceneImageNode } from "./nodes/SceneImageNode";
-import { SlashCommandMenu } from "./SlashCommandMenu";
+import { SlashCommandMenu, type SlashMenuState, type SlashMenuHandle } from "./SlashCommandMenu";
 import { EditorContext } from "@/contexts/EditorContext";
 
 interface Props {
@@ -23,18 +23,25 @@ interface Props {
   sceneId: number;
 }
 
-interface SlashMenuState {
-  from: number;
-  rect: { left: number; top: number };
-}
-
 export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId }: Props) {
   const entriesRef = useRef<PatchedEntry[]>(patchEntryAliases(codexEntries));
   const onClickRef = useRef(onCodexEntryClick);
   entriesRef.current = patchEntryAliases(codexEntries);
   onClickRef.current = onCodexEntryClick;
 
-  const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
+  // Slash menu state — both a React state (for rendering) and a ref (for stale-closure-safe reads
+  // inside useEditor callbacks which are created once and never updated).
+  const [slashMenu, setSlashMenuRaw] = useState<SlashMenuState | null>(null);
+  const slashMenuRef = useRef<SlashMenuState | null>(null);
+  const slashMenuHandleRef = useRef<SlashMenuHandle | null>(null);
+
+  // Stable setter that keeps ref and state in sync.
+  // Written as a mutable ref so useEditor callbacks can call it without stale closure issues.
+  const setSlashMenuFnRef = useRef((_val: SlashMenuState | null) => {});
+  setSlashMenuFnRef.current = (val: SlashMenuState | null) => {
+    slashMenuRef.current = val;
+    setSlashMenuRaw(val);
+  };
 
   const CodexHighlight = Extension.create({
     name: "codexHighlight",
@@ -63,32 +70,55 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
     onUpdate({ editor }) {
       onChange(editor.getHTML());
 
-      // Detect '/' typed at the start of a word to open slash menu
+      const setSlashMenu = setSlashMenuFnRef.current;
       const { state } = editor;
       const { from } = state.selection;
-      if (from < 1) return;
+      const current = slashMenuRef.current;
 
+      if (current) {
+        // Cursor moved before or onto the slash — close
+        if (from <= current.from) {
+          setSlashMenu(null);
+          return;
+        }
+        // Query = text between slash+1 and cursor
+        const query = state.doc.textBetween(current.from + 1, from, "\n", "\0");
+        // Space/newline means user typed past the command word — close
+        if (/[\s\n]/.test(query)) {
+          setSlashMenu(null);
+          return;
+        }
+        if (query !== current.query) {
+          setSlashMenu({ ...current, query });
+        }
+        return;
+      }
+
+      // No menu open — check if '/' was just typed
+      if (from < 1) return;
       const charBefore = state.doc.textBetween(from - 1, from, "\n", "\0");
       if (charBefore === "/") {
-        // Check if position before '/' is start of block or whitespace
         const charBeforeSlash = from > 1
           ? state.doc.textBetween(from - 2, from - 1, "\n", "\0")
           : "";
         if (charBeforeSlash === "" || charBeforeSlash === "\n" || charBeforeSlash === " ") {
           const coords = editor.view.coordsAtPos(from);
-          setSlashMenu({ from: from - 1, rect: { left: coords.left, top: coords.bottom } });
-          return;
+          setSlashMenu({ from: from - 1, rect: { left: coords.left, top: coords.bottom }, query: "" });
         }
       }
-
-      // Close menu if slash was removed / user kept typing past it
-      if (slashMenu) setSlashMenu(null);
     },
     editorProps: {
       attributes: { class: "story-prose prose-invert max-w-2xl mx-auto w-full focus:outline-none min-h-full px-8 py-6" },
       handleKeyDown(_view, event) {
-        if (event.key === "Escape") {
-          setSlashMenu(null);
+        // Route arrow/enter/tab into the slash menu when it is open
+        if (slashMenuRef.current && slashMenuHandleRef.current) {
+          if (slashMenuHandleRef.current.handleKey(event)) {
+            return true;
+          }
+        }
+        if (event.key === "Escape" && slashMenuRef.current) {
+          setSlashMenuFnRef.current(null);
+          return true;
         }
         return false;
       },
@@ -114,11 +144,10 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
     editor.view.dispatch(tr.setMeta("codexHighlight", true));
   }, [codexEntries, editor]);
 
-  // Derived lists for context
   const characters = codexEntries.filter((e) => e.entry_type === "character");
   const items = codexEntries.filter((e) => e.entry_type === "item");
 
-  const closeSlash = useCallback(() => setSlashMenu(null), []);
+  const closeSlash = useCallback(() => setSlashMenuFnRef.current(null), []);
 
   return (
     <EditorContext.Provider value={{ characters, items, sceneId }}>
@@ -126,6 +155,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
         <EditorContent editor={editor} className="h-full" />
         {slashMenu && editor && (
           <SlashCommandMenu
+            ref={slashMenuHandleRef}
             editor={editor}
             state={slashMenu}
             onClose={closeSlash}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useUIStore } from "@/store/ui";
 import { scenesApi } from "@/lib/api";
 
@@ -14,6 +15,7 @@ interface Options {
 
 export function useAutosave({ sceneId, content, enabled }: Options) {
   const setSaveStatus = useUIStore((s) => s.setSaveStatus);
+  const qc = useQueryClient();
   const pendingRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contentRef = useRef(content);
@@ -25,6 +27,10 @@ export function useAutosave({ sceneId, content, enabled }: Options) {
     pendingRef.current = true;
     try {
       await scenesApi.update(sceneId, { content: value });
+      // Keep React Query cache in sync so remounts read fresh content
+      qc.setQueryData(["scene", sceneId], (old: any) =>
+        old ? { ...old, content: value } : old
+      );
       localStorage.removeItem(`${STORAGE_PREFIX}${sceneId}`);
       setSaveStatus("saved");
     } catch {
@@ -33,7 +39,7 @@ export function useAutosave({ sceneId, content, enabled }: Options) {
     } finally {
       pendingRef.current = false;
     }
-  }, [sceneId, enabled, setSaveStatus]);
+  }, [sceneId, enabled, setSaveStatus, qc]);
 
   // Debounced save on content change
   useEffect(() => {

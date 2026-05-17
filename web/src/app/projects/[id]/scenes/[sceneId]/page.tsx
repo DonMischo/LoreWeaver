@@ -86,7 +86,14 @@ export default function ScenePage() {
       setContent(scene.content || "");
       setTitle(scene.title || "");
       setWordCount(scene.word_count);
+      // Sync commands on every scene load so inventory is up-to-date even if the
+      // user navigated away before the debounced sync fired in a previous session.
+      if (scene.content) {
+        const commands = extractCommands(scene.content);
+        syncCommands.mutate(commands);
+      }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene?.id]);
 
   // Extract trackable commands from HTML content
@@ -294,6 +301,7 @@ export default function ScenePage() {
             onSelect={(id) => setSelectedCodexId(id)}
             onClose={() => setCodexSidebarOpen(false)}
             onAdd={() => setNewEntryDialogOpen(true)}
+            sceneContent={content}
           />
         )}
 

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Plus, Trash2, Link2, ImageIcon } from "lucide-react";
+import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins } from "lucide-react";
 import { imagesApi } from "@/lib/api";
-import { useUploadCodexImage, useDeleteCodexImage } from "@/store/queries";
+import { useUploadCodexImage, useDeleteCodexImage, useInventorySummary, useEntryRelations, useCreateRelation, useDeleteRelation } from "@/store/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,8 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { CodexEntry, CodexRelationResolved, EntryType, Currency, Possession } from "@/types";
-import { useEntryRelations, useCreateRelation, useDeleteRelation } from "@/store/queries";
+import type { CodexEntry, CodexRelationResolved, EntryType } from "@/types";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -73,10 +72,6 @@ export function CodexEntryDialog({
   // Main character
   const [isMainChar, setIsMainChar]   = useState(initial?.is_main_char ?? false);
 
-  // Inventory (character only)
-  const [currencies, setCurrencies]   = useState<Currency[]>(initial?.inventory?.currencies ?? []);
-  const [possessions, setPossessions] = useState<Possession[]>(initial?.inventory?.possessions ?? []);
-
   // Relation-add state
   const [relTarget, setRelTarget]     = useState("");
   const [relPreset, setRelPreset]     = useState(PRESET_RELATIONS[0]);
@@ -86,6 +81,9 @@ export function CodexEntryDialog({
   const isExisting = !!initial?.id;
   const entryId    = initial?.id ?? 0;
   const projectId  = initial?.project_id ?? 0;
+
+  // Live inventory from scene commands (read-only display, always fresh)
+  const { data: inventorySummary } = useInventorySummary(isExisting && entryType === "character" ? entryId : 0);
 
   const { data: relations = [] } = useEntryRelations(isExisting ? entryId : 0);
   const createRel    = useCreateRelation(entryId);
@@ -119,8 +117,6 @@ export function CodexEntryDialog({
       setSubtype(initial?.subtype ?? "");
       setTags(initial?.tags ?? []);
       setIsMainChar(initial?.is_main_char ?? false);
-      setCurrencies(initial?.inventory?.currencies ?? []);
-      setPossessions(initial?.inventory?.possessions ?? []);
       setAliasInput("");
       setTagInput("");
       setGroupInput("");
@@ -159,23 +155,6 @@ export function CodexEntryDialog({
   // Existing groups from allEntries as suggestions (not already selected)
   const groupSuggestions = [...new Set(allEntries.flatMap(e => e.groups ?? []))].filter(g => !groups.includes(g)).sort();
 
-  // Currency helpers
-  const addCurrency = () => setCurrencies([...currencies, { name: "", amount: 0 }]);
-  const updateCurrency = (i: number, field: keyof Currency, value: string | number) =>
-    setCurrencies(currencies.map((c, idx) => idx === i ? { ...c, [field]: value } : c));
-  const removeCurrency = (i: number) => setCurrencies(currencies.filter((_, idx) => idx !== i));
-
-  // Possession helpers
-  const addPossession = () => setPossessions([...possessions, { entry_id: 0, quantity: 1 }]);
-  const updatePossession = (i: number, field: keyof Possession, value: string | number | undefined) =>
-    setPossessions(possessions.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
-  const removePossession = (i: number) => setPossessions(possessions.filter((_, idx) => idx !== i));
-
-  // Possessable entries: items, locations, and lore
-  const possessableEntries = allEntries.filter(e =>
-    e.id !== entryId && ["item", "location", "lore"].includes(e.entry_type)
-  );
-
   // Relation helpers
   const effectiveRelType = relPreset === "custom…" ? relCustom.trim() : relPreset;
   const addRelation = () => {
@@ -194,7 +173,6 @@ export function CodexEntryDialog({
 
   const handleSave = () => {
     if (!name.trim()) return;
-    const hasInventory = currencies.length > 0 || possessions.length > 0;
     onSave({
       name: name.trim(),
       aliases,
@@ -207,9 +185,8 @@ export function CodexEntryDialog({
       subtype: entryType !== "character" ? (subtype.trim() || null) : null,
       tags,
       is_main_char: isMainChar,
-      inventory: entryType === "character" && hasInventory
-        ? { currencies, possessions }
-        : null,
+      // inventory is managed exclusively by scene commands (_sync_character_inventories)
+      // — do not overwrite it here
     });
     onClose();
   };
@@ -467,89 +444,47 @@ export function CodexEntryDialog({
                 </div>
               </div>
 
-              {/* Inventory — character only */}
-              {entryType === "character" && (
-                <div className="space-y-3 rounded-lg border border-border p-3">
-                  <Label className="text-sm font-medium">{t("entry_inventory")}</Label>
+              {/* Inventory — character only, read-only from scene commands */}
+              {entryType === "character" && isExisting && inventorySummary && (
+                (inventorySummary.items.length > 0 || inventorySummary.currencies.length > 0) && (
+                  <div className="space-y-2 rounded-lg border border-border p-3">
+                    <Label className="text-sm font-medium">{t("entry_inventory")}</Label>
+                    <p className="text-xs text-muted-foreground">Tracked from scene commands</p>
 
-                  {/* Currencies */}
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-muted-foreground font-medium">{t("entry_currency")}</p>
-                    {currencies.map((c, i) => (
-                      <div key={i} className="flex gap-2 items-center">
-                        <Input
-                          value={c.name}
-                          onChange={e => updateCurrency(i, "name", e.target.value)}
-                          placeholder={t("entry_currency_name")}
-                          className="flex-1 h-8 text-sm"
-                        />
-                        <Input
-                          type="number"
-                          value={c.amount}
-                          onChange={e => updateCurrency(i, "amount", Number(e.target.value))}
-                          className="w-24 h-8 text-sm"
-                          placeholder="0"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeCurrency(i)}
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                    {inventorySummary.currencies.length > 0 && (
+                      <div className="space-y-0.5">
+                        {inventorySummary.currencies.map(({ name, balance }) => (
+                          <div key={name} className="flex items-center gap-2 text-xs">
+                            <Coins className="h-3 w-3 shrink-0 text-yellow-500" />
+                            <span className="flex-1 truncate">{name}</span>
+                            <span className={cn(
+                              "font-mono shrink-0",
+                              balance >= 0 ? "text-green-500" : "text-red-500"
+                            )}>{balance}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                    <Button type="button" variant="outline" size="sm" onClick={addCurrency} className="h-7 text-xs gap-1">
-                      <Plus className="h-3 w-3" /> {t("entry_add_currency")}
-                    </Button>
-                  </div>
+                    )}
 
-                  {/* Possessions */}
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-muted-foreground font-medium">{t("entry_possessions")}</p>
-                    {possessions.map((p, i) => (
-                      <div key={i} className="flex gap-2 items-center">
-                        <select
-                          value={p.entry_id || ""}
-                          onChange={e => updatePossession(i, "entry_id", Number(e.target.value))}
-                          className={cn(
-                            "flex-1 h-8 rounded-md border border-input bg-background px-2 text-sm",
-                            "focus:outline-none focus:ring-1 focus:ring-ring"
-                          )}
-                        >
-                          <option value="">{t("entry_select_item")}</option>
-                          {possessableEntries.map(e => (
-                            <option key={e.id} value={e.id}>{e.name}</option>
-                          ))}
-                        </select>
-                        <Input
-                          type="number"
-                          value={p.quantity}
-                          min={1}
-                          onChange={e => updatePossession(i, "quantity", Number(e.target.value))}
-                          className="w-16 h-8 text-sm"
-                          placeholder="1"
-                        />
-                        <Input
-                          value={p.notes ?? ""}
-                          onChange={e => updatePossession(i, "notes", e.target.value || undefined)}
-                          placeholder={t("entry_possession_notes")}
-                          className="flex-1 h-8 text-sm"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removePossession(i)}
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                    {inventorySummary.items.length > 0 && (
+                      <div className="space-y-0.5">
+                        {inventorySummary.items.map(({ item_id, qty }) => {
+                          const entry = allEntries.find(e => e.id === item_id);
+                          return (
+                            <div key={item_id} className="flex items-center gap-2 text-xs">
+                              <Package className="h-3 w-3 shrink-0 text-blue-400" />
+                              <span className="flex-1 truncate">{entry?.name ?? `Item #${item_id}`}</span>
+                              <span className={cn(
+                                "font-mono shrink-0",
+                                qty > 0 ? "text-green-500" : "text-red-500"
+                              )}>×{qty}</span>
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))}
-                    <Button type="button" variant="outline" size="sm" onClick={addPossession} className="h-7 text-xs gap-1">
-                      <Plus className="h-3 w-3" /> {t("entry_add_possession")}
-                    </Button>
+                    )}
                   </div>
-                </div>
+                )
               )}
 
               {/* Relations — only for existing (saved) entries */}
@@ -559,10 +494,10 @@ export function CodexEntryDialog({
                     <Link2 className="h-3.5 w-3.5" /> {t("entry_relations")}
                   </Label>
 
-                  {/* Existing relations list */}
-                  {relations.length > 0 && (
+                  {/* Existing relations list — auto: entries are shown in Inventory, not here */}
+                  {relations.filter((r: CodexRelationResolved) => !r.relation_type?.startsWith("auto:")).length > 0 && (
                     <div className="space-y-1">
-                      {relations.map((r: CodexRelationResolved) => (
+                      {relations.filter((r: CodexRelationResolved) => !r.relation_type?.startsWith("auto:")).map((r: CodexRelationResolved) => (
                         <div
                           key={r.id}
                           className="flex items-center justify-between text-sm px-2 py-1 rounded bg-secondary/40"
