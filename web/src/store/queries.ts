@@ -213,7 +213,10 @@ export const useUpdateCodexEntry = (projectId: number) => {
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: Parameters<typeof codexApi.update>[1] }) =>
       codexApi.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["codex", projectId] }),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ["codex", projectId] });
+      qc.invalidateQueries({ queryKey: ["inventory-summary", id] });
+    },
   });
 };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins, History, ChevronUp } from "lucide-react";
+import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins, History, ChevronUp, Pencil } from "lucide-react";
 import { imagesApi } from "@/lib/api";
 import { useUploadCodexImage, useDeleteCodexImage, useInventorySummary, useCharacterItemLog, useCharacterCurrencyLog, useEntryRelations, useCreateRelation, useDeleteRelation } from "@/store/queries";
 import { Button } from "@/components/ui/button";
@@ -38,39 +38,69 @@ const PRESET_RELATIONS = [
   "custom…",
 ];
 
-// ── Log sub-components ────────────────────────────────────────────────────────
+// ── Inventory sub-components ──────────────────────────────────────────────────
 
-function CurrencyLogRow({
+function InventoryCurrencyRow({
   characterId, name, balance,
-}: { characterId: number; name: string; balance: number }) {
+  nativeAmount, onNativeChange, onRemoveNative,
+}: {
+  characterId: number; name: string; balance: number;
+  nativeAmount?: number;
+  onNativeChange?: (amount: number) => void;
+  onRemoveNative?: () => void;
+}) {
   const [open, setOpen] = useState(false);
-  const { data: log = [], isFetching } = useCharacterCurrencyLog(
-    open ? characterId : 0, name
-  );
+  const [editing, setEditing] = useState(false);
+  const [editVal, setEditVal] = useState("");
+  const { data: log = [], isFetching } = useCharacterCurrencyLog(open ? characterId : 0, name);
+  const isNative = nativeAmount !== undefined;
 
   return (
     <div>
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-1.5 text-xs">
         <Coins className="h-3 w-3 shrink-0 text-yellow-500" />
         <span className="flex-1 truncate">{name}</span>
+        {isNative && (
+          <span className="text-muted-foreground/50 shrink-0 font-mono">base:{nativeAmount}</span>
+        )}
         <span className={cn("font-mono shrink-0", balance >= 0 ? "text-green-500" : "text-red-500")}>
           {balance}
         </span>
-        <button
-          type="button"
-          onClick={() => setOpen(o => !o)}
-          className="text-muted-foreground hover:text-foreground ml-1"
-          title="Show history"
-        >
+        {isNative && !editing && (
+          <button type="button" onClick={() => { setEditVal(String(nativeAmount)); setEditing(true); }}
+            className="text-muted-foreground hover:text-foreground" title="Edit base amount">
+            <Pencil className="h-3 w-3" />
+          </button>
+        )}
+        {isNative && (
+          <button type="button" onClick={onRemoveNative}
+            className="text-muted-foreground hover:text-destructive" title="Remove currency">
+            <Trash2 className="h-3 w-3" />
+          </button>
+        )}
+        <button type="button" onClick={() => setOpen(o => !o)}
+          className="text-muted-foreground hover:text-foreground" title="Show history">
           {open ? <ChevronUp className="h-3 w-3" /> : <History className="h-3 w-3" />}
         </button>
       </div>
+      {editing && (
+        <div className="flex items-center gap-1.5 ml-5 mt-1">
+          <input type="number" value={editVal} onChange={e => setEditVal(e.target.value)}
+            className="w-16 h-6 text-xs rounded border border-border bg-background px-1.5" />
+          <button type="button" className="text-xs text-primary hover:underline"
+            onClick={() => { onNativeChange?.(parseInt(editVal, 10) || 0); setEditing(false); }}>
+            Save
+          </button>
+          <button type="button" className="text-xs text-muted-foreground hover:underline"
+            onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        </div>
+      )}
       {open && (
         <div className="ml-5 mt-1 mb-1 border-l border-border/50 pl-2 space-y-0.5">
           {isFetching && <p className="text-xs text-muted-foreground">Loading…</p>}
-          {!isFetching && log.length === 0 && (
-            <p className="text-xs text-muted-foreground">No history</p>
-          )}
+          {!isFetching && log.length === 0 && <p className="text-xs text-muted-foreground">No command history</p>}
           {log.map((entry, i) => (
             <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="flex-1 truncate">{entry.scene_title}</span>
@@ -86,37 +116,67 @@ function CurrencyLogRow({
   );
 }
 
-function ItemLogRow({
+function InventoryItemRow({
   characterId, itemId, itemName, qty,
-}: { characterId: number; itemId: number; itemName: string; qty: number }) {
+  nativeQty, onNativeChange, onRemoveNative,
+}: {
+  characterId: number; itemId: number; itemName: string; qty: number;
+  nativeQty?: number;
+  onNativeChange?: (qty: number) => void;
+  onRemoveNative?: () => void;
+}) {
   const [open, setOpen] = useState(false);
-  const { data: log = [], isFetching } = useCharacterItemLog(
-    open ? characterId : 0, itemId
-  );
+  const [editing, setEditing] = useState(false);
+  const [editVal, setEditVal] = useState("");
+  const { data: log = [], isFetching } = useCharacterItemLog(open ? characterId : 0, itemId);
+  const isNative = nativeQty !== undefined;
 
   return (
     <div>
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-1.5 text-xs">
         <Package className="h-3 w-3 shrink-0 text-blue-400" />
         <span className="flex-1 truncate">{itemName}</span>
-        <span className={cn("font-mono shrink-0", qty > 0 ? "text-green-500" : "text-red-500")}>
+        {isNative && (
+          <span className="text-muted-foreground/50 shrink-0 font-mono">base:{nativeQty}</span>
+        )}
+        <span className={cn("font-mono shrink-0", qty > 0 ? "text-green-500" : qty === 0 ? "text-muted-foreground" : "text-red-500")}>
           ×{qty}
         </span>
-        <button
-          type="button"
-          onClick={() => setOpen(o => !o)}
-          className="text-muted-foreground hover:text-foreground ml-1"
-          title="Show history"
-        >
+        {isNative && !editing && (
+          <button type="button" onClick={() => { setEditVal(String(nativeQty)); setEditing(true); }}
+            className="text-muted-foreground hover:text-foreground" title="Edit base quantity">
+            <Pencil className="h-3 w-3" />
+          </button>
+        )}
+        {isNative && (
+          <button type="button" onClick={onRemoveNative}
+            className="text-muted-foreground hover:text-destructive" title="Remove from inventory">
+            <Trash2 className="h-3 w-3" />
+          </button>
+        )}
+        <button type="button" onClick={() => setOpen(o => !o)}
+          className="text-muted-foreground hover:text-foreground" title="Show history">
           {open ? <ChevronUp className="h-3 w-3" /> : <History className="h-3 w-3" />}
         </button>
       </div>
+      {editing && (
+        <div className="flex items-center gap-1.5 ml-5 mt-1">
+          <input type="number" value={editVal} onChange={e => setEditVal(e.target.value)}
+            className="w-16 h-6 text-xs rounded border border-border bg-background px-1.5" />
+          <button type="button" className="text-xs text-primary hover:underline"
+            onClick={() => { onNativeChange?.(parseInt(editVal, 10) || 0); setEditing(false); }}>
+            Save
+          </button>
+          <button type="button" className="text-xs text-muted-foreground hover:underline"
+            onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        </div>
+      )}
       {open && (
         <div className="ml-5 mt-1 mb-1 border-l border-border/50 pl-2 space-y-0.5">
           {isFetching && <p className="text-xs text-muted-foreground">Loading…</p>}
-          {!isFetching && log.length === 0 && (
-            <p className="text-xs text-muted-foreground">No history</p>
-          )}
+          {!isFetching && log.length === 0 && <p className="text-xs text-muted-foreground">No command history</p>}
           {log.map((entry, i) => (
             <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="flex-1 truncate">{entry.scene_title}</span>
@@ -168,6 +228,20 @@ export function CodexEntryDialog({
   // Main character
   const [isMainChar, setIsMainChar]   = useState(initial?.is_main_char ?? false);
 
+  // Native inventory (manually set base quantities)
+  const [nativePossessions, setNativePossessions] = useState<{ entry_id: number; quantity: number }[]>(
+    initial?.inventory?.possessions?.map(p => ({ entry_id: p.entry_id, quantity: p.quantity })) ?? []
+  );
+  const [nativeCurrencies, setNativeCurrencies] = useState<{ name: string; amount: number }[]>(
+    initial?.inventory?.currencies?.map(c => ({ name: c.name, amount: c.amount })) ?? []
+  );
+  // Add-item UI state
+  const [addItemId, setAddItemId]       = useState("");
+  const [addItemQty, setAddItemQty]     = useState("1");
+  // Add-currency UI state
+  const [addCurrencyName, setAddCurrencyName]     = useState("");
+  const [addCurrencyAmount, setAddCurrencyAmount] = useState("0");
+
   // Relation-add state
   const [relTarget, setRelTarget]     = useState("");
   const [relPreset, setRelPreset]     = useState(PRESET_RELATIONS[0]);
@@ -213,6 +287,16 @@ export function CodexEntryDialog({
       setSubtype(initial?.subtype ?? "");
       setTags(initial?.tags ?? []);
       setIsMainChar(initial?.is_main_char ?? false);
+      setNativePossessions(
+        initial?.inventory?.possessions?.map(p => ({ entry_id: p.entry_id, quantity: p.quantity })) ?? []
+      );
+      setNativeCurrencies(
+        initial?.inventory?.currencies?.map(c => ({ name: c.name, amount: c.amount })) ?? []
+      );
+      setAddItemId("");
+      setAddItemQty("1");
+      setAddCurrencyName("");
+      setAddCurrencyAmount("0");
       setAliasInput("");
       setTagInput("");
       setGroupInput("");
@@ -281,8 +365,11 @@ export function CodexEntryDialog({
       subtype: entryType !== "character" ? (subtype.trim() || null) : null,
       tags,
       is_main_char: isMainChar,
-      // inventory is managed exclusively by scene commands (_sync_character_inventories)
-      // — do not overwrite it here
+      // Native inventory: base quantities manually set here.
+      // Command deltas are computed on-the-fly and not stored here.
+      inventory: entryType === "character"
+        ? { possessions: nativePossessions, currencies: nativeCurrencies }
+        : null,
     });
     onClose();
   };
@@ -540,45 +627,153 @@ export function CodexEntryDialog({
                 </div>
               </div>
 
-              {/* Inventory — character only, read-only from scene commands */}
-              {entryType === "character" && isExisting && inventorySummary && (
-                (inventorySummary.items.length > 0 || inventorySummary.currencies.length > 0) && (
+              {/* Inventory — character only */}
+              {entryType === "character" && isExisting && (() => {
+                // Merge inventorySummary with unsaved native entries not yet reflected in summary
+                const summaryItemIds  = new Set((inventorySummary?.items     ?? []).map(i => i.item_id));
+                const summaryCurrencyNames = new Set((inventorySummary?.currencies ?? []).map(c => c.name));
+
+                const allCurrencyRows = [
+                  ...(inventorySummary?.currencies ?? []),
+                  ...nativeCurrencies.filter(c => !summaryCurrencyNames.has(c.name))
+                    .map(c => ({ name: c.name, balance: c.amount })),
+                ];
+                const allItemRows = [
+                  ...(inventorySummary?.items ?? []),
+                  ...nativePossessions.filter(p => !summaryItemIds.has(p.entry_id))
+                    .map(p => ({ item_id: p.entry_id, qty: p.quantity })),
+                ];
+
+                // Addable items: codex entries of type "item" not already natively tracked
+                const nativeItemIds = new Set(nativePossessions.map(p => p.entry_id));
+                const addableItems  = allEntries.filter(e => e.entry_type === "item" && !nativeItemIds.has(e.id));
+
+                return (
                   <div className="space-y-2 rounded-lg border border-border p-3">
                     <Label className="text-sm font-medium">{t("entry_inventory")}</Label>
-                    <p className="text-xs text-muted-foreground">Tracked from scene commands</p>
 
-                    {inventorySummary.currencies.length > 0 && (
+                    {/* Currency rows */}
+                    {allCurrencyRows.length > 0 && (
                       <div className="space-y-1">
-                        {inventorySummary.currencies.map(({ name, balance }) => (
-                          <CurrencyLogRow
-                            key={name}
-                            characterId={entryId}
-                            name={name}
-                            balance={balance}
-                          />
-                        ))}
-                      </div>
-                    )}
-
-                    {inventorySummary.items.length > 0 && (
-                      <div className="space-y-1">
-                        {inventorySummary.items.map(({ item_id, qty }) => {
-                          const itemEntry = allEntries.find(e => e.id === item_id);
+                        {allCurrencyRows.map(({ name, balance }) => {
+                          const nat = nativeCurrencies.find(c => c.name === name);
                           return (
-                            <ItemLogRow
-                              key={item_id}
+                            <InventoryCurrencyRow
+                              key={name}
                               characterId={entryId}
-                              itemId={item_id}
-                              itemName={itemEntry?.name ?? `Item #${item_id}`}
-                              qty={qty}
+                              name={name}
+                              balance={balance}
+                              nativeAmount={nat?.amount}
+                              onNativeChange={amount =>
+                                setNativeCurrencies(prev => prev.map(c => c.name === name ? { ...c, amount } : c))
+                              }
+                              onRemoveNative={() =>
+                                setNativeCurrencies(prev => prev.filter(c => c.name !== name))
+                              }
                             />
                           );
                         })}
                       </div>
                     )}
+
+                    {/* Item rows */}
+                    {allItemRows.length > 0 && (
+                      <div className="space-y-1">
+                        {allItemRows.map(({ item_id, qty }) => {
+                          const nat       = nativePossessions.find(p => p.entry_id === item_id);
+                          const itemEntry = allEntries.find(e => e.id === item_id);
+                          return (
+                            <InventoryItemRow
+                              key={item_id}
+                              characterId={entryId}
+                              itemId={item_id}
+                              itemName={itemEntry?.name ?? `Item #${item_id}`}
+                              qty={qty}
+                              nativeQty={nat?.quantity}
+                              onNativeChange={quantity =>
+                                setNativePossessions(prev => prev.map(p => p.entry_id === item_id ? { ...p, quantity } : p))
+                              }
+                              onRemoveNative={() =>
+                                setNativePossessions(prev => prev.filter(p => p.entry_id !== item_id))
+                              }
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Add native currency */}
+                    <div className="flex gap-1.5 items-center pt-1 border-t border-border/40">
+                      <Coins className="h-3 w-3 shrink-0 text-yellow-500" />
+                      <input
+                        type="text"
+                        value={addCurrencyName}
+                        onChange={e => setAddCurrencyName(e.target.value)}
+                        placeholder="Currency name…"
+                        className="flex-1 h-6 text-xs rounded border border-border bg-background px-1.5 min-w-0"
+                      />
+                      <input
+                        type="number"
+                        value={addCurrencyAmount}
+                        onChange={e => setAddCurrencyAmount(e.target.value)}
+                        className="w-14 h-6 text-xs rounded border border-border bg-background px-1.5"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const n = addCurrencyName.trim();
+                          if (!n || nativeCurrencies.find(c => c.name === n)) return;
+                          setNativeCurrencies(prev => [...prev, { name: n, amount: parseInt(addCurrencyAmount, 10) || 0 }]);
+                          setAddCurrencyName("");
+                          setAddCurrencyAmount("0");
+                        }}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Add currency"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Add native item */}
+                    {addableItems.length > 0 && (
+                      <div className="flex gap-1.5 items-center">
+                        <Package className="h-3 w-3 shrink-0 text-blue-400" />
+                        <select
+                          value={addItemId}
+                          onChange={e => setAddItemId(e.target.value)}
+                          className="flex-1 h-6 text-xs rounded border border-border bg-background px-1 min-w-0"
+                        >
+                          <option value="">Select item…</option>
+                          {addableItems.map(e => (
+                            <option key={e.id} value={String(e.id)}>{e.name}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          value={addItemQty}
+                          onChange={e => setAddItemQty(e.target.value)}
+                          className="w-14 h-6 text-xs rounded border border-border bg-background px-1.5"
+                          min="1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const id = parseInt(addItemId, 10);
+                            if (!id) return;
+                            setNativePossessions(prev => [...prev, { entry_id: id, quantity: parseInt(addItemQty, 10) || 1 }]);
+                            setAddItemId("");
+                            setAddItemQty("1");
+                          }}
+                          className="text-muted-foreground hover:text-foreground"
+                          title="Add item"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )
-              )}
+                );
+              })()}
 
               {/* Relations — only for existing (saved) entries */}
               {isExisting && (

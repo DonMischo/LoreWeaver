@@ -83,73 +83,9 @@ def resync_all_project_commands(project_id: int, db: Session = Depends(get_db)):
                 order_index=cmd["order_index"],
             ))
 
-    _sync_character_inventories(project_id, db)
     db.commit()
     return {"ok": True}
 
-
-def _get_project_id_for_scene(scene_id: int, db: Session) -> Optional[int]:
-    return (
-        db.query(Act.project_id)
-        .join(Chapter, Chapter.act_id == Act.id)
-        .join(Scene, Scene.chapter_id == Chapter.id)
-        .filter(Scene.id == scene_id)
-        .scalar()
-    )
-
-
-def _get_all_project_commands(project_id: int, db: Session):
-    """Return all SceneCommands for a project (auto-flush sees pending session changes)."""
-    return (
-        db.query(SceneCommand)
-        .join(Scene, Scene.id == SceneCommand.scene_id)
-        .join(Chapter, Chapter.id == Scene.chapter_id)
-        .join(Act, Act.id == Chapter.act_id)
-        .filter(Act.project_id == project_id)
-        .all()
-    )
-
-
-def _sync_character_inventories(project_id: int, db: Session) -> None:
-    """Recompute CodexEntry.inventory (possessions + currencies) from scene commands."""
-    cmds = _get_all_project_commands(project_id, db)
-
-    char_items: dict[int, dict[int, int]] = {}       # char_id -> {item_id -> net qty}
-    char_currencies: dict[int, dict[str, int]] = {}  # char_id -> {name -> balance}
-
-    for cmd in cmds:
-        if cmd.character_id <= 0:
-            continue
-        data = json.loads(cmd.data) if cmd.data else {}
-        if cmd.command_type == "item" and cmd.item_id:
-            qty = int(data.get("qty", 1))
-            char_items.setdefault(cmd.character_id, {})
-            char_items[cmd.character_id][cmd.item_id] = (
-                char_items[cmd.character_id].get(cmd.item_id, 0) + qty
-            )
-        elif cmd.command_type == "currency":
-            name = (data.get("currencyName") or "").strip()
-            delta = int(data.get("delta", 0))
-            if name:
-                char_currencies.setdefault(cmd.character_id, {})
-                char_currencies[cmd.character_id][name] = (
-                    char_currencies[cmd.character_id].get(name, 0) + delta
-                )
-
-    for char_id in set(char_items) | set(char_currencies):
-        entry = db.get(CodexEntry, char_id)
-        if not entry:
-            continue
-        possessions = [
-            {"entry_id": k, "quantity": v}
-            for k, v in char_items.get(char_id, {}).items()
-            if v != 0
-        ]
-        currencies = [
-            {"name": k, "amount": v}
-            for k, v in char_currencies.get(char_id, {}).items()
-        ]
-        entry.inventory = json.dumps({"possessions": possessions, "currencies": currencies})
 
 
 @router.post("/api/scenes/{scene_id}/commands/sync", response_model=list[SceneCommandOut])
@@ -178,10 +114,6 @@ def sync_scene_commands(
         )
         db.add(sc)
         new_cmds.append(sc)
-
-    project_id = _get_project_id_for_scene(scene_id, db)
-    if project_id:
-        _sync_character_inventories(project_id, db)
 
     db.commit()
     for sc in new_cmds:
@@ -340,15 +272,37 @@ def get_currency_balance(
 
 @router.get("/api/codex/{character_id}/currencies")
 def get_character_currencies(character_id: int, db: Session = Depends(get_db)):
-    """All distinct currency names for a character, read from CodexEntry.inventory."""
+    """All distinct currency names for a character (native + command-detected)."""
+    names: set[str] = set()
+
+    # Native currencies from inventory
     entry = db.get(CodexEntry, character_id)
-    if not entry or not entry.inventory:
-        return []
-    try:
-        inv = json.loads(entry.inventory)
-        return sorted(c["name"] for c in inv.get("currencies", []) if c.get("name"))
-    except (json.JSONDecodeError, TypeError, KeyError):
-        return []
+    if entry and entry.inventory:
+        try:
+            inv = json.loads(entry.inventory)
+            for c in inv.get("currencies", []):
+                n = (c.get("name") or "").strip()
+                if n:
+                    names.add(n)
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass
+
+    # Command-detected currencies
+    cmds = (
+        db.query(SceneCommand)
+        .filter(
+            SceneCommand.character_id == character_id,
+            SceneCommand.command_type == "currency",
+        )
+        .all()
+    )
+    for cmd in cmds:
+        data = json.loads(cmd.data) if cmd.data else {}
+        n = (data.get("currencyName") or "").strip()
+        if n:
+            names.add(n)
+
+    return sorted(names)
 
 
 @router.get("/api/projects/{project_id}/item-log")
@@ -552,35 +506,59 @@ def get_character_currency_log(
 
 @router.get("/api/codex/{character_id}/inventory-summary")
 def get_inventory_summary(character_id: int, db: Session = Depends(get_db)):
-    """Net item quantities and currency balances for a character across all scenes."""
+    """Combined inventory: native base (from CodexEntry.inventory) + scene command deltas.
+
+    Native items are shown even when total reaches 0 (item was lost in the story).
+    """
+    # ── Native base ───────────────────────────────────────────────────────────
+    entry = db.get(CodexEntry, character_id)
+    native_items: dict[int, int] = {}       # item_id -> base qty
+    native_currencies: dict[str, int] = {}  # name    -> base amount
+    if entry and entry.inventory:
+        try:
+            inv = json.loads(entry.inventory)
+            for p in inv.get("possessions", []):
+                eid = int(p.get("entry_id", 0))
+                if eid:
+                    native_items[eid] = int(p.get("quantity", 0))
+            for c in inv.get("currencies", []):
+                name = (c.get("name") or "").strip()
+                if name:
+                    native_currencies[name] = int(c.get("amount", 0))
+        except (json.JSONDecodeError, TypeError, KeyError, ValueError):
+            pass
+
+    # ── Command deltas ────────────────────────────────────────────────────────
     cmds = (
         db.query(SceneCommand)
         .filter(SceneCommand.character_id == character_id)
         .all()
     )
-
-    item_totals: dict[int, int] = {}
-    currency_totals: dict[str, int] = {}
-
+    cmd_items: dict[int, int] = {}
+    cmd_currencies: dict[str, int] = {}
     for cmd in cmds:
         data = json.loads(cmd.data) if cmd.data else {}
         if cmd.command_type == "item" and cmd.item_id:
             qty = int(data.get("qty", 1))
-            item_totals[cmd.item_id] = item_totals.get(cmd.item_id, 0) + qty
+            cmd_items[cmd.item_id] = cmd_items.get(cmd.item_id, 0) + qty
         elif cmd.command_type == "currency":
             name = (data.get("currencyName") or "").strip()
             delta = int(data.get("delta", 0))
             if name:
-                currency_totals[name] = currency_totals.get(name, 0) + delta
+                cmd_currencies[name] = cmd_currencies.get(name, 0) + delta
 
-    return {
-        "items": [
-            {"item_id": k, "qty": v}
-            for k, v in item_totals.items()
-            if v != 0
-        ],
-        "currencies": [
-            {"name": k, "balance": v}
-            for k, v in currency_totals.items()
-        ],
-    }
+    # ── Combine ───────────────────────────────────────────────────────────────
+    items = []
+    for item_id in set(native_items) | set(cmd_items):
+        native = native_items.get(item_id, 0)
+        total  = native + cmd_items.get(item_id, 0)
+        # Keep native entries even at 0 (lost item), drop command-only zeros
+        if total != 0 or native > 0:
+            items.append({"item_id": item_id, "qty": total})
+
+    currencies = []
+    for name in set(native_currencies) | set(cmd_currencies):
+        total = native_currencies.get(name, 0) + cmd_currencies.get(name, 0)
+        currencies.append({"name": name, "balance": total})
+
+    return {"items": items, "currencies": currencies}
