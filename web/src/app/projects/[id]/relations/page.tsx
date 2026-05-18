@@ -35,11 +35,11 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
   character: User, location: MapPin, item: Package, lore: Scroll, custom: Tag,
 };
 
-const W = 900;
-const H = 680;
+const W = 1000;
+const H = 800;
 const CX = W / 2;
 const CY = H / 2;
-const R1 = 220;   // radius for direct connections
+const RADII = [0, 185, 300, 390]; // ring radii indexed by depth
 const NODE_R = 28;
 
 function radialPos(index: number, total: number, radius: number, offset = 0) {
@@ -129,6 +129,7 @@ export default function RelationsPage() {
   const [centerId, setCenterId] = useState<string | null>(null);
   const [hoveredEdge, setHoveredEdge] = useState<GraphEdge | null>(null);
   const [dialogEntry, setDialogEntry] = useState<CodexEntry | null>(null);
+  const [depth, setDepth] = useState(1);
 
   // Open the codex entry dialog for a graph node (if it has a codex_id)
   const openEntryDialog = (node: GraphNode) => {
@@ -154,7 +155,7 @@ export default function RelationsPage() {
     return data.nodes.find(n => n.id === defaultId) ?? null;
   }, [data, centerId, codexEntries]);
 
-  // Layout: center node + connected nodes arranged radially
+  // Layout: BFS from center node up to `depth` rings
   const layout = useMemo(() => {
     if (!data || !centerNode) return { positions: {}, visibleEdges: [] };
 
@@ -162,25 +163,30 @@ export default function RelationsPage() {
     const positions: Record<string, { x: number; y: number }> = {};
     positions[centerName] = { x: CX, y: CY };
 
-    const directEdges = data.edges.filter(
-      e => e.source === centerName || e.target === centerName
-    );
-    const directNames = new Set<string>();
-    for (const e of directEdges) {
-      if (e.source && e.source !== centerName) directNames.add(e.source);
-      if (e.target !== centerName) directNames.add(e.target);
+    let frontier = new Set<string>([centerName]);
+
+    for (let d = 1; d <= depth; d++) {
+      const nextFrontier = new Set<string>();
+      for (const name of frontier) {
+        for (const e of data.edges) {
+          const src = e.source ?? "";
+          if (src === name && !positions[e.target]) nextFrontier.add(e.target);
+          if (e.target === name && src && !positions[src]) nextFrontier.add(src);
+        }
+      }
+      const arr = [...nextFrontier];
+      arr.forEach((name, i) => {
+        positions[name] = radialPos(i, arr.length, RADII[d], Math.PI / arr.length);
+      });
+      frontier = nextFrontier;
     }
-    const directArr = [...directNames];
-    directArr.forEach((name, i) => {
-      positions[name] = radialPos(i, directArr.length, R1);
-    });
 
     const visibleEdges = data.edges.filter(
       e => positions[e.source ?? ""] && positions[e.target]
     );
 
     return { positions, visibleEdges };
-  }, [data, centerNode]);
+  }, [data, centerNode, depth]);
 
   if (isLoading) return <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading graph…</div>;
   if (error || !data) return <div className="flex items-center justify-center h-full text-destructive text-sm">Failed to load graph</div>;
@@ -198,14 +204,29 @@ export default function RelationsPage() {
           <h1 className="text-base font-semibold">Relations</h1>
           <p className="text-xs text-muted-foreground">{data.nodes.length} nodes · {data.edges.length} edges · click a node to re-centre</p>
         </div>
-        {hoveredEdge && (
-          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-            <Info className="h-3 w-3" />
-            {hoveredEdge.via === "inline"
-              ? `In scene: "${hoveredEdge.scene_title}" (${hoveredEdge.chapter_title})`
-              : "Defined in Codex"}
+        <div className="flex items-center gap-4">
+          {hoveredEdge && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Info className="h-3 w-3" />
+              {hoveredEdge.via === "inline"
+                ? `In scene: "${hoveredEdge.scene_title}" (${hoveredEdge.chapter_title})`
+                : "Defined in Codex"}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Depth</span>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={1}
+              value={depth}
+              onChange={e => setDepth(Number(e.target.value))}
+              className="w-20 accent-primary"
+            />
+            <span className="text-xs font-medium w-3 text-center">{depth}</span>
           </div>
-        )}
+        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
