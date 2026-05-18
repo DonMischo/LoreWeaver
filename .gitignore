@@ -61,3 +61,6 @@ api/uv.lock
 CLAUDE.md
 /api/uploads
 /api-dist
+/.next-standalone
+/.pyinstaller-work
+/dist
