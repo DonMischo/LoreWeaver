@@ -59,10 +59,10 @@ jobs:
         run: ${{ matrix.build_cmd }}
         env:
           # Suppress electron-builder code signing on CI (no certs available).
-          # Remove or set proper certs to enable signing.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          # GitHub token for auto-updater release uploads (optional).
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Do NOT pass GH_TOKEN here — that would trigger electron-builder's
+          # implicit publish and fail without contents:write. The release job
+          # below handles uploading artifacts to GitHub Releases instead.
 
       # ── Upload artifacts ─────────────────────────────────────────────────────
       - uses: actions/upload-artifact@v4
