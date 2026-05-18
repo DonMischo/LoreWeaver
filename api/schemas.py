@@ -405,6 +405,17 @@ class KiGenerateRequest(BaseModel):
     word_count: Optional[int] = None  # per-node override; falls back to prompt's word_count
 
 
+class ChatMessage(BaseModel):
+    role: str   # "user" | "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    scene_id: int
+    messages: list[ChatMessage]
+    model: Optional[str] = None
+
+
 class SceneVersionOut(BaseModel):
     id: int
     scene_id: int

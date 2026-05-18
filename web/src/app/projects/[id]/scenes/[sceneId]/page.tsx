@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History } from "lucide-react";
+import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
@@ -11,6 +11,7 @@ import { CodexSidebar } from "@/components/codex/CodexSidebar";
 import { CodexEntryDialog } from "@/components/codex/CodexEntryDialog";
 import { AIPanel } from "@/components/ai/AIPanel";
 import { VersionHistoryPanel } from "@/components/editor/VersionHistoryPanel";
+import { ChatPanel } from "@/components/editor/ChatPanel";
 import { SceneTimePanel } from "@/components/time/SceneTimePanel";
 import { TimeConfigDialog } from "@/components/time/TimeConfigDialog";
 import { useUIStore } from "@/store/ui";
@@ -79,6 +80,7 @@ export default function ScenePage() {
   const [timePanelOpen, setTimePanelOpen] = useState(false);
   const [timeConfigOpen, setTimeConfigOpen] = useState(false);
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
+  const [chatPanelOpen, setChatPanelOpen] = useState(false);
 
   const codexSidebarOpen = useUIStore((s) => s.codexSidebarOpen);
   const aiPanelOpen = useUIStore((s) => s.aiPanelOpen);
@@ -333,6 +335,18 @@ export default function ScenePage() {
           <Sparkles className="h-3.5 w-3.5" />
           AI
         </Button>
+        <Button
+          size="sm"
+          variant={chatPanelOpen ? "secondary" : "ghost"}
+          onClick={() => {
+            setChatPanelOpen(!chatPanelOpen);
+            if (timePanelOpen) setTimePanelOpen(false);
+          }}
+          className="gap-1.5 text-xs"
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          Chat
+        </Button>
       </div>
 
       {/* Main area */}
@@ -345,6 +359,7 @@ export default function ScenePage() {
             codexEntries={codexEntries}
             onCodexEntryClick={handleCodexEntryClick}
             sceneId={sceneIdNum}
+            onOpenChat={() => setChatPanelOpen(true)}
           />
           <StatusBar sceneWordCount={wordCount} />
         </div>
@@ -387,6 +402,14 @@ export default function ScenePage() {
             sceneId={sceneIdNum}
             onClose={() => setHistoryPanelOpen(false)}
             onRestored={handleVersionRestored}
+          />
+        )}
+
+        {/* Scene chat panel */}
+        {chatPanelOpen && (
+          <ChatPanel
+            sceneId={sceneIdNum}
+            onClose={() => setChatPanelOpen(false)}
           />
         )}
       </div>

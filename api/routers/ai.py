@@ -8,7 +8,7 @@ import httpx
 from crypto import decrypt
 from database import get_db
 from models import Scene, Chapter, Act, Project, UserSettings, CodexEntry, AIPrompt
-from schemas import AIGenerateRequest, KiGenerateRequest
+from schemas import AIGenerateRequest, KiGenerateRequest, ChatRequest
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -271,3 +271,39 @@ async def ki_generate(body: KiGenerateRequest, db: Session = Depends(get_db)):
         raise HTTPException(resp.status_code, resp.text)
 
     return {"text": resp.json()["choices"][0]["message"]["content"]}
+
+
+@router.post("/chat")
+async def chat(body: ChatRequest, db: Session = Depends(get_db)):
+    """Multi-turn chat about the current scene."""
+    scene = db.get(Scene, body.scene_id)
+    if not scene:
+        raise HTTPException(404, "Scene not found")
+
+    settings = db.query(UserSettings).first()
+    if not settings or not settings.openrouter_api_key:
+        raise HTTPException(400, "OpenRouter API key not configured")
+
+    api_key = decrypt(settings.openrouter_api_key)
+    model = body.model or settings.default_model
+    language = _project_language(scene, db)
+    scene_content = re.sub(r"<[^>]+>", "", scene.content or "")
+
+    system = (
+        "You are a creative writing assistant helping an author develop their story. "
+        "The author is currently working on the following scene:\n\n"
+        f"--- Scene: {scene.title or 'Untitled'} ---\n"
+        f"{scene_content}\n"
+        "--- End of Scene ---\n\n"
+        "Discuss ideas, answer questions, suggest improvements, and explore story possibilities. "
+        f"Be conversational, specific, and helpful. Respond in {language}."
+    )
+
+    messages = [{"role": "system", "content": system}]
+    messages += [{"role": m.role, "content": m.content} for m in body.messages]
+
+    return StreamingResponse(
+        _stream_openrouter(api_key, model, messages),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

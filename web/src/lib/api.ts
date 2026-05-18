@@ -368,3 +368,16 @@ export const kiApi = {
     word_count?: number | null;
   }) => req<{ text: string }>("/ai/ki", { method: "POST", body: JSON.stringify(data) }),
 };
+
+export const chatApi = {
+  stream: (
+    sceneId: number,
+    messages: { role: string; content: string }[],
+    model?: string,
+  ) =>
+    fetch(`${BASE}/ai/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scene_id: sceneId, messages, model }),
+    }),
+};

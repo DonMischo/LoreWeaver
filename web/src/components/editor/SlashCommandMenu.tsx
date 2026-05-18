@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { StickyNote, Coins, Package, ImageIcon, Sparkles } from "lucide-react";
+import { StickyNote, Coins, Package, ImageIcon, Sparkles, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/core";
 
@@ -19,6 +19,7 @@ interface Props {
   editor: Editor;
   state: SlashMenuState;
   onClose: () => void;
+  onAction?: (id: string) => void;
 }
 
 const COMMANDS = [
@@ -67,10 +68,27 @@ const COMMANDS = [
     keywords: ["ai", "generate", "ki", "knowledge", "inject"],
     content: () => ({ type: "ki", attrs: { model: "", codexIds: "", sceneIds: "", prompt: "" } }),
   },
-] as const;
+  {
+    id: "chat",
+    label: "Scene Chat",
+    description: "Chat with AI about this scene to brainstorm ideas",
+    icon: MessageSquare,
+    color: "#06b6d4",
+    keywords: ["chat", "discuss", "brainstorm", "ideas", "talk"],
+    content: null,
+  },
+] satisfies {
+  id: string;
+  label: string;
+  description: string;
+  icon: React.ElementType;
+  color: string;
+  keywords: string[];
+  content: (() => object) | null;
+}[];
 
 export const SlashCommandMenu = forwardRef<SlashMenuHandle, Props>(
-  function SlashCommandMenu({ editor, state, onClose }, ref) {
+  function SlashCommandMenu({ editor, state, onClose, onAction }, ref) {
     const menuRef = useRef<HTMLDivElement>(null);
     const [activeIndex, setActiveIndex] = useState(0);
 
@@ -101,13 +119,18 @@ export const SlashCommandMenu = forwardRef<SlashMenuHandle, Props>(
 
     const selectCommand = (cmd: typeof COMMANDS[number]) => {
       onClose();
-      // Single chain: delete the '/' + query text, then insert the node
+      // Always delete the '/' + query text first
       editor
         .chain()
         .focus()
         .deleteRange({ from: state.from, to: state.from + 1 + state.query.length })
-        .insertContent(cmd.content())
         .run();
+      if (cmd.content) {
+        editor.chain().focus().insertContent(cmd.content()).run();
+      } else {
+        // Action command — fire callback instead of inserting a node
+        onAction?.(cmd.id);
+      }
     };
 
     useImperativeHandle(ref, () => ({

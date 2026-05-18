@@ -43,8 +43,8 @@ def get_settings(db: Session = Depends(get_db)):
 @router.post("", response_model=SettingsOut)
 def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
     s = _get_or_create_settings(db)
-    if body.openrouter_api_key is not None:
-        s.openrouter_api_key = encrypt(body.openrouter_api_key) if body.openrouter_api_key else None
+    if body.openrouter_api_key:  # non-empty string → update; empty/None → keep existing key
+        s.openrouter_api_key = encrypt(body.openrouter_api_key)
     if body.default_model is not None:
         s.default_model = body.default_model
     if body.theme is not None:

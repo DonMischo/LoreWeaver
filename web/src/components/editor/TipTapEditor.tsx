@@ -22,9 +22,10 @@ interface Props {
   codexEntries: CodexEntry[];
   onCodexEntryClick: (id: number) => void;
   sceneId: number;
+  onOpenChat?: () => void;
 }
 
-export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId }: Props) {
+export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId, onOpenChat }: Props) {
   const entriesRef = useRef<PatchedEntry[]>(patchEntryAliases(codexEntries));
   const onClickRef = useRef(onCodexEntryClick);
   entriesRef.current = patchEntryAliases(codexEntries);
@@ -162,6 +163,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
             editor={editor}
             state={slashMenu}
             onClose={closeSlash}
+            onAction={(id) => { if (id === "chat") onOpenChat?.(); }}
           />
         )}
       </div>

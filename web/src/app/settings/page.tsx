@@ -39,6 +39,7 @@ export default function SettingsPage() {
   const revertPrompt  = useRevertPrompt();
 
   const [apiKey, setApiKey]               = useState("");
+  const [apiKeyDirty, setApiKeyDirty]     = useState(false);
   const [defaultModel, setDefaultModel]   = useState("anthropic/claude-3.5-sonnet");
   const [enabledModels, setEnabledModels] = useState<string[]>([]);
   const [modelSearch, setModelSearch]     = useState("");
@@ -107,12 +108,16 @@ export default function SettingsPage() {
   };
 
   const handleSave = async () => {
-    await updateSettings.mutateAsync({
-      openrouter_api_key: apiKey || undefined,
+    const payload: Parameters<typeof updateSettings.mutateAsync>[0] = {
       default_model: defaultModel,
       enabled_models: enabledModels,
-    });
+    };
+    // Only include the key when the user has explicitly typed in the field.
+    // Guards against browser autofill silently populating a password field on load.
+    if (apiKeyDirty && apiKey) payload.openrouter_api_key = apiKey;
+    await updateSettings.mutateAsync(payload);
     setApiKey("");
+    setApiKeyDirty(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -155,8 +160,8 @@ export default function SettingsPage() {
               type="password"
               placeholder={settings?.has_api_key ? "••••••••••••••••••••••••••••••" : "sk-or-..."}
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              autoComplete="off"
+              onChange={(e) => { setApiKey(e.target.value); setApiKeyDirty(true); }}
+              autoComplete="new-password"
             />
             <p className="text-xs text-muted-foreground">
               {t("settings_api_key_note")}{" "}
