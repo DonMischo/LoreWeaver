@@ -157,6 +157,7 @@ export interface Settings {
   id: number;
   has_api_key: boolean;
   default_model: string;
+  default_chat_model: string | null;
   theme: string;
   enabled_models: string[];
 }

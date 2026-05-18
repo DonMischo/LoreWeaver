@@ -30,6 +30,7 @@ def _settings_out(s: UserSettings) -> SettingsOut:
         id=s.id,
         has_api_key=bool(s.openrouter_api_key),
         default_model=s.default_model,
+        default_chat_model=s.default_chat_model or None,
         theme=s.theme,
         enabled_models=enabled,
     )
@@ -47,6 +48,8 @@ def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
         s.openrouter_api_key = encrypt(body.openrouter_api_key)
     if body.default_model is not None:
         s.default_model = body.default_model
+    if body.default_chat_model is not None:
+        s.default_chat_model = body.default_chat_model or None
     if body.theme is not None:
         s.theme = body.theme
     if body.enabled_models is not None:

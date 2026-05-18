@@ -342,6 +342,7 @@ class SceneCommandOut(BaseModel):
 class SettingsUpdate(BaseModel):
     openrouter_api_key: Optional[str] = None
     default_model: Optional[str] = None
+    default_chat_model: Optional[str] = None
     theme: Optional[str] = None
     enabled_models: Optional[list[str]] = None
 
@@ -350,6 +351,7 @@ class SettingsOut(BaseModel):
     id: int
     has_api_key: bool
     default_model: str
+    default_chat_model: Optional[str] = None
     theme: str
     enabled_models: list[str]
 

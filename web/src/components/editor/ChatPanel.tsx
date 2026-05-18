@@ -26,7 +26,7 @@ export function ChatPanel({ sceneId, onClose }: Props) {
 
   // "" means "use default"; once the user picks explicitly, we store their choice
   const [selectedModel, setSelectedModel] = useState("");
-  const effectiveModel = selectedModel || settings?.default_model || "";
+  const effectiveModel = selectedModel || settings?.default_chat_model || settings?.default_model || "";
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");

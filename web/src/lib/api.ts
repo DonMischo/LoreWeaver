@@ -323,6 +323,7 @@ export const settingsApi = {
   update: (data: {
     openrouter_api_key?: string;
     default_model?: string;
+    default_chat_model?: string | null;
     theme?: string;
     enabled_models?: string[];
   }) => req<Settings>("/settings", { method: "POST", body: JSON.stringify(data) }),

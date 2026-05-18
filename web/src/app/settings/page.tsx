@@ -40,8 +40,9 @@ export default function SettingsPage() {
 
   const [apiKey, setApiKey]               = useState("");
   const [apiKeyDirty, setApiKeyDirty]     = useState(false);
-  const [defaultModel, setDefaultModel]   = useState("anthropic/claude-3.5-sonnet");
-  const [enabledModels, setEnabledModels] = useState<string[]>([]);
+  const [defaultModel, setDefaultModel]         = useState("anthropic/claude-3.5-sonnet");
+  const [defaultChatModel, setDefaultChatModel] = useState<string>("");
+  const [enabledModels, setEnabledModels]       = useState<string[]>([]);
   const [modelSearch, setModelSearch]     = useState("");
   const [saved, setSaved]                 = useState(false);
 
@@ -97,6 +98,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setDefaultModel(settings.default_model);
+      setDefaultChatModel(settings.default_chat_model ?? "");
       setEnabledModels(settings.enabled_models ?? []);
     }
   }, [settings]);
@@ -110,6 +112,7 @@ export default function SettingsPage() {
   const handleSave = async () => {
     const payload: Parameters<typeof updateSettings.mutateAsync>[0] = {
       default_model: defaultModel,
+      default_chat_model: defaultChatModel || null,
       enabled_models: enabledModels,
     };
     // Only include the key when the user has explicitly typed in the field.
@@ -185,6 +188,26 @@ export default function SettingsPage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">Used by the AI writing panel.</p>
+          </div>
+
+          {/* Default chat model */}
+          <div className="space-y-1.5">
+            <Label>Default Chat Model</Label>
+            <Select
+              value={defaultChatModel || "__default__"}
+              onValueChange={(v) => setDefaultChatModel(v === "__default__" ? "" : v)}
+            >
+              <SelectTrigger className="w-full max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__default__">Same as default model</SelectItem>
+                {defaultModelChoices.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Used by the Scene Chat panel.</p>
           </div>
 
           {/* Available models (checkbox list for /ki command) */}
