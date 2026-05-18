@@ -51,10 +51,16 @@ if (Test-Path ".next\standalone\web") {
 }
 Ok "Next.js built"
 
-# Stage the standalone for electron-builder
+# Stage the standalone for electron-builder.
+# Normalise to a flat layout regardless of whether Next.js nested output under
+# "web\" (happens when a parent node_modules exists) or produced it at root.
 Set-Location $Root
 if (Test-Path ".next-standalone") { Remove-Item -Recurse -Force ".next-standalone" }
-Copy-Item -Recurse "web\.next\standalone" ".next-standalone"
+if (Test-Path "web\.next\standalone\web") {
+  Copy-Item -Recurse "web\.next\standalone\web" ".next-standalone"
+} else {
+  Copy-Item -Recurse "web\.next\standalone" ".next-standalone"
+}
 Ok "Next.js standalone staged -> .next-standalone\"
 
 # ── Step 3 — FastAPI / PyInstaller ───────────────────────────────────────────

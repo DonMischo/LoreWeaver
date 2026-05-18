@@ -17,7 +17,7 @@ const GITIGNORED_DIRS = ['node_modules', '.next'];
 exports.default = async function afterPack(context) {
   const projectDir = context.packager.projectDir;
   const appOutDir  = context.appOutDir;
-  const webSrc     = path.join(projectDir, '.next-standalone', 'web');
+  const webSrc     = path.join(projectDir, '.next-standalone');
   const webDest    = path.join(appOutDir,  'resources', 'web');
 
   for (const dir of GITIGNORED_DIRS) {

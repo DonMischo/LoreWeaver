@@ -23,7 +23,7 @@ files:
 # so the actual server.js lives at .next-standalone/web/server.js.
 # → resources/web/
 extraResources:
-  - from: .next-standalone/web/
+  - from: .next-standalone/
     to: web
     filter:
       - "**/*"
@@ -69,8 +69,7 @@ linux:
       arch: [x64]
 
 # ── Auto-updater (GitHub Releases) ───────────────────────────────────────────
-# Uncomment and fill in your GitHub repo to enable automatic updates:
-# publish:
-#   provider: github
-#   owner: YOUR_GITHUB_USERNAME
-#   repo: loreweaver
+publish:
+  provider: github
+  owner: DonMischo
+  repo: loreweaver

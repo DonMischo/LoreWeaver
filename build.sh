@@ -50,7 +50,11 @@ ok "Next.js built"
 # Stage the standalone for electron-builder
 cd "$ROOT"
 rm -rf .next-standalone
-cp -r web/.next/standalone .next-standalone
+if [ -d "web/.next/standalone/web" ]; then
+  cp -r web/.next/standalone/web .next-standalone
+else
+  cp -r web/.next/standalone .next-standalone
+fi
 ok "Next.js standalone staged → .next-standalone/"
 
 # ── Step 3 — FastAPI / PyInstaller ───────────────────────────────────────────
