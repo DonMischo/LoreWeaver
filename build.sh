@@ -89,7 +89,7 @@ ok "API binary staged → api-dist/"
 
 # ── Step 4 — Electron build ───────────────────────────────────────────────────
 step "Packaging with electron-builder"
-npm run dist
+npm run dist -- --publish never
 ok "Done!  Installers are in dist/"
 echo ""
 echo "  macOS:  dist/*.dmg"

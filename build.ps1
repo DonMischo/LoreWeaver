@@ -97,7 +97,7 @@ Ok "API binary staged -> api-dist\"
 # ── Step 4 — Electron build ───────────────────────────────────────────────────
 Step "Packaging with electron-builder"
 Set-Location $Root
-Run npm @("run", "dist:win")
+Run npm @("run", "dist:win", "--", "--publish", "never")
 Ok "Done!  Installer is in dist\"
 Write-Host ""
 Write-Host "  Windows: dist\*.exe  (NSIS installer)" -ForegroundColor White
