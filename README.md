@@ -28,8 +28,8 @@ Then open **http://localhost:3000** in your browser.
 | Editor | TipTap with Codex highlight extension |
 | State | Zustand + TanStack Query v5 |
 | Backend | FastAPI, SQLAlchemy 2.0, SQLite (WAL mode) |
-| AI | OpenRouter (any model, proxied via backend) WIP |
-| Export | Markdown + LaTeX (Jinja2 templates) |
+| AI | OpenRouter (any model, proxied via backend) |
+| Export | Markdown, LaTeX, EPUB-style HTML (Jinja2 templates) |
 
 ---
 
@@ -43,9 +43,21 @@ Then open **http://localhost:3000** in your browser.
 - Scene titles auto-generated from content if left blank
 - Debounced **autosave** (1 s) + periodic interval save; localStorage fallback when the backend is unreachable
 - Word count in the status bar; per-scene counts persist to the database
-- **Export** to `.md` (Markdown) or `.tex` (LaTeX) — LaTeX output uses `\chapter` / `\section` structure with proper special-character escaping
+- **Export** to `.md` (Markdown), `.tex` (LaTeX), or EPUB-style HTML — LaTeX output uses `\chapter` / `\section` structure with proper special-character escaping
 - **Import** a Markdown story file (splits on `##` / `###` / `####` headings into acts / chapters / scenes)
 - Read view per chapter and per act — flowing prose layout with story typography (indent, justify, no-indent after headings)
+
+### 🕓 Version History
+- **Automatic snapshots** every 5 minutes while a scene is open (only when content has changed)
+- **Scene-leave snapshot** — a snapshot is taken automatically when navigating away from a scene
+- **Pre-restore snapshot** — before restoring an older version, the current content is always saved first so nothing is lost
+- SHA-256 deduplication — identical content is never saved twice
+- Retention policy: up to **30 versions** per scene; if over 30, versions older than 30 days are pruned first, then the oldest overall
+- **History sidebar** (History button in the scene toolbar):
+  - Lists all snapshots with relative time ("5m ago") and absolute timestamp in your local timezone
+  - Hover any entry to reveal **Preview** (eye icon) and **Restore** (↺ icon) buttons
+  - Preview renders the snapshot content inline without leaving the editor
+  - Restore shows an inline confirmation before applying
 
 ### 📚 Codex (World-building Database)
 - Entry types: **Character**, **Location**, **Item**, **Lore**, **Custom**
@@ -101,9 +113,25 @@ Then open **http://localhost:3000** in your browser.
 
 ### 🤖 AI Assistant
 - Sidebar panel in the scene editor (Sparkles button)
-- Actions: **Continue**, **Rewrite**, **Brainstorm**, **Ask**, **Custom**
+- Classic actions: **Continue**, **Rewrite**, **Brainstorm**, **Ask**, **Custom**
+- **KI inline command** (`/ki` in the editor) — insert an AI generation node directly into the prose flow:
+  - Select a **wrapper prompt** (Story Generation, Lector Review, Codex Entry Distillation, or any custom prompt)
+  - Pick **codex entries** to inject as world-building context
+  - Add **extra scenes** for additional context beyond the active scene
+  - Set a **word count** target (presets: 600 / 800 / 1000, or enter any value); defaults to the prompt's configured word count
+  - For the Codex Entry Distillation prompt, choose the **entry type** to extract (Character, Location, Item, Lore)
 - Streams output from any [OpenRouter](https://openrouter.ai) model
 - Insert generated text directly into the editor at the cursor
+
+### 📝 AI Prompts
+- Three **built-in prompts** shipped with the app:
+  - **Story Generation** — continues or fills a scene, mirrors the author's voice; uses `{{WORD_COUNT}}` and `{{LANGUAGE}}`
+  - **Lector Review** — full editorial report across grammar, logic, character consistency, prose quality, pacing, and dialogue
+  - **Codex Entry Distillation** — extracts a structured codex entry (character, location, item, or lore) from scene content
+- All built-in prompts inject the **project language** automatically (e.g. `language: "de"` → writes in German)
+- **Custom prompts** — create your own with a name, description, system instruction, user template, and default word count
+- Manage all prompts from **Settings → AI Prompts**: edit, create, delete, and **revert to default** (built-ins only)
+- Template placeholders: `{{SCENE_CONTENT}}`, `{{CODEX_ENTRIES}}`, `{{USER_PROMPT}}`, `{{LANGUAGE}}`, `{{WORD_COUNT}}`, `{{ENTRY_TYPE}}`
 
 ---
 
@@ -112,8 +140,9 @@ Then open **http://localhost:3000** in your browser.
 Open `/settings` or click **Settings** in the sidebar to:
 
 - Add your [OpenRouter API key](https://openrouter.ai/keys) — stored server-side, never sent to the browser
-- Choose your default AI model
+- Choose your default AI model and enable/disable available models
 - Switch between **dark** and **light** theme
+- **AI Prompts** — view, edit, create, and revert all story generation prompts
 
 ---
 
@@ -135,6 +164,13 @@ Open `/settings` or click **Settings** in the sidebar to:
 | Edit an entry from the Relations graph | Click its name in the left panel |
 | Share a world bible across projects | New Project → **Share codex** → pick the source project |
 | Track what a character owns | Codex entry (character) → **Inventory** section |
+| Browse scene snapshots | Scene editor → **History** button (top toolbar) |
+| Restore an older version of a scene | History sidebar → hover a version → ↺ Restore |
+| Preview a version without restoring | History sidebar → hover a version → 👁 eye icon |
+| Generate text inline with AI | Type `/ki` in the editor, configure the node, click Generate |
+| Customise an AI prompt | Settings → AI Prompts → select a prompt → edit system/template |
+| Revert a built-in prompt to default | Settings → AI Prompts → select built-in → Revert to Default |
+| Set the language for AI output | Project settings → Book Metadata → Language (BCP 47 code, e.g. `de`) |
 
 ---
 
@@ -143,7 +179,7 @@ Open `/settings` or click **Settings** in the sidebar to:
 ```
 loreweaver/
 ├── api/                  # FastAPI backend
-│   ├── routers/          # projects, acts, chapters, scenes, codex, time, graph, ai, export, imports
+│   ├── routers/          # projects, acts, chapters, scenes, codex, time, graph, ai, settings, export, imports
 │   ├── models.py         # SQLAlchemy ORM models
 │   ├── schemas.py        # Pydantic request/response schemas
 │   ├── database.py       # Engine, session, migration helpers
@@ -151,7 +187,7 @@ loreweaver/
 └── web/                  # Next.js 14 frontend
     └── src/
         ├── app/          # App Router pages (projects, codex, timeline, relations, settings…)
-        ├── components/   # Editor, Codex, AI panel, Time panel, layout
+        ├── components/   # Editor, Codex, AI panel, Time panel, Version History panel, layout
         ├── store/        # Zustand UI store + TanStack Query hooks
         ├── hooks/        # useAutosave, useExport
         └── types/        # Shared TypeScript interfaces
