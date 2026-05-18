@@ -2,6 +2,7 @@ import type {
   Project, Act, Chapter, Scene, CodexEntry, CodexRelation, CodexRelationResolved,
   Settings, ChapterReadData, ActReadData, TimeConfig, SceneTime,
   Fragment, FragmentTabs, BookMeta, AIPrompt, ProjectSceneItem,
+  SceneVersion, SceneVersionDetail,
 } from "@/types";
 
 const BASE = "/api";
@@ -338,6 +339,19 @@ export const promptsApi = {
     req<AIPrompt>(`/settings/prompts/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: (id: number) => req<void>(`/settings/prompts/${id}`, { method: "DELETE" }),
   revert: (id: number) => req<AIPrompt>(`/settings/prompts/${id}/revert`, { method: "POST" }),
+};
+
+// ── Scene Versions ────────────────────────────────────────────────────────────
+
+export const versionsApi = {
+  create: (sceneId: number, content: string) =>
+    req<SceneVersion>(`/scenes/${sceneId}/versions`, { method: "POST", body: JSON.stringify({ content }) }),
+  list: (sceneId: number) =>
+    req<SceneVersion[]>(`/scenes/${sceneId}/versions`),
+  get: (sceneId: number, versionId: number) =>
+    req<SceneVersionDetail>(`/scenes/${sceneId}/versions/${versionId}`),
+  restore: (sceneId: number, versionId: number) =>
+    req<SceneVersionDetail>(`/scenes/${sceneId}/versions/${versionId}/restore`, { method: "POST" }),
 };
 
 // ── Ki (AI Generate) ──────────────────────────────────────────────────────────

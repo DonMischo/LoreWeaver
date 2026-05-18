@@ -305,6 +305,20 @@ def migrate_ai_prompts():
                 )
 
 
+def migrate_scene_versions():
+    """Create scene_versions table."""
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS scene_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scene_id INTEGER NOT NULL REFERENCES scenes(id) ON DELETE CASCADE,
+                content TEXT NOT NULL DEFAULT '',
+                content_hash TEXT NOT NULL DEFAULT '',
+                created_at DATETIME DEFAULT (datetime('now'))
+            )
+        """))
+
+
 def get_db():
     db = SessionLocal()
     try:

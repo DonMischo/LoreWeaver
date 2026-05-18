@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BookOpen, Sparkles, Clock, Moon, Sun, Archive } from "lucide-react";
+import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
@@ -10,19 +10,22 @@ import { StatusBar } from "@/components/editor/StatusBar";
 import { CodexSidebar } from "@/components/codex/CodexSidebar";
 import { CodexEntryDialog } from "@/components/codex/CodexEntryDialog";
 import { AIPanel } from "@/components/ai/AIPanel";
+import { VersionHistoryPanel } from "@/components/editor/VersionHistoryPanel";
 import { SceneTimePanel } from "@/components/time/SceneTimePanel";
 import { TimeConfigDialog } from "@/components/time/TimeConfigDialog";
 import { useUIStore } from "@/store/ui";
 import { useAutosave } from "@/hooks/useAutosave";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useScene, useUpdateScene, useCodexEntries,
   useCreateCodexEntry, useProject,
   useTimeConfig, useUpdateTimeConfig,
   useCreateFragment, useDeleteScene,
-  useSyncSceneCommands,
+  useSyncSceneCommands, useCreateSceneVersion,
 } from "@/store/queries";
 import type { SceneTime } from "@/types";
 import type { SceneCommandIn } from "@/lib/api";
+import { versionsApi } from "@/lib/api";
 import { DEFAULT_TIME_CONFIG } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +65,8 @@ export default function ScenePage() {
   // chapter_id is on scene; hook needs it — use 0 until scene loads, only called after
   const deleteScene = useDeleteScene(scene?.chapter_id ?? 0);
   const syncCommands = useSyncSceneCommands(sceneIdNum);
+  const createVersion = useCreateSceneVersion(sceneIdNum);
+  const qc = useQueryClient();
 
   const timeConfig = timeConfigData ?? DEFAULT_TIME_CONFIG;
 
@@ -73,6 +78,7 @@ export default function ScenePage() {
   const [newEntryInitial, setNewEntryInitial] = useState<{ name?: string }>({});
   const [timePanelOpen, setTimePanelOpen] = useState(false);
   const [timeConfigOpen, setTimeConfigOpen] = useState(false);
+  const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
 
   const codexSidebarOpen = useUIStore((s) => s.codexSidebarOpen);
   const aiPanelOpen = useUIStore((s) => s.aiPanelOpen);
@@ -80,6 +86,9 @@ export default function ScenePage() {
   const setAiPanelOpen = useUIStore((s) => s.setAiPanelOpen);
 
   const editorRef = useRef<{ insertContent: (text: string) => void } | null>(null);
+  const contentRef = useRef<string>("");
+  const lastSnapshotContentRef = useRef<string>("");
+  const prevSceneIdRef = useRef<number>(0);
 
   useEffect(() => {
     if (scene) {
@@ -131,6 +140,7 @@ export default function ScenePage() {
   const syncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleContentChange = useCallback((html: string) => {
     setContent(html);
+    contentRef.current = html;
     const text = html.replace(/<[^>]+>/g, "");
     setWordCount(text.trim().split(/\s+/).filter(Boolean).length);
     // Debounce command sync
@@ -148,6 +158,51 @@ export default function ScenePage() {
   };
 
   useAutosave({ sceneId: sceneIdNum, content, enabled: !!scene });
+
+  // 5-minute auto-snapshot
+  useEffect(() => {
+    if (!scene) return;
+    const interval = setInterval(() => {
+      const current = contentRef.current;
+      if (current && current !== lastSnapshotContentRef.current) {
+        lastSnapshotContentRef.current = current;
+        createVersion.mutate(current);
+      }
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene?.id]);
+
+  // Snapshot on scene navigation (fire-and-forget for the scene we just left)
+  useEffect(() => {
+    if (prevSceneIdRef.current !== 0 && prevSceneIdRef.current !== sceneIdNum) {
+      const prev = prevSceneIdRef.current;
+      const prevContent = contentRef.current;
+      if (prevContent) {
+        versionsApi.create(prev, prevContent)
+          .then(() => qc.invalidateQueries({ queryKey: ["scene-versions", prev] }))
+          .catch(() => {});
+      }
+    }
+    prevSceneIdRef.current = sceneIdNum;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sceneIdNum]);
+
+  // Snapshot on unmount (navigating away from scene entirely)
+  useEffect(() => {
+    return () => {
+      const current = contentRef.current;
+      const id = prevSceneIdRef.current;
+      if (current && id > 0) {
+        versionsApi.create(id, current).catch(() => {});
+      }
+    };
+  }, []);
+
+  const handleVersionRestored = (restoredContent: string) => {
+    setContent(restoredContent);
+    lastSnapshotContentRef.current = restoredContent;
+  };
 
   const handleCodexEntryClick = (id: number) => {
     setSelectedCodexId(id);
@@ -244,6 +299,18 @@ export default function ScenePage() {
         </Button>
         <Button
           size="sm"
+          variant={historyPanelOpen ? "secondary" : "ghost"}
+          onClick={() => {
+            setHistoryPanelOpen(!historyPanelOpen);
+            if (timePanelOpen) setTimePanelOpen(false);
+          }}
+          className="gap-1.5 text-xs"
+        >
+          <History className="h-3.5 w-3.5" />
+          History
+        </Button>
+        <Button
+          size="sm"
           variant={codexSidebarOpen ? "secondary" : "ghost"}
           onClick={() => {
             setCodexSidebarOpen(!codexSidebarOpen);
@@ -311,6 +378,15 @@ export default function ScenePage() {
             sceneId={sceneIdNum}
             onInsert={handleInsertAI}
             onClose={() => setAiPanelOpen(false)}
+          />
+        )}
+
+        {/* Version history panel */}
+        {historyPanelOpen && (
+          <VersionHistoryPanel
+            sceneId={sceneIdNum}
+            onClose={() => setHistoryPanelOpen(false)}
+            onRestored={handleVersionRestored}
           />
         )}
       </div>

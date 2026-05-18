@@ -245,3 +245,13 @@ class AIPrompt(Base):
     is_built_in: Mapped[int] = mapped_column(Integer, default=0)
     built_in_key: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     word_count: Mapped[int] = mapped_column(Integer, default=400)
+
+
+class SceneVersion(Base):
+    __tablename__ = "scene_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scene_id: Mapped[int] = mapped_column(Integer, ForeignKey("scenes.id", ondelete="CASCADE"))
+    content: Mapped[str] = mapped_column(Text, default="")
+    content_hash: Mapped[str] = mapped_column(String(64))   # sha256 hex for dedup
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

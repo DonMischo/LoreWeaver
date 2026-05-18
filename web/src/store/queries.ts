@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi } from "@/lib/api";
 import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry, OpenRouterModel } from "@/lib/api";
-import type { AIPrompt, ProjectSceneItem } from "@/types";
+import type { AIPrompt, ProjectSceneItem, SceneVersion, SceneVersionDetail } from "@/types";
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -523,3 +523,32 @@ export const useProjectScenes = (projectId: number) =>
     enabled: projectId > 0,
     staleTime: 1000 * 60 * 2,
   });
+
+// ── Scene Versions ────────────────────────────────────────────────────────────
+
+export const useSceneVersions = (sceneId: number) =>
+  useQuery<SceneVersion[]>({
+    queryKey: ["scene-versions", sceneId],
+    queryFn: () => versionsApi.list(sceneId),
+    enabled: sceneId > 0,
+    refetchOnMount: "always",
+  });
+
+export const useCreateSceneVersion = (sceneId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (content: string) => versionsApi.create(sceneId, content),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["scene-versions", sceneId] }),
+  });
+};
+
+export const useRestoreSceneVersion = (sceneId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (versionId: number) => versionsApi.restore(sceneId, versionId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scene-versions", sceneId] });
+      qc.invalidateQueries({ queryKey: ["scene", sceneId] });
+    },
+  });
+};

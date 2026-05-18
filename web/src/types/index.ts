@@ -229,3 +229,14 @@ export interface AIPrompt {
   built_in_key: string | null;
   word_count: number;
 }
+
+export interface SceneVersion {
+  id: number;
+  scene_id: number;
+  content_hash: string;
+  created_at: string;
+}
+
+export interface SceneVersionDetail extends SceneVersion {
+  content: string;
+}

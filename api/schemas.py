@@ -405,6 +405,20 @@ class KiGenerateRequest(BaseModel):
     word_count: Optional[int] = None  # per-node override; falls back to prompt's word_count
 
 
+class SceneVersionOut(BaseModel):
+    id: int
+    scene_id: int
+    content_hash: str
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+class SceneVersionDetail(SceneVersionOut):
+    content: str
+
+class CreateVersionRequest(BaseModel):
+    content: str
+
+
 # ── Time Config ───────────────────────────────────────────────────────────────
 
 class TimeUnit(BaseModel):
