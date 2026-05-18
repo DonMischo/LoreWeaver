@@ -1,17 +1,18 @@
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   devIndicators: false,
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: "http://localhost:8000/api/:path*",
-      },
-      {
-        source: "/uploads/:path*",
-        destination: "http://localhost:8000/uploads/:path*",
-      },
-    ];
+  output: "standalone",
+  // API proxying is handled at runtime by src/proxy.ts
+  // so that the Electron build can inject a dynamic port.
+  turbopack: {
+    // Explicitly set the root to this directory so Next.js doesn't
+    // mistake the parent node_modules (Electron deps) as a workspace root.
+    root: __dirname,
   },
 };
 

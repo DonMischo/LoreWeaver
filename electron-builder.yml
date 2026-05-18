@@ -1,0 +1,75 @@
+afterPack: scripts/after-pack.cjs
+
+appId: com.loreweaver.studio
+productName: LoreWeaver
+copyright: "© 2024 LoreWeaver"
+
+# Only the tiny Electron main + splash go into the ASAR.
+# The large Next.js standalone and the API binary are extraResources
+# (placed in resources/ outside the ASAR for direct filesystem access).
+asar: true
+
+directories:
+  output: dist
+  buildResources: electron/assets
+
+files:
+  - electron/main.js
+  - electron/splash.html
+  - electron/assets/**/*
+
+# Next.js standalone output (staged by the build script into .next-standalone/)
+# Next.js nests the output under a "web/" subdir when it detects a parent node_modules,
+# so the actual server.js lives at .next-standalone/web/server.js.
+# → resources/web/
+extraResources:
+  - from: .next-standalone/
+    to: web
+    filter:
+      - "**/*"
+  # PyInstaller onedir output (staged into api-dist/ by the build script)
+  # → resources/api/
+  - from: api-dist/
+    to: api
+    filter:
+      - "**/*"
+
+# ── Platform targets ──────────────────────────────────────────────────────────
+
+win:
+  icon: electron/assets/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: LoreWeaver
+
+mac:
+  icon: electron/assets/icon.icns
+  category: public.app-category.productivity
+  # Set your Apple Developer Team ID here for code signing:
+  # identity: "Developer ID Application: Your Name (TEAMID)"
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+
+dmg:
+  title: LoreWeaver ${version}
+
+linux:
+  icon: electron/assets/icon.png
+  category: Office
+  target:
+    - target: AppImage
+      arch: [x64]
+
+# ── Auto-updater (GitHub Releases) ───────────────────────────────────────────
+publish:
+  provider: github
+  owner: DonMischo
+  repo: loreweaver

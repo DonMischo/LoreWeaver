@@ -1,0 +1,25 @@
+{
+  "name": "loreweaver",
+  "version": "1.0.0",
+  "description": "LoreWeaver Personal Studio — local-first novel writing app",
+  "author": "LoreWeaver",
+  "main": "electron/main.js",
+  "scripts": {
+    "generate-icons": "cd scripts && npm install && node generate-icons.mjs",
+    "electron:dev": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": ["sharp"]
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.4"
+  },
+  "devDependencies": {
+    "electron": "^42.1.0",
+    "electron-builder": "^26.8.1"
+  }
+}
