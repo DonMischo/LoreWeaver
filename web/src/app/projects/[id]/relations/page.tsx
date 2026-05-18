@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { User, MapPin, Package, Scroll, Tag, Info } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { User, MapPin, Package, Scroll, Tag, Info, Edit2, Crosshair, Copy, Unlink, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CodexEntryDialog } from "@/components/codex/CodexEntryDialog";
 import { useCodexEntries, useUpdateCodexEntry } from "@/store/queries";
@@ -20,6 +20,7 @@ interface GraphEdge {
   source: string | null;
   target: string;
   type: string;
+  relation_id?: number;
   scene_id?: number;
   scene_title?: string;
   chapter_title?: string;
@@ -31,6 +32,18 @@ interface GraphData {
   edges: GraphEdge[];
 }
 
+interface RelationItem {
+  relation_id: number;
+  other_name: string;
+  rel_type: string;
+  direction: "from" | "to";
+}
+
+type MenuState =
+  | { kind: "node"; x: number; y: number; node: GraphNode; relations: RelationItem[] }
+  | { kind: "edge"; x: number; y: number; edge: GraphEdge }
+  | null;
+
 const TYPE_ICONS: Record<string, React.ElementType> = {
   character: User, location: MapPin, item: Package, lore: Scroll, custom: Tag,
 };
@@ -39,7 +52,7 @@ const W = 1000;
 const H = 800;
 const CX = W / 2;
 const CY = H / 2;
-const RADII = [0, 185, 300, 390]; // ring radii indexed by depth
+const RADII = [0, 185, 300, 390];
 const NODE_R = 28;
 
 function radialPos(index: number, total: number, radius: number, offset = 0) {
@@ -47,34 +60,156 @@ function radialPos(index: number, total: number, radius: number, offset = 0) {
   return { x: CX + radius * Math.cos(angle), y: CY + radius * Math.sin(angle) };
 }
 
+function gradId(color: string) {
+  return "sphere-" + color.replace("#", "");
+}
+
+// ── Context Menu ──────────────────────────────────────────────────────────────
+
+const menuItemCls =
+  "w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-secondary/60 cursor-pointer text-left text-xs";
+const destructiveCls =
+  "w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-destructive/10 text-destructive cursor-pointer text-left text-xs";
+
+function ContextMenu({ menu, onClose, onDeleteRelation, onSetCenter, onEditEntry, onCopyName }: {
+  menu: MenuState;
+  onClose: () => void;
+  onDeleteRelation: (relationId: number) => void;
+  onSetCenter: (nodeId: string) => void;
+  onEditEntry: (node: GraphNode) => void;
+  onCopyName: (name: string) => void;
+}) {
+  const [subOpen, setSubOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  if (!menu) return null;
+
+  return (
+    <>
+      {/* Invisible overlay — catches outside clicks */}
+      <div
+        className="fixed inset-0 z-40"
+        onClick={onClose}
+        onContextMenu={e => { e.preventDefault(); onClose(); }}
+      />
+
+      <div
+        className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[11rem] select-none"
+        style={{ left: menu.x, top: menu.y }}
+      >
+        {menu.kind === "node" && (
+          <>
+            {menu.node.codex_id && (
+              <button className={menuItemCls} onClick={() => { onEditEntry(menu.node); onClose(); }}>
+                <Edit2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                Edit Codex Entry
+              </button>
+            )}
+            <button className={menuItemCls} onClick={() => { onSetCenter(menu.node.id); onClose(); }}>
+              <Crosshair className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              Set as Center
+            </button>
+            <button className={menuItemCls} onClick={() => { onCopyName(menu.node.id); onClose(); }}>
+              <Copy className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              Copy Name
+            </button>
+
+            {menu.relations.length > 0 && (
+              <>
+                <div className="my-1 mx-2 border-t border-border" />
+                <div
+                  className="relative"
+                  onMouseEnter={() => setSubOpen(true)}
+                  onMouseLeave={() => setSubOpen(false)}
+                >
+                  <div className={cn(destructiveCls, "justify-between")}>
+                    <span className="flex items-center gap-2.5">
+                      <Unlink className="h-3.5 w-3.5 shrink-0" />
+                      Remove Relation
+                    </span>
+                    <ChevronRight className="h-3 w-3 opacity-60" />
+                  </div>
+
+                  {subOpen && (
+                    <div className="absolute left-full top-0 ml-0.5 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[13rem]">
+                      {menu.relations.map(rel => (
+                        <button
+                          key={rel.relation_id}
+                          className={destructiveCls}
+                          onClick={() => { onDeleteRelation(rel.relation_id); onClose(); }}
+                        >
+                          <span className="text-muted-foreground shrink-0 w-4">
+                            {rel.direction === "from" ? "→" : "←"}
+                          </span>
+                          <span className="truncate flex-1">{rel.other_name}</span>
+                          {rel.rel_type && (
+                            <span className="text-muted-foreground shrink-0 ml-1">({rel.rel_type})</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {menu.kind === "edge" && menu.edge.relation_id && (
+          <button
+            className={destructiveCls}
+            onClick={() => { onDeleteRelation(menu.edge.relation_id!); onClose(); }}
+          >
+            <Unlink className="h-3.5 w-3.5 shrink-0" />
+            Remove Relation
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Node + Edge rendering ─────────────────────────────────────────────────────
+
 function NodeCircle({
-  node, x, y, selected, onClick,
-}: { node: GraphNode; x: number; y: number; selected: boolean; onClick: () => void }) {
+  node, x, y, selected, onClick, onRightClick,
+}: {
+  node: GraphNode; x: number; y: number; selected: boolean;
+  onClick: () => void; onRightClick?: (e: React.MouseEvent) => void;
+}) {
   const Icon = TYPE_ICONS[node.entry_type] ?? Tag;
   return (
     <g
       transform={`translate(${x},${y})`}
       onClick={onClick}
+      onContextMenu={e => { e.preventDefault(); onRightClick?.(e); }}
       className="cursor-pointer"
       style={{ userSelect: "none" }}
     >
+      {selected && (
+        <circle r={NODE_R + 5} fill="none" stroke={node.color} strokeWidth={2} strokeOpacity={0.35} />
+      )}
       <circle
         r={NODE_R}
-        fill={node.color + "33"}
+        fill={`url(#${gradId(node.color)})`}
         stroke={node.color}
-        strokeWidth={selected ? 3 : 1.5}
+        strokeWidth={selected ? 2.5 : 1.5}
         className="transition-all"
       />
-      <foreignObject x={-10} y={-10} width={20} height={20}>
+      <foreignObject x={-18} y={-18} width={36} height={36}>
         <div className="flex items-center justify-center w-full h-full">
-          <Icon size={14} color={node.color} />
+          <Icon size={36} color="#ffffff" />
         </div>
       </foreignObject>
       <text
-        y={NODE_R + 14}
+        y={NODE_R + 15}
         textAnchor="middle"
-        fontSize={11}
-        fill="currentColor"
+        fontSize={13}
         className="fill-foreground"
         style={{ fontWeight: selected ? 600 : 400 }}
       >
@@ -100,13 +235,7 @@ function EdgePath({
         markerEnd="url(#arrow)"
       />
       {label && (
-        <text
-          x={mx} y={my - 5}
-          textAnchor="middle"
-          fontSize={9}
-          fill={color}
-          fillOpacity={0.85}
-        >
+        <text x={mx} y={my - 5} textAnchor="middle" fontSize={12} fill={color} fillOpacity={0.85}>
           {label}
         </text>
       )}
@@ -114,9 +243,12 @@ function EdgePath({
   );
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function RelationsPage() {
   const { id } = useParams();
   const projectId = Number(id);
+  const qc = useQueryClient();
 
   const { data, isLoading, error } = useQuery<GraphData>({
     queryKey: ["graph", projectId],
@@ -130,19 +262,42 @@ export default function RelationsPage() {
   const [hoveredEdge, setHoveredEdge] = useState<GraphEdge | null>(null);
   const [dialogEntry, setDialogEntry] = useState<CodexEntry | null>(null);
   const [depth, setDepth] = useState(1);
+  const [menu, setMenu] = useState<MenuState>(null);
 
-  // Open the codex entry dialog for a graph node (if it has a codex_id)
   const openEntryDialog = (node: GraphNode) => {
     if (!node.codex_id) return;
     const entry = codexEntries.find(e => e.id === node.codex_id);
     if (entry) setDialogEntry(entry);
   };
 
+  const deleteRelation = async (relationId: number) => {
+    await fetch(`/api/codex/relations/${relationId}`, { method: "DELETE" });
+    qc.invalidateQueries({ queryKey: ["graph", projectId] });
+  };
+
+  const openNodeMenu = (node: GraphNode, e: React.MouseEvent) => {
+    if (!data) return;
+    const relations: RelationItem[] = data.edges
+      .filter(edge => edge.via === "codex" && edge.relation_id &&
+        (edge.source === node.id || edge.target === node.id))
+      .map(edge => ({
+        relation_id: edge.relation_id!,
+        other_name: edge.source === node.id ? edge.target : (edge.source ?? ""),
+        rel_type: edge.type,
+        direction: edge.source === node.id ? "from" : "to",
+      }));
+    setMenu({ kind: "node", x: e.clientX + 4, y: e.clientY + 4, node, relations });
+  };
+
+  const openEdgeMenu = (edge: GraphEdge, e: React.MouseEvent) => {
+    if (!edge.relation_id) return;
+    setMenu({ kind: "edge", x: e.clientX + 4, y: e.clientY + 4, edge });
+  };
+
   const centerNode = useMemo(() => {
     if (!data) return null;
     let defaultId = centerId;
     if (!defaultId) {
-      // Prefer is_main_char=true characters
       const mainChar = codexEntries.find(e => e.is_main_char && e.entry_type === "character");
       if (mainChar) {
         const node = data.nodes.find(n => n.codex_id === mainChar.id);
@@ -155,7 +310,6 @@ export default function RelationsPage() {
     return data.nodes.find(n => n.id === defaultId) ?? null;
   }, [data, centerId, codexEntries]);
 
-  // Layout: BFS from center node up to `depth` rings
   const layout = useMemo(() => {
     if (!data || !centerNode) return { positions: {}, visibleEdges: [] };
 
@@ -202,7 +356,7 @@ export default function RelationsPage() {
       <header className="flex items-center justify-between px-6 py-3 border-b border-border">
         <div>
           <h1 className="text-base font-semibold">Relations</h1>
-          <p className="text-xs text-muted-foreground">{data.nodes.length} nodes · {data.edges.length} edges · click a node to re-centre</p>
+          <p className="text-xs text-muted-foreground">{data.nodes.length} nodes · {data.edges.length} edges · left-click to re-centre · right-click for options</p>
         </div>
         <div className="flex items-center gap-4">
           {hoveredEdge && (
@@ -216,11 +370,7 @@ export default function RelationsPage() {
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground whitespace-nowrap">Depth</span>
             <input
-              type="range"
-              min={1}
-              max={3}
-              step={1}
-              value={depth}
+              type="range" min={1} max={3} step={1} value={depth}
               onChange={e => setDepth(Number(e.target.value))}
               className="w-20 accent-primary"
             />
@@ -230,7 +380,6 @@ export default function RelationsPage() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Node list — click opens codex dialog (if entry exists), SVG node click re-centres */}
         <aside className="w-48 border-r border-border overflow-y-auto py-2 shrink-0">
           {data.nodes.map(n => {
             const Icon = TYPE_ICONS[n.entry_type] ?? Tag;
@@ -238,13 +387,7 @@ export default function RelationsPage() {
             return (
               <button
                 key={n.id}
-                onClick={() => {
-                  if (hasCodexEntry) {
-                    openEntryDialog(n);
-                  } else {
-                    setCenterId(n.id);
-                  }
-                }}
+                onClick={() => hasCodexEntry ? openEntryDialog(n) : setCenterId(n.id)}
                 className={cn(
                   "w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-secondary/50 text-left",
                   centerNode?.id === n.id && "bg-secondary font-medium"
@@ -259,18 +402,19 @@ export default function RelationsPage() {
           })}
         </aside>
 
-        {/* SVG canvas — clicking a node re-centres */}
         <div className="flex-1 overflow-auto bg-background/50">
-          <svg
-            viewBox={`0 0 ${W} ${H}`}
-            width={W}
-            height={H}
-            className="min-w-full"
-          >
+          <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="min-w-full">
             <defs>
               <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
                 <path d="M0,0 L0,6 L6,3 z" fill="#6b7280" fillOpacity={0.6} />
               </marker>
+              {[...new Set(data.nodes.map(n => n.color))].map(color => (
+                <radialGradient key={color} id={gradId(color)} cx="35%" cy="28%" r="70%">
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity={0.55} />
+                  <stop offset="50%" stopColor={color} stopOpacity={1} />
+                  <stop offset="100%" stopColor={color} stopOpacity={1} />
+                </radialGradient>
+              ))}
             </defs>
 
             {/* Edges */}
@@ -281,15 +425,18 @@ export default function RelationsPage() {
               if (!sp || !tp) return null;
               const nodeColor = data.nodes.find(n => n.id === src)?.color ?? "#6b7280";
               return (
-                <g key={i}
+                <g
+                  key={i}
                   onMouseEnter={() => setHoveredEdge(edge)}
                   onMouseLeave={() => setHoveredEdge(null)}
+                  onContextMenu={e => { e.preventDefault(); openEdgeMenu(edge, e); }}
+                  className="cursor-context-menu"
                 >
+                  {/* Wider invisible hit area */}
+                  <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="transparent" strokeWidth={12} />
                   <EdgePath
                     x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y}
-                    label={edge.type}
-                    color={nodeColor}
-                    dashed={edge.via === "inline"}
+                    label={edge.type} color={nodeColor} dashed={edge.via === "inline"}
                   />
                 </g>
               );
@@ -307,6 +454,7 @@ export default function RelationsPage() {
                   y={pos.y}
                   selected={centerNode?.id === name}
                   onClick={() => setCenterId(name)}
+                  onRightClick={e => openNodeMenu(node, e)}
                 />
               );
             })}
@@ -323,7 +471,6 @@ export default function RelationsPage() {
         </span>
       </div>
 
-      {/* Codex entry edit dialog — opened by clicking left panel entries */}
       {dialogEntry && (
         <CodexEntryDialog
           open={!!dialogEntry}
@@ -337,6 +484,15 @@ export default function RelationsPage() {
           allEntries={codexEntries}
         />
       )}
+
+      <ContextMenu
+        menu={menu}
+        onClose={() => setMenu(null)}
+        onDeleteRelation={deleteRelation}
+        onSetCenter={id => setCenterId(id)}
+        onEditEntry={openEntryDialog}
+        onCopyName={name => navigator.clipboard.writeText(name)}
+      />
     </div>
   );
 }

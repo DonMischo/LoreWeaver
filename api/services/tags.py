@@ -156,7 +156,7 @@ def build_relations_graph(project, codex_entries: list) -> dict:
                 "source": e.name,
                 "target": target.name,
                 "type": rel.relation_type or "",
-                "source_scene_id": None,
+                "relation_id": rel.id,
                 "scene_title": "",
                 "via": "codex",
             })
