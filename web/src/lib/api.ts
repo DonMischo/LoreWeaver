@@ -1,7 +1,7 @@
 import type {
   Project, Act, Chapter, Scene, CodexEntry, CodexRelation, CodexRelationResolved,
   Settings, ChapterReadData, ActReadData, TimeConfig, SceneTime,
-  Fragment, FragmentTabs, BookMeta,
+  Fragment, FragmentTabs, BookMeta, AIPrompt,
 } from "@/types";
 
 const BASE = "/api";
@@ -311,8 +311,44 @@ export const fragmentsApi = {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
+export interface OpenRouterModel {
+  id: string;
+  name: string;
+}
+
 export const settingsApi = {
   get: () => req<Settings>("/settings"),
-  update: (data: { openrouter_api_key?: string; default_model?: string; theme?: string }) =>
-    req<Settings>("/settings", { method: "POST", body: JSON.stringify(data) }),
+  update: (data: {
+    openrouter_api_key?: string;
+    default_model?: string;
+    theme?: string;
+    enabled_models?: string[];
+  }) => req<Settings>("/settings", { method: "POST", body: JSON.stringify(data) }),
+  getModels: () => req<OpenRouterModel[]>("/settings/models"),
+};
+
+// ── AI Prompts ────────────────────────────────────────────────────────────────
+
+export const promptsApi = {
+  list: () => req<AIPrompt[]>("/settings/prompts"),
+  create: (data: { name: string; description?: string; system?: string; user_template?: string }) =>
+    req<AIPrompt>("/settings/prompts", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: { name?: string; description?: string; system?: string; user_template?: string }) =>
+    req<AIPrompt>(`/settings/prompts/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  delete: (id: number) => req<void>(`/settings/prompts/${id}`, { method: "DELETE" }),
+  revert: (id: number) => req<AIPrompt>(`/settings/prompts/${id}/revert`, { method: "POST" }),
+};
+
+// ── Ki (AI Generate) ──────────────────────────────────────────────────────────
+
+export const kiApi = {
+  generate: (data: {
+    scene_id: number;
+    model: string;
+    codex_ids: number[];
+    extra_scene_ids: number[];
+    prompt: string;
+    prompt_id?: number | null;
+    entry_type?: string;
+  }) => req<{ text: string }>("/ai/ki", { method: "POST", body: JSON.stringify(data) }),
 };

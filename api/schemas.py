@@ -343,6 +343,7 @@ class SettingsUpdate(BaseModel):
     openrouter_api_key: Optional[str] = None
     default_model: Optional[str] = None
     theme: Optional[str] = None
+    enabled_models: Optional[list[str]] = None
 
 
 class SettingsOut(BaseModel):
@@ -350,8 +351,35 @@ class SettingsOut(BaseModel):
     has_api_key: bool
     default_model: str
     theme: str
+    enabled_models: list[str]
 
     model_config = {"from_attributes": True}
+
+
+# ── AI Prompts ────────────────────────────────────────────────────────────────
+
+class AIPromptOut(BaseModel):
+    id: int
+    name: str
+    description: str
+    system: str
+    user_template: str
+    is_built_in: bool
+    built_in_key: Optional[str]
+
+    model_config = {"from_attributes": True}
+
+class AIPromptCreate(BaseModel):
+    name: str
+    description: str = ""
+    system: str = ""
+    user_template: str = ""
+
+class AIPromptUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    system: Optional[str] = None
+    user_template: Optional[str] = None
 
 
 # ── AI ────────────────────────────────────────────────────────────────────────
@@ -361,6 +389,16 @@ class AIGenerateRequest(BaseModel):
     mode: str  # continue | rewrite | brainstorm | ask | custom
     custom_prompt: Optional[str] = None
     model: Optional[str] = None
+
+
+class KiGenerateRequest(BaseModel):
+    scene_id: int
+    model: str
+    codex_ids: list[int] = []
+    extra_scene_ids: list[int] = []
+    prompt: str = ""
+    prompt_id: Optional[int] = None
+    entry_type: str = ""
 
 
 # ── Time Config ───────────────────────────────────────────────────────────────

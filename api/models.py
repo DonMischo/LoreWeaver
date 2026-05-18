@@ -231,3 +231,16 @@ class UserSettings(Base):
         String(100), default="anthropic/claude-3.5-sonnet"
     )
     theme: Mapped[str] = mapped_column(String(20), default="system")
+    enabled_models: Mapped[str] = mapped_column(Text, default="[]")  # JSON list of model IDs
+
+
+class AIPrompt(Base):
+    __tablename__ = "ai_prompts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    system: Mapped[str] = mapped_column(Text, default="")
+    user_template: Mapped[str] = mapped_column(Text, default="")
+    is_built_in: Mapped[int] = mapped_column(Integer, default=0)
+    built_in_key: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

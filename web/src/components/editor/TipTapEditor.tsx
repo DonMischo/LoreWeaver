@@ -12,6 +12,7 @@ import { NoteNode } from "./nodes/NoteNode";
 import { CurrencyNode } from "./nodes/CurrencyNode";
 import { ItemNode } from "./nodes/ItemNode";
 import { SceneImageNode } from "./nodes/SceneImageNode";
+import { KiNode } from "./nodes/KiNode";
 import { SlashCommandMenu, type SlashMenuState, type SlashMenuHandle } from "./SlashCommandMenu";
 import { EditorContext } from "@/contexts/EditorContext";
 
@@ -56,6 +57,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
   });
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit,
       Placeholder.configure({ placeholder: "Start writing your scene… (type / to insert a command)" }),
@@ -65,6 +67,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
       CurrencyNode,
       ItemNode,
       SceneImageNode,
+      KiNode,
     ],
     content,
     onUpdate({ editor }) {
@@ -150,7 +153,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
   const closeSlash = useCallback(() => setSlashMenuFnRef.current(null), []);
 
   return (
-    <EditorContext.Provider value={{ characters, items, sceneId }}>
+    <EditorContext.Provider value={{ characters, items, allEntries: codexEntries, sceneId }}>
       <div className="h-full overflow-y-auto relative">
         <EditorContent editor={editor} className="h-full" />
         {slashMenu && editor && (

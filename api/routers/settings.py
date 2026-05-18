@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends
+import json
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+import httpx
 
 from crypto import encrypt, decrypt
-from database import get_db
-from models import UserSettings
-from schemas import SettingsOut, SettingsUpdate
+from database import get_db, DEFAULT_AI_PROMPTS
+from models import UserSettings, AIPrompt
+from schemas import SettingsOut, SettingsUpdate, AIPromptOut, AIPromptCreate, AIPromptUpdate
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -19,15 +21,23 @@ def _get_or_create_settings(db: Session) -> UserSettings:
     return settings
 
 
-@router.get("", response_model=SettingsOut)
-def get_settings(db: Session = Depends(get_db)):
-    s = _get_or_create_settings(db)
+def _settings_out(s: UserSettings) -> SettingsOut:
+    try:
+        enabled = json.loads(s.enabled_models or "[]")
+    except (json.JSONDecodeError, TypeError):
+        enabled = []
     return SettingsOut(
         id=s.id,
         has_api_key=bool(s.openrouter_api_key),
         default_model=s.default_model,
         theme=s.theme,
+        enabled_models=enabled,
     )
+
+
+@router.get("", response_model=SettingsOut)
+def get_settings(db: Session = Depends(get_db)):
+    return _settings_out(_get_or_create_settings(db))
 
 
 @router.post("", response_model=SettingsOut)
@@ -39,11 +49,115 @@ def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
         s.default_model = body.default_model
     if body.theme is not None:
         s.theme = body.theme
+    if body.enabled_models is not None:
+        s.enabled_models = json.dumps(body.enabled_models)
     db.commit()
     db.refresh(s)
-    return SettingsOut(
-        id=s.id,
-        has_api_key=bool(s.openrouter_api_key),
-        default_model=s.default_model,
-        theme=s.theme,
+    return _settings_out(s)
+
+
+@router.get("/models")
+def get_available_models(db: Session = Depends(get_db)):
+    """Proxy the OpenRouter model list so the API key stays server-side."""
+    s = _get_or_create_settings(db)
+    if not s.openrouter_api_key:
+        return []
+    try:
+        api_key = decrypt(s.openrouter_api_key)
+        resp = httpx.get(
+            "https://openrouter.ai/api/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return []
+        data = resp.json()
+        models = [
+            {"id": m["id"], "name": m.get("name") or m["id"]}
+            for m in data.get("data", [])
+            if m.get("id")
+        ]
+        return sorted(models, key=lambda m: m["name"].lower())
+    except Exception:
+        return []
+
+
+# ── AI Prompts ────────────────────────────────────────────────────────────────
+
+def _prompt_out(p: AIPrompt) -> AIPromptOut:
+    return AIPromptOut(
+        id=p.id,
+        name=p.name,
+        description=p.description or "",
+        system=p.system or "",
+        user_template=p.user_template or "",
+        is_built_in=bool(p.is_built_in),
+        built_in_key=p.built_in_key,
     )
+
+
+@router.get("/prompts", response_model=list[AIPromptOut])
+def list_prompts(db: Session = Depends(get_db)):
+    return [_prompt_out(p) for p in db.query(AIPrompt).all()]
+
+
+@router.post("/prompts", response_model=AIPromptOut)
+def create_prompt(body: AIPromptCreate, db: Session = Depends(get_db)):
+    p = AIPrompt(
+        name=body.name,
+        description=body.description,
+        system=body.system,
+        user_template=body.user_template,
+        is_built_in=0,
+        built_in_key=None,
+    )
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return _prompt_out(p)
+
+
+@router.put("/prompts/{prompt_id}", response_model=AIPromptOut)
+def update_prompt(prompt_id: int, body: AIPromptUpdate, db: Session = Depends(get_db)):
+    p = db.get(AIPrompt, prompt_id)
+    if not p:
+        raise HTTPException(404, "Prompt not found")
+    if body.name is not None:
+        p.name = body.name
+    if body.description is not None:
+        p.description = body.description
+    if body.system is not None:
+        p.system = body.system
+    if body.user_template is not None:
+        p.user_template = body.user_template
+    db.commit()
+    db.refresh(p)
+    return _prompt_out(p)
+
+
+@router.delete("/prompts/{prompt_id}", status_code=204)
+def delete_prompt(prompt_id: int, db: Session = Depends(get_db)):
+    p = db.get(AIPrompt, prompt_id)
+    if not p:
+        raise HTTPException(404, "Prompt not found")
+    if p.is_built_in:
+        raise HTTPException(400, "Cannot delete built-in prompts")
+    db.delete(p)
+    db.commit()
+
+
+@router.post("/prompts/{prompt_id}/revert", response_model=AIPromptOut)
+def revert_prompt(prompt_id: int, db: Session = Depends(get_db)):
+    p = db.get(AIPrompt, prompt_id)
+    if not p or not p.built_in_key:
+        raise HTTPException(404, "Prompt not found or not a built-in")
+    default = next((d for d in DEFAULT_AI_PROMPTS if d["built_in_key"] == p.built_in_key), None)
+    if not default:
+        raise HTTPException(404, "No default found for this prompt")
+    p.name = default["name"]
+    p.description = default["description"]
+    p.system = default["system"]
+    p.user_template = default["user_template"]
+    db.commit()
+    db.refresh(p)
+    return _prompt_out(p)

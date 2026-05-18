@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { StickyNote, Coins, Package, ImageIcon } from "lucide-react";
+import { StickyNote, Coins, Package, ImageIcon, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/core";
 
@@ -57,6 +57,15 @@ const COMMANDS = [
     color: "#a855f7",
     keywords: ["image", "picture", "illustration"],
     content: () => ({ type: "sceneImage", attrs: { src: "", caption: "" } }),
+  },
+  {
+    id: "ki",
+    label: "AI Generate",
+    description: "AI text generation with selected context",
+    icon: Sparkles,
+    color: "#f472b6",
+    keywords: ["ai", "generate", "ki", "knowledge", "inject"],
+    content: () => ({ type: "ki", attrs: { model: "", codexIds: "", sceneIds: "", prompt: "" } }),
   },
 ] as const;
 

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from database import engine, migrate_to_four_level, migrate_new_columns, migrate_entry_groups
+from database import engine, migrate_to_four_level, migrate_new_columns, migrate_entry_groups, migrate_ai_prompts
 from models import Base
 from routers import projects, acts, chapters, scenes, codex, settings, ai, export, imports, graph, time, fragments, images, scene_commands
 
@@ -14,6 +14,7 @@ migrate_to_four_level()
 Base.metadata.create_all(bind=engine)
 migrate_new_columns()
 migrate_entry_groups()
+migrate_ai_prompts()
 
 os.makedirs("uploads", exist_ok=True)
 

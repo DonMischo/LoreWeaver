@@ -158,6 +158,7 @@ export interface Settings {
   has_api_key: boolean;
   default_model: string;
   theme: string;
+  enabled_models: string[];
 }
 
 // ── Fragments ─────────────────────────────────────────────────────────────────
@@ -209,4 +210,14 @@ export interface ActReadData {
   id: number;
   title: string;
   chapters: ActReadChapter[];
+}
+
+export interface AIPrompt {
+  id: number;
+  name: string;
+  description: string;
+  system: string;
+  user_template: string;
+  is_built_in: boolean;
+  built_in_key: string | null;
 }

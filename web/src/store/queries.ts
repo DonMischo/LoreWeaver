@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi } from "@/lib/api";
-import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi } from "@/lib/api";
+import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry, OpenRouterModel } from "@/lib/api";
+import type { AIPrompt } from "@/types";
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -462,5 +463,55 @@ export const useUpdateSettings = () => {
   return useMutation({
     mutationFn: settingsApi.update,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+  });
+};
+
+export const useOpenRouterModels = () =>
+  useQuery<OpenRouterModel[]>({
+    queryKey: ["openrouter-models"],
+    queryFn: settingsApi.getModels,
+    staleTime: 1000 * 60 * 5,  // cache for 5 min — list rarely changes
+    retry: false,
+  });
+
+// ── AI Prompts ────────────────────────────────────────────────────────────────
+
+export const usePrompts = () =>
+  useQuery<AIPrompt[]>({
+    queryKey: ["ai-prompts"],
+    queryFn: promptsApi.list,
+    staleTime: 1000 * 60 * 5,
+  });
+
+export const useCreatePrompt = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: promptsApi.create,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-prompts"] }),
+  });
+};
+
+export const useUpdatePrompt = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof promptsApi.update>[1] }) =>
+      promptsApi.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-prompts"] }),
+  });
+};
+
+export const useDeletePrompt = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: promptsApi.delete,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-prompts"] }),
+  });
+};
+
+export const useRevertPrompt = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: promptsApi.revert,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-prompts"] }),
   });
 };
