@@ -38,7 +38,8 @@ def _load_codex(project_id: int, db: Session):
 @router.get("/{project_id}/graph")
 def get_relations_graph(project_id: int, db: Session = Depends(get_db)):
     project = _load_project(project_id, db)
-    codex = _load_codex(project_id, db)
+    codex_owner_id = project.shared_codex_project_id or project_id
+    codex = _load_codex(codex_owner_id, db)
     return build_relations_graph(project, codex)
 
 

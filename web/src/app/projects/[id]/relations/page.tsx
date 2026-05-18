@@ -39,8 +39,7 @@ const W = 900;
 const H = 680;
 const CX = W / 2;
 const CY = H / 2;
-const R1 = 180;   // radius for direct connections
-const R2 = 320;   // radius for second-degree connections
+const R1 = 220;   // radius for direct connections
 const NODE_R = 28;
 
 function radialPos(index: number, total: number, radius: number, offset = 0) {
@@ -174,21 +173,6 @@ export default function RelationsPage() {
     const directArr = [...directNames];
     directArr.forEach((name, i) => {
       positions[name] = radialPos(i, directArr.length, R1);
-    });
-
-    // Second-degree nodes
-    const secondEdges = data.edges.filter(e =>
-      directNames.has(e.source ?? "") || directNames.has(e.target)
-    ).filter(e => e.source !== centerName && e.target !== centerName);
-
-    const secondNames = new Set<string>();
-    for (const e of secondEdges) {
-      if (e.source && !positions[e.source]) secondNames.add(e.source);
-      if (!positions[e.target]) secondNames.add(e.target);
-    }
-    const secondArr = [...secondNames];
-    secondArr.forEach((name, i) => {
-      positions[name] = radialPos(i, secondArr.length, R2, Math.PI / secondArr.length);
     });
 
     const visibleEdges = data.edges.filter(
