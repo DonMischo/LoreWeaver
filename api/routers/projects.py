@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Project, CodexEntry, CodexRelation
+from models import Project, CodexEntry, CodexRelation, Act, Chapter, Scene
 from schemas import ProjectCreate, ProjectOut, ProjectUpdate
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -141,3 +141,27 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
         )
     db.delete(project)
     db.commit()
+
+
+@router.get("/{project_id}/scenes")
+def list_project_scenes(project_id: int, db: Session = Depends(get_db)):
+    """Flat list of all scenes in a project, ordered by act/chapter/scene position."""
+    acts = (
+        db.query(Act)
+        .filter(Act.project_id == project_id)
+        .order_by(Act.order_index)
+        .all()
+    )
+    result = []
+    for act in acts:
+        chapters = sorted(act.chapters, key=lambda c: c.order_index)
+        for chapter in chapters:
+            scenes = sorted(chapter.scenes, key=lambda s: s.order_index)
+            for scene in scenes:
+                result.append({
+                    "id": scene.id,
+                    "title": scene.title or "Untitled Scene",
+                    "chapter_title": chapter.title,
+                    "act_title": act.title,
+                })
+    return result

@@ -23,6 +23,7 @@ const PLACEHOLDER_HELP = [
   { token: "{{EXTRA_SCENES}}", desc: "Content of additionally selected scenes" },
   { token: "{{ENTRY_TYPE}}", desc: "For codex distillation: character/location/item/lore" },
   { token: "{{LANGUAGE}}", desc: "Project language from Project Info (e.g. English, German)" },
+  { token: "{{WORD_COUNT}}", desc: "Target word count configured on this prompt (default 400)" },
 ];
 
 export default function SettingsPage() {
@@ -48,6 +49,7 @@ export default function SettingsPage() {
   const [editDescription, setEditDescription]   = useState("");
   const [editSystem, setEditSystem]             = useState("");
   const [editTemplate, setEditTemplate]         = useState("");
+  const [editWordCount, setEditWordCount]       = useState(400);
   const [showPlaceholderHelp, setShowPlaceholderHelp] = useState(false);
   const [promptSaved, setPromptSaved]           = useState(false);
 
@@ -59,6 +61,7 @@ export default function SettingsPage() {
     setEditDescription(p.description);
     setEditSystem(p.system);
     setEditTemplate(p.user_template);
+    setEditWordCount(p.word_count ?? 400);
     setShowPlaceholderHelp(false);
     setPromptSaved(false);
   };
@@ -67,7 +70,7 @@ export default function SettingsPage() {
     if (!selectedPromptId) return;
     await updatePrompt.mutateAsync({
       id: selectedPromptId,
-      data: { name: editName, description: editDescription, system: editSystem, user_template: editTemplate },
+      data: { name: editName, description: editDescription, system: editSystem, user_template: editTemplate, word_count: editWordCount },
     });
     setPromptSaved(true);
     setTimeout(() => setPromptSaved(false), 2000);
@@ -295,6 +298,21 @@ export default function SettingsPage() {
               <div className="space-y-1.5">
                 <Label>Description</Label>
                 <Input value={editDescription} onChange={e => setEditDescription(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Word Count Target</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={50}
+                    max={10000}
+                    step={50}
+                    value={editWordCount}
+                    onChange={e => setEditWordCount(Number(e.target.value))}
+                    className="w-28 h-8 text-sm"
+                  />
+                  <span className="text-xs text-muted-foreground">words — use <code className="text-primary">{"{{WORD_COUNT}}"}</code> in your prompt</span>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label>System Prompt</Label>

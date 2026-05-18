@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi } from "@/lib/api";
 import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry, OpenRouterModel } from "@/lib/api";
-import type { AIPrompt } from "@/types";
+import type { AIPrompt, ProjectSceneItem } from "@/types";
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -515,3 +515,11 @@ export const useRevertPrompt = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-prompts"] }),
   });
 };
+
+export const useProjectScenes = (projectId: number) =>
+  useQuery<ProjectSceneItem[]>({
+    queryKey: ["project-scenes", projectId],
+    queryFn: () => projectsApi.listScenes(projectId),
+    enabled: projectId > 0,
+    staleTime: 1000 * 60 * 2,
+  });

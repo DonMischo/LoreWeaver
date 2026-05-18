@@ -93,6 +93,7 @@ def _prompt_out(p: AIPrompt) -> AIPromptOut:
         user_template=p.user_template or "",
         is_built_in=bool(p.is_built_in),
         built_in_key=p.built_in_key,
+        word_count=p.word_count if p.word_count is not None else 400,
     )
 
 
@@ -110,6 +111,7 @@ def create_prompt(body: AIPromptCreate, db: Session = Depends(get_db)):
         user_template=body.user_template,
         is_built_in=0,
         built_in_key=None,
+        word_count=body.word_count,
     )
     db.add(p)
     db.commit()
@@ -130,6 +132,8 @@ def update_prompt(prompt_id: int, body: AIPromptUpdate, db: Session = Depends(ge
         p.system = body.system
     if body.user_template is not None:
         p.user_template = body.user_template
+    if body.word_count is not None:
+        p.word_count = body.word_count
     db.commit()
     db.refresh(p)
     return _prompt_out(p)

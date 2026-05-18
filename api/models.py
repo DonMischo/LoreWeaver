@@ -244,3 +244,4 @@ class AIPrompt(Base):
     user_template: Mapped[str] = mapped_column(Text, default="")
     is_built_in: Mapped[int] = mapped_column(Integer, default=0)
     built_in_key: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    word_count: Mapped[int] = mapped_column(Integer, default=400)

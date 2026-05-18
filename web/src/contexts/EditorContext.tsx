@@ -6,6 +6,7 @@ export interface EditorContextValue {
   items: CodexEntry[];
   allEntries: CodexEntry[];
   sceneId: number;
+  projectId: number;
 }
 
 export const EditorContext = createContext<EditorContextValue>({
@@ -13,6 +14,7 @@ export const EditorContext = createContext<EditorContextValue>({
   items: [],
   allEntries: [],
   sceneId: 0,
+  projectId: 0,
 });
 
 export function useEditorContext() {

@@ -366,6 +366,7 @@ class AIPromptOut(BaseModel):
     user_template: str
     is_built_in: bool
     built_in_key: Optional[str]
+    word_count: int
 
     model_config = {"from_attributes": True}
 
@@ -374,12 +375,14 @@ class AIPromptCreate(BaseModel):
     description: str = ""
     system: str = ""
     user_template: str = ""
+    word_count: int = 400
 
 class AIPromptUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     system: Optional[str] = None
     user_template: Optional[str] = None
+    word_count: Optional[int] = None
 
 
 # ── AI ────────────────────────────────────────────────────────────────────────
@@ -399,6 +402,7 @@ class KiGenerateRequest(BaseModel):
     prompt: str = ""
     prompt_id: Optional[int] = None
     entry_type: str = ""
+    word_count: Optional[int] = None  # per-node override; falls back to prompt's word_count
 
 
 # ── Time Config ───────────────────────────────────────────────────────────────

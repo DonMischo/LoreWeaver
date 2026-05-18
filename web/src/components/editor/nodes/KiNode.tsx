@@ -5,7 +5,7 @@ import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
 import { Sparkles, X, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useEditorContext } from "@/contexts/EditorContext";
-import { useSettings, usePrompts } from "@/store/queries";
+import { useSettings, usePrompts, useProjectScenes } from "@/store/queries";
 import { kiApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -14,17 +14,18 @@ import { cn } from "@/lib/utils";
 const ACCENT = "#f472b6";
 
 function KiNodeView({ node, updateAttributes, deleteNode, getPos, editor }: any) {
-  const { allEntries, sceneId } = useEditorContext();
+  const { allEntries, sceneId, projectId } = useEditorContext();
   const { data: settings } = useSettings();
   const { data: prompts = [] } = usePrompts();
+  const { data: projectScenes = [] } = useProjectScenes(projectId);
 
   const [generating, setGenerating] = useState(false);
   const [result, setResult]         = useState<string | null>(null);
   const [error, setError]           = useState<string | null>(null);
   const [entryType, setEntryType]   = useState("character");
 
-  const { model, codexIds: codexIdsStr, sceneIds: sceneIdsStr, prompt, promptId } = node.attrs as {
-    model: string; codexIds: string; sceneIds: string; prompt: string; promptId: string;
+  const { model, codexIds: codexIdsStr, sceneIds: sceneIdsStr, prompt, promptId, wordCount: wordCountAttr } = node.attrs as {
+    model: string; codexIds: string; sceneIds: string; prompt: string; promptId: string; wordCount: string;
   };
 
   // Enabled models from settings; fall back to just the default if none pinned
@@ -41,6 +42,11 @@ function KiNodeView({ node, updateAttributes, deleteNode, getPos, editor }: any)
 
   const selectedPrompt = prompts.find(p => String(p.id) === promptId) ?? null;
   const isCodexDistill = selectedPrompt?.built_in_key === "codex_distill";
+
+  // Word count: node attribute overrides prompt default; fall back to prompt's value or 400
+  const promptWordCount = selectedPrompt?.word_count ?? 400;
+  const nodeWordCount   = wordCountAttr ? Number(wordCountAttr) : null;
+  const displayWordCount = nodeWordCount ?? promptWordCount;
 
   const selectedEntries  = allEntries.filter(e => codexIds.includes(e.id));
   const availableEntries = allEntries.filter(e => !codexIds.includes(e.id));
@@ -64,6 +70,7 @@ function KiNodeView({ node, updateAttributes, deleteNode, getPos, editor }: any)
         prompt: prompt || "",
         prompt_id: promptId ? Number(promptId) : null,
         entry_type: isCodexDistill ? entryType : undefined,
+        word_count: nodeWordCount,
       });
       setResult(data.text);
     } catch (e: any) {
@@ -141,6 +148,38 @@ function KiNodeView({ node, updateAttributes, deleteNode, getPos, editor }: any)
           </div>
         )}
 
+        {/* Word count */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground w-14 shrink-0">Words</span>
+          <input
+            type="number"
+            min={50}
+            max={10000}
+            step={50}
+            value={displayWordCount}
+            onChange={e => updateAttributes({ wordCount: e.target.value })}
+            onKeyDown={e => e.stopPropagation()}
+            onMouseDown={e => e.stopPropagation()}
+            className="bg-background text-xs rounded border border-border px-1.5 py-1 outline-none w-16 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          {[600, 800, 1000].map(n => (
+            <button
+              key={n}
+              type="button"
+              onMouseDown={e => e.stopPropagation()}
+              onClick={() => updateAttributes({ wordCount: String(n) })}
+              className={cn(
+                "text-[11px] px-1.5 py-0.5 rounded border transition-colors",
+                displayWordCount === n
+                  ? "border-primary text-primary bg-primary/10"
+                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+              )}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+
         {/* Model selector */}
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground w-14 shrink-0">Model</span>
@@ -162,25 +201,43 @@ function KiNodeView({ node, updateAttributes, deleteNode, getPos, editor }: any)
           )}
         </div>
 
-        {/* Context — active scene (auto) */}
+        {/* Context — scenes */}
         <div className="flex items-start gap-2">
-          <span className="text-xs text-muted-foreground w-14 shrink-0 pt-0.5">Scene</span>
-          <div className="flex flex-wrap gap-1">
+          <span className="text-xs text-muted-foreground w-14 shrink-0 pt-0.5">Scenes</span>
+          <div className="flex flex-wrap gap-1 flex-1">
             <span className="text-[11px] bg-secondary px-2 py-0.5 rounded flex items-center gap-1">
               Current scene
               <span className="text-muted-foreground/50 text-[10px]">auto</span>
             </span>
-            {extraSceneIds.map(id => (
-              <span key={id} className="text-[11px] bg-secondary px-2 py-0.5 rounded flex items-center gap-1">
-                Scene #{id}
-                <button
-                  type="button"
-                  onClick={() => updateAttributes({ sceneIds: extraSceneIds.filter(i => i !== id).join(",") })}
-                >
-                  <X className="h-2.5 w-2.5" />
-                </button>
-              </span>
-            ))}
+            {extraSceneIds.map(id => {
+              const sc = projectScenes.find(s => s.id === id);
+              return (
+                <span key={id} className="text-[11px] bg-secondary px-2 py-0.5 rounded flex items-center gap-1">
+                  {sc ? sc.title : `Scene #${id}`}
+                  <button
+                    type="button"
+                    onClick={() => updateAttributes({ sceneIds: extraSceneIds.filter(i => i !== id).join(",") })}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </span>
+              );
+            })}
+            {projectScenes.filter(s => s.id !== sceneId && !extraSceneIds.includes(s.id)).length > 0 && (
+              <select
+                value=""
+                onChange={e => { if (e.target.value) updateAttributes({ sceneIds: [...extraSceneIds, Number(e.target.value)].join(",") }); }}
+                onMouseDown={e => e.stopPropagation()}
+                className="text-[11px] bg-background border border-border rounded px-1.5 py-0.5 outline-none text-muted-foreground"
+              >
+                <option value="">+ Add scene…</option>
+                {projectScenes
+                  .filter(s => s.id !== sceneId && !extraSceneIds.includes(s.id))
+                  .map(s => (
+                    <option key={s.id} value={s.id}>{s.title}</option>
+                  ))}
+              </select>
+            )}
           </div>
         </div>
 
@@ -292,11 +349,12 @@ export const KiNode = Node.create({
 
   addAttributes() {
     return {
-      model:    { default: "", parseHTML: el => el.getAttribute("data-model")     ?? "" },
-      codexIds: { default: "", parseHTML: el => el.getAttribute("data-codex-ids") ?? "" },
-      sceneIds: { default: "", parseHTML: el => el.getAttribute("data-scene-ids") ?? "" },
-      prompt:   { default: "", parseHTML: el => el.getAttribute("data-prompt")    ?? "" },
-      promptId: { default: "", parseHTML: el => el.getAttribute("data-prompt-id") ?? "" },
+      model:      { default: "", parseHTML: el => el.getAttribute("data-model")      ?? "" },
+      codexIds:   { default: "", parseHTML: el => el.getAttribute("data-codex-ids")  ?? "" },
+      sceneIds:   { default: "", parseHTML: el => el.getAttribute("data-scene-ids")  ?? "" },
+      prompt:     { default: "", parseHTML: el => el.getAttribute("data-prompt")     ?? "" },
+      promptId:   { default: "", parseHTML: el => el.getAttribute("data-prompt-id")  ?? "" },
+      wordCount:  { default: "", parseHTML: el => el.getAttribute("data-word-count") ?? "" },
     };
   },
 
@@ -306,12 +364,13 @@ export const KiNode = Node.create({
 
   renderHTML({ node }) {
     return ["div", {
-      "data-type":      "ki",
-      "data-model":     node.attrs.model,
-      "data-codex-ids": node.attrs.codexIds,
-      "data-scene-ids": node.attrs.sceneIds,
-      "data-prompt":    node.attrs.prompt,
-      "data-prompt-id": node.attrs.promptId,
+      "data-type":       "ki",
+      "data-model":      node.attrs.model,
+      "data-codex-ids":  node.attrs.codexIds,
+      "data-scene-ids":  node.attrs.sceneIds,
+      "data-prompt":     node.attrs.prompt,
+      "data-prompt-id":  node.attrs.promptId,
+      "data-word-count": node.attrs.wordCount,
     }];
   },
 

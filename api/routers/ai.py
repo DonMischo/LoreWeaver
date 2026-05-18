@@ -222,7 +222,9 @@ async def ki_generate(body: KiGenerateRequest, db: Session = Depends(get_db)):
         if not prompt_row:
             raise HTTPException(404, "Prompt not found")
         ctx = _build_ki_context(scene, body, db)
-        system = prompt_row.system or "You are a creative writing assistant."
+        effective_wc = body.word_count if body.word_count is not None else (prompt_row.word_count or 400)
+        ctx["WORD_COUNT"] = str(effective_wc)
+        system = _fill_placeholders(prompt_row.system or "You are a creative writing assistant.", ctx)
         user_msg = _fill_placeholders(prompt_row.user_template or "", ctx)
     else:
         # Legacy inline behaviour

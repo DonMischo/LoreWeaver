@@ -153,7 +153,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
   const closeSlash = useCallback(() => setSlashMenuFnRef.current(null), []);
 
   return (
-    <EditorContext.Provider value={{ characters, items, allEntries: codexEntries, sceneId }}>
+    <EditorContext.Provider value={{ characters, items, allEntries: codexEntries, sceneId, projectId: codexEntries[0]?.project_id ?? 0 }}>
       <div className="h-full overflow-y-auto relative">
         <EditorContent editor={editor} className="h-full" />
         {slashMenu && editor && (

@@ -1,7 +1,7 @@
 import type {
   Project, Act, Chapter, Scene, CodexEntry, CodexRelation, CodexRelationResolved,
   Settings, ChapterReadData, ActReadData, TimeConfig, SceneTime,
-  Fragment, FragmentTabs, BookMeta, AIPrompt,
+  Fragment, FragmentTabs, BookMeta, AIPrompt, ProjectSceneItem,
 } from "@/types";
 
 const BASE = "/api";
@@ -60,6 +60,7 @@ export const projectsApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(opts),
     }),
+  listScenes: (id: number) => req<ProjectSceneItem[]>(`/projects/${id}/scenes`),
 };
 
 // ── Acts ──────────────────────────────────────────────────────────────────────
@@ -331,9 +332,9 @@ export const settingsApi = {
 
 export const promptsApi = {
   list: () => req<AIPrompt[]>("/settings/prompts"),
-  create: (data: { name: string; description?: string; system?: string; user_template?: string }) =>
+  create: (data: { name: string; description?: string; system?: string; user_template?: string; word_count?: number }) =>
     req<AIPrompt>("/settings/prompts", { method: "POST", body: JSON.stringify(data) }),
-  update: (id: number, data: { name?: string; description?: string; system?: string; user_template?: string }) =>
+  update: (id: number, data: { name?: string; description?: string; system?: string; user_template?: string; word_count?: number }) =>
     req<AIPrompt>(`/settings/prompts/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: (id: number) => req<void>(`/settings/prompts/${id}`, { method: "DELETE" }),
   revert: (id: number) => req<AIPrompt>(`/settings/prompts/${id}/revert`, { method: "POST" }),
@@ -350,5 +351,6 @@ export const kiApi = {
     prompt: string;
     prompt_id?: number | null;
     entry_type?: string;
+    word_count?: number | null;
   }) => req<{ text: string }>("/ai/ki", { method: "POST", body: JSON.stringify(data) }),
 };

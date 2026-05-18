@@ -212,6 +212,13 @@ export interface ActReadData {
   chapters: ActReadChapter[];
 }
 
+export interface ProjectSceneItem {
+  id: number;
+  title: string;
+  chapter_title: string;
+  act_title: string;
+}
+
 export interface AIPrompt {
   id: number;
   name: string;
@@ -220,4 +227,5 @@ export interface AIPrompt {
   user_template: string;
   is_built_in: boolean;
   built_in_key: string | null;
+  word_count: number;
 }

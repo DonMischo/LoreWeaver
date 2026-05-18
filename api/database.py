@@ -131,7 +131,8 @@ DEFAULT_AI_PROMPTS = [
             "15. DIALOGUE TAGS — Use \"said\" as the default invisible tag. Use action beats instead of adverb-loaded tags.\n\n"
             "CODEX USAGE — The codex entries describe characters, locations, items, and lore. You must use established physical descriptions exactly as defined, honour personality and speech patterns, and respect world-building rules.\n\n"
             "OUTPUT FORMAT — Return only the generated prose. No preamble, no commentary, no markdown headings. Plain paragraphs separated by blank lines, ready to drop into the manuscript.\n\n"
-            "LANGUAGE — Write exclusively in {{LANGUAGE}}. Use {{LANGUAGE}} vocabulary, sentence structure, and stylistic conventions throughout."
+            "LANGUAGE — Write exclusively in {{LANGUAGE}}. Use {{LANGUAGE}} vocabulary, sentence structure, and stylistic conventions throughout.\n\n"
+            "TARGET LENGTH — Write approximately {{WORD_COUNT}} words."
         ),
         "user_template": "## Current Scene\n{{SCENE_CONTENT}}\n\n## Codex Entries\n{{CODEX_ENTRIES}}\n\n## Instruction\n{{USER_PROMPT}}",
         "is_built_in": 1,
@@ -264,9 +265,14 @@ def migrate_ai_prompts():
                 system TEXT NOT NULL DEFAULT '',
                 user_template TEXT NOT NULL DEFAULT '',
                 is_built_in INTEGER NOT NULL DEFAULT 0,
-                built_in_key TEXT
+                built_in_key TEXT,
+                word_count INTEGER NOT NULL DEFAULT 400
             )
         """))
+        try:
+            conn.execute(text("ALTER TABLE ai_prompts ADD COLUMN word_count INTEGER NOT NULL DEFAULT 400"))
+        except Exception:
+            pass  # column already exists
         for p in DEFAULT_AI_PROMPTS:
             existing = conn.execute(
                 text("SELECT id FROM ai_prompts WHERE built_in_key = :key"),
@@ -280,13 +286,19 @@ def migrate_ai_prompts():
                     """),
                     p,
                 )
-        # One-time upgrade: push {{LANGUAGE}} into existing built-in prompts that predate it
+        # Upgrade: update built-in system texts when expected placeholders are missing
+        _required = {
+            "story_generate": ["{{LANGUAGE}}", "{{WORD_COUNT}}"],
+            "lector_review":  ["{{LANGUAGE}}"],
+            "codex_distill":  ["{{LANGUAGE}}"],
+        }
         for p in DEFAULT_AI_PROMPTS:
+            tokens = _required.get(p["built_in_key"], [])
             row = conn.execute(
                 text("SELECT id, system FROM ai_prompts WHERE built_in_key = :key"),
                 {"key": p["built_in_key"]},
             ).fetchone()
-            if row and "{{LANGUAGE}}" not in (row[1] or ""):
+            if row and any(t not in (row[1] or "") for t in tokens):
                 conn.execute(
                     text("UPDATE ai_prompts SET system = :system WHERE id = :id"),
                     {"system": p["system"], "id": row[0]},
