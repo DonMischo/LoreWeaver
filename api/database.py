@@ -282,10 +282,10 @@ def migrate_ai_prompts():
             if not existing:
                 conn.execute(
                     text("""
-                        INSERT INTO ai_prompts (name, description, system, user_template, is_built_in, built_in_key)
-                        VALUES (:name, :description, :system, :user_template, :is_built_in, :built_in_key)
+                        INSERT INTO ai_prompts (name, description, system, user_template, is_built_in, built_in_key, word_count)
+                        VALUES (:name, :description, :system, :user_template, :is_built_in, :built_in_key, :word_count)
                     """),
-                    p,
+                    {**p, "word_count": p.get("word_count", 400)},
                 )
         # Upgrade: update built-in system texts when expected placeholders are missing
         _required = {

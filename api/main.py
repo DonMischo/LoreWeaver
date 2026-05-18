@@ -23,7 +23,9 @@ app = FastAPI(title="LoreWeaver API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    # Allow any localhost / 127.0.0.1 port — needed for the Electron build
+    # where the Next.js server runs on a dynamic port.
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
