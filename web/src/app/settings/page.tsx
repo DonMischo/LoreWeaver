@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Key, Cpu, Globe, Loader2, RefreshCw, Sparkles, Plus, Trash2, RotateCcw, HelpCircle } from "lucide-react";
+import { ArrowLeft, Key, Cpu, Globe, Loader2, RefreshCw, Sparkles, Plus, Trash2, RotateCcw, HelpCircle, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSettings, useUpdateSettings, useOpenRouterModels, usePrompts, useCreatePrompt, useUpdatePrompt, useDeletePrompt, useRevertPrompt } from "@/store/queries";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useTheme, THEMES, THEME_LABELS, THEME_PREVIEW } from "@/contexts/ThemeContext";
 import { LOCALE_NAMES, type Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { AIPrompt } from "@/types";
@@ -31,6 +32,7 @@ export default function SettingsPage() {
   const updateSettings = useUpdateSettings();
   const { data: availableModels = [], isLoading: modelsLoading, refetch: refetchModels } = useOpenRouterModels();
   const { t, locale, setLocale } = useLanguage();
+  const { theme, setTheme } = useTheme();
 
   const { data: prompts = [] } = usePrompts();
   const createPrompt  = useCreatePrompt();
@@ -416,6 +418,50 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+        </section>
+
+        <div className="border-t border-border" />
+
+        {/* Appearance */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Palette className="h-4 w-4 text-primary" />
+            <h2 className="text-base font-semibold">Appearance</h2>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Choose a color theme for the interface.</p>
+            <div className="grid grid-cols-4 gap-2">
+              {THEMES.map((t) => {
+                const preview = THEME_PREVIEW[t];
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTheme(t)}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 rounded-lg border p-2.5 text-xs transition-colors",
+                      theme === t
+                        ? "border-primary ring-1 ring-primary"
+                        : "border-border hover:border-border/70"
+                    )}
+                  >
+                    <div
+                      className="w-full h-8 rounded"
+                      style={{ background: preview.bg, boxShadow: `inset 0 0 0 2px ${preview.accent}33` }}
+                    >
+                      <div
+                        className="h-2 rounded-t mt-1.5 mx-1.5"
+                        style={{ background: preview.accent, opacity: 0.85 }}
+                      />
+                    </div>
+                    <span className={cn("font-medium", theme === t && "text-primary")}>
+                      {THEME_LABELS[t]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </section>
 
         <div className="border-t border-border" />
