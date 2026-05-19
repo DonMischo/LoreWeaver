@@ -24,34 +24,12 @@ async def import_story(
         raise HTTPException(404, "Project not found")
 
     content = (await file.read()).decode("utf-8", errors="replace")
-    book_title, parsed_acts = parse_story_markdown(content)
+    _, parsed_acts = parse_story_markdown(content)
 
     if not parsed_acts:
         raise HTTPException(400, "No content found. Use ## for acts, ### for chapters, #### for scenes.")
 
-    # ── Determine target project ──────────────────────────────────────────────
-    if book_title:
-        # # heading → create a new project, copy codex from source project
-        target_project = Project(title=book_title)
-        db.add(target_project)
-        db.flush()
-
-        # Duplicate codex entries from source project into the new project
-        for entry in source_project.codex_entries:
-            clone = CodexEntry(
-                project_id=target_project.id,
-                name=entry.name,
-                aliases=entry.aliases,
-                entry_type=entry.entry_type,
-                description=entry.description,
-                notes=entry.notes,
-                color=entry.color,
-                species=entry.species,
-            )
-            clone.set_groups(entry.get_groups())
-            db.add(clone)
-    else:
-        target_project = source_project
+    target_project = source_project
 
     # ── Append after existing acts ────────────────────────────────────────────
     existing_act_count = db.query(Act).filter(Act.project_id == target_project.id).count()
@@ -93,8 +71,6 @@ async def import_story(
     db.commit()
 
     msg = f"Imported {created_acts} act(s), {created_chapters} chapter(s), {created_scenes} scene(s)."
-    if book_title:
-        msg += f" Created new project '{book_title}' with codex copied."
 
     return {
         "message": msg,
