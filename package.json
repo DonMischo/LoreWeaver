@@ -1,6 +1,6 @@
 {
   "name": "loreweaver",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "LoreWeaver Personal Studio — local-first novel writing app",
   "author": "LoreWeaver",
   "main": "electron/main.js",
