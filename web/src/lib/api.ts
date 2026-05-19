@@ -342,6 +342,18 @@ export const promptsApi = {
   revert: (id: number) => req<AIPrompt>(`/settings/prompts/${id}/revert`, { method: "POST" }),
 };
 
+// ── Data directory ────────────────────────────────────────────────────────────
+
+export const dataDirApi = {
+  get: () => req<{ current: string; configured: string | null }>("/settings/data-dir"),
+  pick: () => req<{ path: string | null }>("/settings/data-dir/pick"),
+  set: (p: string | null, migrate = false) =>
+    req<{ current: string; configured: string | null }>("/settings/data-dir", {
+      method: "POST",
+      body: JSON.stringify({ path: p, migrate }),
+    }),
+};
+
 // ── Scene Versions ────────────────────────────────────────────────────────────
 
 export const versionsApi = {

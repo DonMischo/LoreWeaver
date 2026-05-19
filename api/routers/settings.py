@@ -1,4 +1,7 @@
 import json
+import os
+import shutil
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import httpx
@@ -6,7 +9,23 @@ import httpx
 from crypto import encrypt, decrypt
 from database import get_db, DEFAULT_AI_PROMPTS
 from models import UserSettings, AIPrompt
-from schemas import SettingsOut, SettingsUpdate, AIPromptOut, AIPromptCreate, AIPromptUpdate
+from schemas import SettingsOut, SettingsUpdate, AIPromptOut, AIPromptCreate, AIPromptUpdate, DataDirUpdate
+
+# ── Shared LoreWeaver config (~/.loreweaver/config.json) ──────────────────────
+# Both this API and the Electron main process read/write this file so the
+# chosen data directory survives restarts in any run mode.
+
+LW_CONFIG_FILE = Path.home() / ".loreweaver" / "config.json"
+
+def _read_lw_config() -> dict:
+    try:
+        return json.loads(LW_CONFIG_FILE.read_text("utf-8"))
+    except Exception:
+        return {}
+
+def _write_lw_config(data: dict) -> None:
+    LW_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LW_CONFIG_FILE.write_text(json.dumps(data, indent=2), "utf-8")
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -57,6 +76,62 @@ def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(s)
     return _settings_out(s)
+
+
+@router.get("/data-dir/pick")
+def pick_data_dir():
+    """Open a native folder-picker dialog on the server machine (dev / local use)."""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        chosen = filedialog.askdirectory(title="Choose LoreWeaver Data Folder")
+        root.destroy()
+        return {"path": chosen or None}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not open folder dialog: {exc}")
+
+
+@router.get("/data-dir")
+def get_data_dir():
+    cfg = _read_lw_config()
+    return {
+        "current": os.getcwd(),
+        "configured": cfg.get("dataDir"),
+    }
+
+
+@router.post("/data-dir")
+def set_data_dir(body: DataDirUpdate):
+    cfg = _read_lw_config()
+
+    if body.path and body.migrate:
+        src = Path(os.getcwd())
+        dst = Path(body.path)
+        dst.mkdir(parents=True, exist_ok=True)
+        (dst / "uploads").mkdir(exist_ok=True)
+
+        db_src = src / "loreweaver.db"
+        if db_src.exists():
+            shutil.copy2(db_src, dst / "loreweaver.db")
+
+        uploads_src = src / "uploads"
+        if uploads_src.exists():
+            for item in uploads_src.iterdir():
+                dest_item = dst / "uploads" / item.name
+                if item.is_dir():
+                    shutil.copytree(item, dest_item, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(item, dest_item)
+
+    if body.path:
+        cfg["dataDir"] = body.path
+    else:
+        cfg.pop("dataDir", None)
+    _write_lw_config(cfg)
+    return {"current": os.getcwd(), "configured": body.path or None}
 
 
 @router.get("/models")

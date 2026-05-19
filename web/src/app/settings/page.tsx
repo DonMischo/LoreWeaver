@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSettings, useUpdateSettings, useOpenRouterModels, usePrompts, useCreatePrompt, useUpdatePrompt, useDeletePrompt, useRevertPrompt } from "@/store/queries";
+import { dataDirApi } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme, THEMES, THEME_LABELS, THEME_PREVIEW } from "@/contexts/ThemeContext";
 import { LOCALE_NAMES, type Locale } from "@/lib/i18n";
@@ -48,19 +49,20 @@ export default function SettingsPage() {
   const [modelSearch, setModelSearch]     = useState("");
   const [saved, setSaved]                 = useState(false);
 
-  // ── Data directory (Electron only) ────────────────────────────────────────
+  // ── Data directory ────────────────────────────────────────────────────────
   const isElectron = typeof window !== "undefined" && !!(window as any).electron;
-  const [dataDir, setDataDir]           = useState<string>("");
-  const [dataDirIsCustom, setDataDirIsCustom] = useState(false);
-  const [dataDirPending, setDataDirPending]   = useState(false);
+  const [dataDir, setDataDir]               = useState<string>("");
+  const [dataDirConfigured, setDataDirConfigured] = useState<string | null>(null);
+  const [dataDirPending, setDataDirPending] = useState(false);
+  const [dataDirSaved, setDataDirSaved]     = useState(false);
+  const [dataDirMigrate, setDataDirMigrate] = useState(true);
 
   useEffect(() => {
-    if (!isElectron) return;
-    (window as any).electron.getDataDir().then((res: { path: string; isCustom: boolean }) => {
-      setDataDir(res.path);
-      setDataDirIsCustom(res.isCustom);
-    });
-  }, [isElectron]);
+    dataDirApi.get().then((res) => {
+      setDataDir(res.configured ?? res.current);
+      setDataDirConfigured(res.configured);
+    }).catch(() => {});
+  }, []);
 
   const [selectedPromptId, setSelectedPromptId] = useState<number | null>(null);
   const [editName, setEditName]                 = useState("");
@@ -490,60 +492,84 @@ export default function SettingsPage() {
           <p className="text-xs text-muted-foreground">
             Where LoreWeaver stores its database and uploads. Point this to a
             Dropbox, Google Drive, or OneDrive folder to sync across devices.
-            The app will restart when you apply a change.
+            Restart the app after applying a change.
           </p>
-          {!isElectron ? (
-            <p className="text-xs text-muted-foreground italic">
-              Only configurable in the desktop app.
-            </p>
-          ) : (
-            <>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 truncate rounded border border-border bg-secondary/40 px-3 py-1.5 text-xs text-muted-foreground">
-                  {dataDir || "—"}
-                </code>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={async () => {
-                    const picked = await (window as any).electron.pickDataDir();
-                    if (picked) setDataDir(picked);
-                  }}
-                >
-                  <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
-                  Browse
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  disabled={dataDirPending}
-                  onClick={async () => {
-                    setDataDirPending(true);
-                    await (window as any).electron.setDataDir(dataDir);
-                    (window as any).electron.restart();
-                  }}
-                >
-                  <RotateCw className="h-3.5 w-3.5 mr-1.5" />
-                  Apply &amp; Restart
-                </Button>
-                {dataDirIsCustom && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={dataDirPending}
-                    onClick={async () => {
-                      setDataDirPending(true);
-                      await (window as any).electron.setDataDir(null);
-                      (window as any).electron.restart();
-                    }}
-                  >
-                    Reset to default
-                  </Button>
-                )}
-              </div>
-            </>
+          <div className="flex items-center gap-2">
+            <input
+              className="flex-1 truncate rounded border border-border bg-secondary/40 px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              value={dataDir}
+              onChange={(e) => setDataDir(e.target.value)}
+              placeholder="Default (app data folder)"
+              spellCheck={false}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                const picked = isElectron
+                  ? await (window as any).electron.pickDataDir()
+                  : (await dataDirApi.pick()).path;
+                if (picked) setDataDir(picked);
+              }}
+            >
+              <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
+              Browse
+            </Button>
+          </div>
+          {dataDir && dataDir !== dataDirConfigured && (
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={dataDirMigrate}
+                onChange={e => setDataDirMigrate(e.target.checked)}
+                className="accent-primary"
+              />
+              Copy existing database &amp; uploads to new folder
+            </label>
           )}
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              disabled={dataDirPending}
+              onClick={async () => {
+                setDataDirPending(true);
+                try {
+                  const shouldMigrate = dataDirMigrate && !!dataDir && dataDir !== dataDirConfigured;
+                  const res = await dataDirApi.set(dataDir || null, shouldMigrate);
+                  setDataDirConfigured(res.configured);
+                  setDataDirSaved(true);
+                  setTimeout(() => setDataDirSaved(false), 2000);
+                  if (isElectron) (window as any).electron.restart();
+                } finally {
+                  setDataDirPending(false);
+                }
+              }}
+            >
+              {isElectron
+                ? <><RotateCw className="h-3.5 w-3.5 mr-1.5" />Apply &amp; Restart</>
+                : dataDirSaved ? "Saved — restart backend to apply" : "Save"}
+            </Button>
+            {dataDirConfigured && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={dataDirPending}
+                onClick={async () => {
+                  setDataDirPending(true);
+                  try {
+                    await dataDirApi.set(null);
+                    setDataDir("");
+                    setDataDirConfigured(null);
+                    if (isElectron) (window as any).electron.restart();
+                  } finally {
+                    setDataDirPending(false);
+                  }
+                }}
+              >
+                Reset to default
+              </Button>
+            )}
+          </div>
         </section>
 
         <div className="border-t border-border" />

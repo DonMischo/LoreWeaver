@@ -63,7 +63,14 @@ function saveConfig(patch) {
 
 const isProd   = app.isPackaged;
 const config   = loadConfig();
-const dataDir  = config.dataDir || app.getPath("userData");
+
+// Shared config (~/.loreweaver/config.json) — written by the settings UI.
+const LW_CONFIG_PATH = path.join(require("os").homedir(), ".loreweaver", "config.json");
+function loadLwConfig() {
+  try { return JSON.parse(fs.readFileSync(LW_CONFIG_PATH, "utf8")); } catch { return {}; }
+}
+
+const dataDir = loadLwConfig().dataDir || config.dataDir || app.getPath("userData");
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 // Logs always go to the fixed OS userData folder so they're easy to find.
@@ -270,13 +277,14 @@ ipcMain.handle("lw:pick-data-dir", async () => {
 });
 
 ipcMain.handle("lw:set-data-dir", (_, newPath) => {
+  const lwCfg = loadLwConfig();
   if (newPath) {
-    saveConfig({ dataDir: newPath });
+    lwCfg.dataDir = newPath;
   } else {
-    const cfg = loadConfig();
-    delete cfg.dataDir;
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+    delete lwCfg.dataDir;
   }
+  fs.mkdirSync(path.dirname(LW_CONFIG_PATH), { recursive: true });
+  fs.writeFileSync(LW_CONFIG_PATH, JSON.stringify(lwCfg, null, 2));
   return true;
 });
 

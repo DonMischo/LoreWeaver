@@ -42,7 +42,7 @@ echo Freeing port 8765...
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8765 " ^| findstr "LISTENING" 2^>nul') do taskkill /PID %%p /F >nul 2>&1
 
 echo Starting FastAPI server on http://localhost:8765
-.venv\Scripts\python.exe -m uvicorn main:app --reload --port 8765
+.venv\Scripts\python.exe run.py --dev
 exit /b
 
 rem ══════════════════════════════════════════════════════════════════════════

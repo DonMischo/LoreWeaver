@@ -337,6 +337,13 @@ class SceneCommandOut(BaseModel):
         return data
 
 
+# ── Data directory ────────────────────────────────────────────────────────────
+
+class DataDirUpdate(BaseModel):
+    path: Optional[str] = None   # None = reset to default
+    migrate: bool = False        # copy existing DB + uploads to new path
+
+
 # ── Settings ──────────────────────────────────────────────────────────────────
 
 class SettingsUpdate(BaseModel):
