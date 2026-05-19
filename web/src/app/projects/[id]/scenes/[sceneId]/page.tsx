@@ -9,7 +9,6 @@ import { TipTapEditor } from "@/components/editor/TipTapEditor";
 import { StatusBar } from "@/components/editor/StatusBar";
 import { CodexSidebar } from "@/components/codex/CodexSidebar";
 import { CodexEntryDialog } from "@/components/codex/CodexEntryDialog";
-import { AIPanel } from "@/components/ai/AIPanel";
 import { VersionHistoryPanel } from "@/components/editor/VersionHistoryPanel";
 import { ChatPanel } from "@/components/editor/ChatPanel";
 import { SceneTimePanel } from "@/components/time/SceneTimePanel";
@@ -83,9 +82,7 @@ export default function ScenePage() {
   const [chatPanelOpen, setChatPanelOpen] = useState(false);
 
   const codexSidebarOpen = useUIStore((s) => s.codexSidebarOpen);
-  const aiPanelOpen = useUIStore((s) => s.aiPanelOpen);
   const setCodexSidebarOpen = useUIStore((s) => s.setCodexSidebarOpen);
-  const setAiPanelOpen = useUIStore((s) => s.setAiPanelOpen);
 
   const editorRef = useRef<{ insertContent: (text: string) => void } | null>(null);
   const contentRef = useRef<string>("");
@@ -282,7 +279,6 @@ export default function ScenePage() {
           onClick={() => {
             setTimePanelOpen(!timePanelOpen);
             if (codexSidebarOpen) setCodexSidebarOpen(false);
-            if (aiPanelOpen) setAiPanelOpen(false);
           }}
           className={cn("gap-1.5 text-xs", hasTime && !timePanelOpen && "border-primary/50 text-primary")}
         >
@@ -322,18 +318,6 @@ export default function ScenePage() {
         >
           <BookOpen className="h-3.5 w-3.5" />
           Codex
-        </Button>
-        <Button
-          size="sm"
-          variant={aiPanelOpen ? "secondary" : "ghost"}
-          onClick={() => {
-            setAiPanelOpen(!aiPanelOpen);
-            if (timePanelOpen) setTimePanelOpen(false);
-          }}
-          className="gap-1.5 text-xs"
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          AI
         </Button>
         <Button
           size="sm"
@@ -384,15 +368,6 @@ export default function ScenePage() {
             onClose={() => setCodexSidebarOpen(false)}
             onAdd={() => setNewEntryDialogOpen(true)}
             sceneContent={content}
-          />
-        )}
-
-        {/* AI panel */}
-        {aiPanelOpen && (
-          <AIPanel
-            sceneId={sceneIdNum}
-            onInsert={handleInsertAI}
-            onClose={() => setAiPanelOpen(false)}
           />
         )}
 

@@ -1,28 +1,20 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { StickyNote, Coins, Package, ImageIcon, Sparkles, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Editor } from "@tiptap/core";
 
-export interface SlashMenuState {
-  from: number;   // position of the '/'
-  rect: { left: number; top: number };
-  query: string;  // text typed after '/'
+export interface CommandItem {
+  id: string;
+  label: string;
+  description: string;
+  icon: React.ElementType;
+  color: string;
+  keywords: string[];
+  content: (() => object) | null;
 }
 
-export interface SlashMenuHandle {
-  handleKey(e: KeyboardEvent): boolean;
-}
-
-interface Props {
-  editor: Editor;
-  state: SlashMenuState;
-  onClose: () => void;
-  onAction?: (id: string) => void;
-}
-
-const COMMANDS = [
+export const COMMANDS: CommandItem[] = [
   {
     id: "note",
     label: "Note",
@@ -77,34 +69,37 @@ const COMMANDS = [
     keywords: ["chat", "discuss", "brainstorm", "ideas", "talk"],
     content: null,
   },
-] satisfies {
-  id: string;
-  label: string;
-  description: string;
-  icon: React.ElementType;
-  color: string;
-  keywords: string[];
-  content: (() => object) | null;
-}[];
+];
+
+export interface SlashMenuHandle {
+  handleKey(e: KeyboardEvent): boolean;
+}
+
+interface Props {
+  items: CommandItem[];
+  rect: DOMRect | null;
+  onSelect: (item: CommandItem) => void;
+  onClose: () => void;
+}
 
 export const SlashCommandMenu = forwardRef<SlashMenuHandle, Props>(
-  function SlashCommandMenu({ editor, state, onClose, onAction }, ref) {
+  function SlashCommandMenu({ items, rect, onSelect, onClose }, ref) {
     const menuRef = useRef<HTMLDivElement>(null);
     const [activeIndex, setActiveIndex] = useState(0);
+    const [openAbove, setOpenAbove] = useState(false);
 
-    const q = state.query.toLowerCase();
-    const filtered = q
-      ? COMMANDS.filter(
-          (cmd) =>
-            cmd.label.toLowerCase().startsWith(q) ||
-            cmd.keywords.some((k) => k.startsWith(q))
-        )
-      : [...COMMANDS];
-
-    // Reset active index when filter changes
+    // Reset active index when items change (query updated)
     useEffect(() => {
       setActiveIndex(0);
-    }, [state.query]);
+    }, [items]);
+
+    // Flip the menu above the cursor if it would overflow the bottom of the viewport.
+    // useLayoutEffect runs before the browser paints so there is no visible flicker.
+    useLayoutEffect(() => {
+      if (!menuRef.current || !rect) return;
+      const spaceBelow = window.innerHeight - rect.bottom - 4;
+      setOpenAbove(spaceBelow < menuRef.current.offsetHeight);
+    }, [rect, items]);
 
     // Close on click outside
     useEffect(() => {
@@ -117,56 +112,44 @@ export const SlashCommandMenu = forwardRef<SlashMenuHandle, Props>(
       return () => document.removeEventListener("mousedown", handler);
     }, [onClose]);
 
-    const selectCommand = (cmd: typeof COMMANDS[number]) => {
-      onClose();
-      // Always delete the '/' + query text first
-      editor
-        .chain()
-        .focus()
-        .deleteRange({ from: state.from, to: state.from + 1 + state.query.length })
-        .run();
-      if (cmd.content) {
-        editor.chain().focus().insertContent(cmd.content()).run();
-      } else {
-        // Action command — fire callback instead of inserting a node
-        onAction?.(cmd.id);
-      }
-    };
-
     useImperativeHandle(ref, () => ({
       handleKey(e: KeyboardEvent): boolean {
-        if (filtered.length === 0) return false;
+        if (items.length === 0) return false;
         if (e.key === "ArrowDown") {
-          setActiveIndex((i) => (i + 1) % filtered.length);
+          setActiveIndex((i) => (i + 1) % items.length);
           return true;
         }
         if (e.key === "ArrowUp") {
-          setActiveIndex((i) => (i - 1 + filtered.length) % filtered.length);
+          setActiveIndex((i) => (i - 1 + items.length) % items.length);
           return true;
         }
         if (e.key === "Enter" || e.key === "Tab") {
-          selectCommand(filtered[activeIndex]);
+          onSelect(items[activeIndex]);
           return true;
         }
         return false;
       },
     }));
 
-    if (filtered.length === 0) return null;
+    if (items.length === 0 || !rect) return null;
 
     return (
       <div
         ref={menuRef}
         className="fixed z-50 w-64 rounded-lg border border-border bg-popover shadow-lg py-1"
         style={{
-          left: Math.min(state.rect.left, window.innerWidth - 280),
-          top: state.rect.top + 4,
+          left: Math.min(rect.left, window.innerWidth - 280),
+          // When opening above: anchor the bottom edge just above the cursor line.
+          // CSS `bottom` with position:fixed = distance from the viewport bottom.
+          ...(openAbove
+            ? { bottom: window.innerHeight - rect.top + 4 }
+            : { top: rect.bottom + 4 }),
         }}
       >
         <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Insert command
         </p>
-        {filtered.map((cmd, i) => {
+        {items.map((cmd, i) => {
           const Icon = cmd.icon;
           return (
             <button
@@ -178,7 +161,7 @@ export const SlashCommandMenu = forwardRef<SlashMenuHandle, Props>(
               )}
               onMouseDown={(e) => {
                 e.preventDefault(); // prevent editor blur
-                selectCommand(cmd);
+                onSelect(cmd);
               }}
               onMouseEnter={() => setActiveIndex(i)}
             >

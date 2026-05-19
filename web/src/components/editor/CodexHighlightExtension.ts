@@ -3,7 +3,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { CodexEntry } from "@/types";
 
-const PLUGIN_KEY = new PluginKey("codexHighlight");
+export const PLUGIN_KEY = new PluginKey("codexHighlight");
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
