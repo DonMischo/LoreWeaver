@@ -1,8 +1,20 @@
 # LoreWeaver Personal Writer Studio
 
-A local-first novel writing studio — write, world-build, and track your story's timeline and relationships, all running on your own machine. No subscriptions, no cloud sync.
+A local-first novel writing studio — write, world-build, and track your story's timeline and relationships, all running on your own machine. No subscriptions, no cloud required.
 
-## Quick Start
+Available as a **standalone desktop app** (Windows, macOS, Linux) or run directly from source.
+
+---
+
+## Desktop App (recommended)
+
+Download the latest installer from [Releases](../../releases) and run it. LoreWeaver starts as a self-contained app — no Node.js or Python required.
+
+**Cloud sync:** point LoreWeaver at a folder inside your Dropbox, Google Drive, or OneDrive and it syncs automatically across devices. *(Settings → Data folder — coming soon as a UI option; advanced users can set `dataDir` in `config.json` manually.)*
+
+---
+
+## Development / Run from Source
 
 Open two PowerShell terminals from the `loreweaver/` directory:
 
@@ -18,12 +30,26 @@ Open two PowerShell terminals from the `loreweaver/` directory:
 
 Then open **http://localhost:3000** in your browser.
 
+### Build the desktop app locally
+
+```powershell
+# Windows
+.\build.ps1
+```
+```bash
+# macOS / Linux
+./build.sh
+```
+
+Requires Node.js 20+, Python 3.11+, and [uv](https://github.com/astral-sh/uv). Produces an installer in `dist/`.
+
 ---
 
 ## Stack
 
 | Layer | Tech |
 |-------|------|
+| Desktop | Electron 36, electron-builder |
 | Frontend | Next.js 14, TypeScript, Tailwind CSS, shadcn/ui |
 | Editor | TipTap with Codex highlight extension |
 | State | Zustand + TanStack Query v5 |
@@ -44,7 +70,7 @@ Then open **http://localhost:3000** in your browser.
 - Debounced **autosave** (1 s) + periodic interval save; localStorage fallback when the backend is unreachable
 - Word count in the status bar; per-scene counts persist to the database
 - **Export** to `.md` (Markdown), `.tex` (LaTeX), or EPUB-style HTML — LaTeX output uses `\chapter` / `\section` structure with proper special-character escaping
-- **Import** a Markdown story file (splits on `##` / `###` / `####` headings into acts / chapters / scenes)
+- **Import** a Markdown story file (splits on `##` / `###` / `####` headings into acts / chapters / scenes) — always imports into the current project
 - Read view per chapter and per act — flowing prose layout with story typography (indent, justify, no-indent after headings)
 
 ### 🕓 Version History
@@ -83,10 +109,12 @@ Then open **http://localhost:3000** in your browser.
 
 ### 🕸️ Relations Graph
 - SVG radial mindmap — one entry at the centre, linked entries on the inner ring, second-degree connections on the outer ring
+- **Depth slider (1–3)** — control how many relationship hops are shown at once
 - Defaults to centring on the first **main character** (★) in the codex; falls back to the first character, then the first node
 - Click any **node in the SVG** to re-centre the graph on that entry
+- **Right-click a node** for a context menu: *Edit Codex Entry* or *Remove Relation*
 - Click any **entry in the left panel** to open its full edit dialog inline — edit name, description, relations, inventory, and more without leaving the page
-- Colour-coded by entry type; relation type shown on the connecting line
+- Nodes rendered with a **spheric gradient** style, colour-coded by entry type; relation type shown on the connecting line with larger labels
 - Solid lines = Codex relations; dashed lines = inline `[rel:]` tags from scene text
 
 ### 🕐 Time System
@@ -162,6 +190,8 @@ Open `/settings` or click **Settings** in the sidebar to:
 | Import a Markdown draft | Sidebar → **Import** — headings `##` / `###` / `####` map to acts / chapters / scenes |
 | Mark a protagonist | Codex entry → **Main character** checkbox (character type only) |
 | Edit an entry from the Relations graph | Click its name in the left panel |
+| Edit or remove a relation | Right-click a node in the Relations graph |
+| Adjust graph depth | Relations graph → depth slider (1–3 hops) |
 | Share a world bible across projects | New Project → **Share codex** → pick the source project |
 | Track what a character owns | Codex entry (character) → **Inventory** section |
 | Browse scene snapshots | Scene editor → **History** button (top toolbar) |
@@ -178,6 +208,9 @@ Open `/settings` or click **Settings** in the sidebar to:
 
 ```
 loreweaver/
+├── electron/             # Electron main process + splash screen
+│   └── assets/           # App icons (ico, icns, png)
+├── scripts/              # electron-builder hooks (afterPack)
 ├── api/                  # FastAPI backend
 │   ├── routers/          # projects, acts, chapters, scenes, codex, time, graph, ai, settings, export, imports
 │   ├── models.py         # SQLAlchemy ORM models
