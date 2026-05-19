@@ -43,13 +43,31 @@ function waitForPort(port, timeoutMs = 60_000) {
   });
 }
 
+// ── Config ────────────────────────────────────────────────────────────────────
+// config.json always lives in the fixed OS userData folder.
+// dataDir (where the DB and uploads live) can point elsewhere (e.g. Dropbox).
+
+const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
+
+function loadConfig() {
+  try { return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")); } catch { return {}; }
+}
+
+function saveConfig(patch) {
+  const updated = { ...loadConfig(), ...patch };
+  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(updated, null, 2));
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
-const isProd = app.isPackaged;
-const dataDir = app.getPath("userData");
+const isProd   = app.isPackaged;
+const config   = loadConfig();
+const dataDir  = config.dataDir || app.getPath("userData");
 
 // ── Logging ───────────────────────────────────────────────────────────────────
-const logDir  = path.join(dataDir, "logs");
+// Logs always go to the fixed OS userData folder so they're easy to find.
+const logDir  = path.join(app.getPath("userData"), "logs");
 const logFile = path.join(logDir, "startup.log");
 
 function log(msg) {
@@ -89,15 +107,21 @@ function createSplash() {
 }
 
 function createMain(webPort) {
+  const savedWin = config.window || {};
+
   mainWin = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    width:  savedWin.width  || 1400,
+    height: savedWin.height || 900,
+    // x/y undefined on first run → Electron centres the window automatically
+    ...(savedWin.x != null && savedWin.y != null ? { x: savedWin.x, y: savedWin.y } : {}),
     minWidth: 900,
     minHeight: 600,
     show: false,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: { nodeIntegration: false, contextIsolation: true },
   });
+
+  if (savedWin.maximized) mainWin.maximize();
 
   mainWin.loadURL(`http://127.0.0.1:${webPort}`);
 
@@ -107,8 +131,17 @@ function createMain(webPort) {
     mainWin.focus();
   });
 
+  // Persist window state before the window closes or hides.
+  const persistBounds = () => {
+    if (!mainWin || mainWin.isMinimized()) return;
+    saveConfig({
+      window: { ...mainWin.getNormalBounds(), maximized: mainWin.isMaximized() },
+    });
+  };
+
   // On macOS, closing the window hides it instead of quitting.
   mainWin.on("close", (e) => {
+    persistBounds();
     if (process.platform === "darwin" && !app.isQuiting) {
       e.preventDefault();
       mainWin.hide();
