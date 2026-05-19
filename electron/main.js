@@ -1,7 +1,7 @@
 "use strict";
 
 const {
-  app, BrowserWindow, Tray, Menu, nativeImage, shell, dialog,
+  app, BrowserWindow, Tray, Menu, nativeImage, shell, dialog, ipcMain,
 } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
@@ -118,7 +118,11 @@ function createMain(webPort) {
     minHeight: 600,
     show: false,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    webPreferences: { nodeIntegration: false, contextIsolation: true },
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, "preload.js"),
+    },
   });
 
   if (savedWin.maximized) mainWin.maximize();
@@ -248,6 +252,38 @@ function killServers() {
 
 app.on("before-quit", killServers);
 process.on("exit", killServers);
+
+// ── IPC — data directory ──────────────────────────────────────────────────────
+
+ipcMain.handle("lw:get-data-dir", () => {
+  const cfg = loadConfig();
+  return { path: cfg.dataDir || app.getPath("userData"), isCustom: !!cfg.dataDir };
+});
+
+ipcMain.handle("lw:pick-data-dir", async () => {
+  const result = await dialog.showOpenDialog(mainWin, {
+    properties: ["openDirectory", "createDirectory"],
+    title: "Choose LoreWeaver Data Folder",
+    buttonLabel: "Select Folder",
+  });
+  return result.canceled ? null : result.filePaths[0];
+});
+
+ipcMain.handle("lw:set-data-dir", (_, newPath) => {
+  if (newPath) {
+    saveConfig({ dataDir: newPath });
+  } else {
+    const cfg = loadConfig();
+    delete cfg.dataDir;
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+  }
+  return true;
+});
+
+ipcMain.on("lw:restart", () => {
+  app.relaunch();
+  app.exit(0);
+});
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 

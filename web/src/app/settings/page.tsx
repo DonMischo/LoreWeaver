@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Key, Cpu, Globe, Loader2, RefreshCw, Sparkles, Plus, Trash2, RotateCcw, HelpCircle, Palette } from "lucide-react";
+import { ArrowLeft, Key, Cpu, Globe, Loader2, RefreshCw, Sparkles, Plus, Trash2, RotateCcw, HelpCircle, Palette, FolderOpen, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,6 +47,20 @@ export default function SettingsPage() {
   const [enabledModels, setEnabledModels]       = useState<string[]>([]);
   const [modelSearch, setModelSearch]     = useState("");
   const [saved, setSaved]                 = useState(false);
+
+  // ── Data directory (Electron only) ────────────────────────────────────────
+  const isElectron = typeof window !== "undefined" && !!(window as any).electron;
+  const [dataDir, setDataDir]           = useState<string>("");
+  const [dataDirIsCustom, setDataDirIsCustom] = useState(false);
+  const [dataDirPending, setDataDirPending]   = useState(false);
+
+  useEffect(() => {
+    if (!isElectron) return;
+    (window as any).electron.getDataDir().then((res: { path: string; isCustom: boolean }) => {
+      setDataDir(res.path);
+      setDataDirIsCustom(res.isCustom);
+    });
+  }, [isElectron]);
 
   const [selectedPromptId, setSelectedPromptId] = useState<number | null>(null);
   const [editName, setEditName]                 = useState("");
@@ -463,6 +477,73 @@ export default function SettingsPage() {
               })}
             </div>
           </div>
+        </section>
+
+        <div className="border-t border-border" />
+
+        {/* Data Directory */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 mb-4">
+            <FolderOpen className="h-4 w-4 text-primary" />
+            <h2 className="text-base font-semibold">Data Folder</h2>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Where LoreWeaver stores its database and uploads. Point this to a
+            Dropbox, Google Drive, or OneDrive folder to sync across devices.
+            The app will restart when you apply a change.
+          </p>
+          {!isElectron ? (
+            <p className="text-xs text-muted-foreground italic">
+              Only configurable in the desktop app.
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 truncate rounded border border-border bg-secondary/40 px-3 py-1.5 text-xs text-muted-foreground">
+                  {dataDir || "—"}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    const picked = await (window as any).electron.pickDataDir();
+                    if (picked) setDataDir(picked);
+                  }}
+                >
+                  <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
+                  Browse
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  disabled={dataDirPending}
+                  onClick={async () => {
+                    setDataDirPending(true);
+                    await (window as any).electron.setDataDir(dataDir);
+                    (window as any).electron.restart();
+                  }}
+                >
+                  <RotateCw className="h-3.5 w-3.5 mr-1.5" />
+                  Apply &amp; Restart
+                </Button>
+                {dataDirIsCustom && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={dataDirPending}
+                    onClick={async () => {
+                      setDataDirPending(true);
+                      await (window as any).electron.setDataDir(null);
+                      (window as any).electron.restart();
+                    }}
+                  >
+                    Reset to default
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
         </section>
 
         <div className="border-t border-border" />
