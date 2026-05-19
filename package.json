@@ -1,6 +1,6 @@
 {
   "name": "loreweaver",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "LoreWeaver Personal Studio — local-first novel writing app",
   "author": "LoreWeaver",
   "main": "electron/main.js",
@@ -13,7 +13,9 @@
     "dist:linux": "electron-builder --linux"
   },
   "pnpm": {
-    "ignoredBuiltDependencies": ["sharp"]
+    "ignoredBuiltDependencies": [
+      "sharp"
+    ]
   },
   "dependencies": {
     "electron-updater": "^6.3.4"
