@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, Plus, Trash2, Calendar, BookCopy, Sparkles, TriangleAlert, Link2, ImageIcon } from "lucide-react";
-import { imagesApi } from "@/lib/api";
+import { BookOpen, Plus, Trash2, Calendar, BookCopy, Sparkles, TriangleAlert, Link2, ImageIcon, Settings, Upload, FileText, BookMarked } from "lucide-react";
+import { imagesApi, importApi } from "@/lib/api";
 import { useUploadProjectCover, useDeleteProjectCover } from "@/store/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,6 +124,63 @@ export default function Dashboard() {
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Import dialog state
+  type ImportMode = "existing" | "new";
+  const [importOpen, setImportOpen] = useState(false);
+  const [importMode, setImportMode] = useState<ImportMode>("existing");
+  const [importTargetId, setImportTargetId] = useState<number | "">("");
+  const [importStoryFile, setImportStoryFile] = useState<File | null>(null);
+  const [importCodexFile, setImportCodexFile] = useState<File | null>(null);
+  const [importNewTitle, setImportNewTitle] = useState("");
+  const [importNewDesc, setImportNewDesc] = useState("");
+  const [importPending, setImportPending] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const handleOpenImport = () => {
+    setImportMode("existing");
+    setImportTargetId("");
+    setImportStoryFile(null);
+    setImportCodexFile(null);
+    setImportNewTitle("");
+    setImportNewDesc("");
+    setImportResult(null);
+    setImportError(null);
+    setImportOpen(true);
+  };
+
+  const handleImport = async () => {
+    setImportPending(true);
+    setImportResult(null);
+    setImportError(null);
+    try {
+      let projectId: number;
+      if (importMode === "new") {
+        if (!importNewTitle.trim()) return;
+        const project = await createProject.mutateAsync({ title: importNewTitle.trim(), description: importNewDesc.trim() || undefined });
+        projectId = project.id;
+      } else {
+        if (importTargetId === "") return;
+        projectId = importTargetId;
+      }
+      const messages: string[] = [];
+      if (importStoryFile) {
+        const r = await importApi.story(projectId, importStoryFile);
+        messages.push(r.message);
+      }
+      if (importCodexFile) {
+        const r = await importApi.codex(projectId, importCodexFile);
+        messages.push(r.message);
+      }
+      setImportResult(messages.join(" "));
+      if (importMode === "new") router.push(`/projects/${projectId}`);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message.replace(/^\d+: /, "") : "Import failed.");
+    } finally {
+      setImportPending(false);
+    }
+  };
+
   const otherProjects = projects;
 
   const handleOpen = () => {
@@ -159,10 +216,23 @@ export default function Dashboard() {
           <BookOpen className="h-6 w-6 text-primary" />
           <h1 className="text-xl font-bold">LoreWeaver</h1>
         </div>
-        <Button onClick={handleOpen} size="sm">
-          <Plus className="h-4 w-4" />
-          {t("dash_new_project")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleOpenImport}>
+            <Upload className="h-4 w-4" />
+            Import
+          </Button>
+          <Button onClick={handleOpen} size="sm">
+            <Plus className="h-4 w-4" />
+            {t("dash_new_project")}
+          </Button>
+          <Link
+            href="/settings"
+            className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-input bg-background text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
+            title="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
+        </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
@@ -209,6 +279,156 @@ export default function Dashboard() {
           Powered by TanStack
         </a>
       </footer>
+
+      {/* ── Import dialog ── */}
+      <Dialog open={importOpen} onOpenChange={(open) => { if (!open) setImportOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-4 w-4" />
+              Import Project
+            </DialogTitle>
+            <DialogDescription>
+              Import a story or codex from Markdown files.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+
+            {/* Mode selector */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setImportMode("existing")}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 rounded-lg border p-3 text-xs transition-colors",
+                  importMode === "existing"
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground",
+                  projects.length === 0 && "opacity-40 cursor-not-allowed"
+                )}
+                disabled={projects.length === 0}
+              >
+                <BookMarked className="h-5 w-5" />
+                <span className="font-medium">Add to existing project</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportMode("new")}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 rounded-lg border p-3 text-xs transition-colors",
+                  importMode === "new"
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground"
+                )}
+              >
+                <Plus className="h-5 w-5" />
+                <span className="font-medium">Create new project</span>
+              </button>
+            </div>
+
+            {/* Existing project selector */}
+            {importMode === "existing" && (
+              <div className="space-y-1.5">
+                <Label>Target Project</Label>
+                <select
+                  value={importTargetId}
+                  onChange={(e) => setImportTargetId(e.target.value === "" ? "" : Number(e.target.value))}
+                  className={cn(
+                    "w-full h-9 rounded-md border border-input bg-background px-3 text-sm",
+                    "focus:outline-none focus:ring-1 focus:ring-ring"
+                  )}
+                >
+                  <option value="">Select a project…</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.title}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* New project fields */}
+            {importMode === "new" && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Project Title</Label>
+                  <Input
+                    placeholder="My Novel"
+                    value={importNewTitle}
+                    onChange={(e) => setImportNewTitle(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>
+                    Description <span className="text-muted-foreground font-normal">(optional)</span>
+                  </Label>
+                  <Textarea
+                    placeholder="A brief synopsis…"
+                    value={importNewDesc}
+                    onChange={(e) => setImportNewDesc(e.target.value)}
+                    rows={2}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* File pickers */}
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5" />
+                  Story file <span className="text-muted-foreground font-normal">(Markdown — optional)</span>
+                </Label>
+                <input
+                  type="file"
+                  accept=".md,.txt"
+                  onChange={(e) => setImportStoryFile(e.target.files?.[0] ?? null)}
+                  className="text-sm text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-border file:text-xs file:bg-background file:text-foreground hover:file:bg-secondary/50 file:cursor-pointer"
+                />
+                <p className="text-[11px] text-muted-foreground">Use ## Acts, ### Chapters, #### Scenes.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5">
+                  <BookMarked className="h-3.5 w-3.5" />
+                  Codex file <span className="text-muted-foreground font-normal">(Markdown — optional)</span>
+                </Label>
+                <input
+                  type="file"
+                  accept=".md,.txt"
+                  onChange={(e) => setImportCodexFile(e.target.files?.[0] ?? null)}
+                  className="text-sm text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-border file:text-xs file:bg-background file:text-foreground hover:file:bg-secondary/50 file:cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {importResult && (
+              <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-foreground">
+                {importResult}
+              </div>
+            )}
+            {importError && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {importError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button>
+              <Button
+                onClick={handleImport}
+                disabled={
+                  importPending ||
+                  (!importStoryFile && !importCodexFile) ||
+                  (importMode === "existing" && importTargetId === "") ||
+                  (importMode === "new" && !importNewTitle.trim())
+                }
+              >
+                {importPending ? "Importing…" : "Import"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── New project dialog ── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
