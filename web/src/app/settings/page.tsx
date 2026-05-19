@@ -116,6 +116,7 @@ export default function SettingsPage() {
       default_model: defaultModel,
       default_chat_model: defaultChatModel || null,
       enabled_models: enabledModels,
+      theme,
     };
     // Only include the key when the user has explicitly typed in the field.
     // Guards against browser autofill silently populating a password field on load.
@@ -431,16 +432,16 @@ export default function SettingsPage() {
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">Choose a color theme for the interface.</p>
             <div className="grid grid-cols-4 gap-2">
-              {THEMES.map((t) => {
-                const preview = THEME_PREVIEW[t];
+              {THEMES.map((themeId) => {
+                const preview = THEME_PREVIEW[themeId];
                 return (
                   <button
-                    key={t}
+                    key={themeId}
                     type="button"
-                    onClick={() => setTheme(t)}
+                    onClick={() => setTheme(themeId)}
                     className={cn(
                       "flex flex-col items-center gap-1.5 rounded-lg border p-2.5 text-xs transition-colors",
-                      theme === t
+                      theme === themeId
                         ? "border-primary ring-1 ring-primary"
                         : "border-border hover:border-border/70"
                     )}
@@ -454,8 +455,8 @@ export default function SettingsPage() {
                         style={{ background: preview.accent, opacity: 0.85 }}
                       />
                     </div>
-                    <span className={cn("font-medium", theme === t && "text-primary")}>
-                      {THEME_LABELS[t]}
+                    <span className={cn("font-medium", theme === themeId && "text-primary")}>
+                      {THEME_LABELS[themeId]}
                     </span>
                   </button>
                 );
