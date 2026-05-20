@@ -1,4 +1,4 @@
-# LoreWeaver Personal Writer Studio
+# LoreWeaver Personal Novel Writer Studio
 
 A local-first novel writing studio — write, world-build, and track your story's timeline and relationships, all running on your own machine. No subscriptions, no cloud required.
 
