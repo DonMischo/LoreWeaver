@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { X, Search, Plus, User, MapPin, Package, Scroll, Tag, Coins } from "lucide-react";
+import { X, Search, Plus, User, MapPin, Package, Scroll, Tag, Coins, BarChart2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CodexEntry, EntryType } from "@/types";
 import { useEntryRelations, useInventorySummary } from "@/store/queries";
+import { EntryMentionsDialog } from "./EntryMentionsDialog";
 
 const TYPE_ICONS: Record<EntryType, React.ElementType> = {
   character: User,
@@ -38,6 +39,7 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd, sc
   const [typeFilter, setTypeFilter] = useState<EntryType | "all" | "scene">(
     sceneContent ? "scene" : "all"
   );
+  const [mentionsEntry, setMentionsEntry] = useState<CodexEntry | null>(null);
 
   // Strip HTML and compute which entry IDs are mentioned in the current scene
   const relevantIds = useMemo(() => {
@@ -68,6 +70,7 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd, sc
   const { data: inventory } = useInventorySummary(isCharacter ? (selected?.id ?? 0) : 0);
 
   return (
+    <>
     <div className="flex flex-col w-72 border-l border-border bg-card h-full">
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
         <span className="text-sm font-medium">Codex</span>
@@ -91,7 +94,16 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd, sc
           </button>
           <div className="flex items-center gap-2 mb-3">
             <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: selected.color }} />
-            <h3 className="font-semibold">{selected.name}</h3>
+            <h3 className="font-semibold flex-1">{selected.name}</h3>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+              title="Mentions across scenes"
+              onClick={() => setMentionsEntry(selected)}
+            >
+              <BarChart2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider">{TYPE_LABELS[selected.entry_type as EntryType]}</p>
 
@@ -269,15 +281,23 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd, sc
             {filtered.map((entry) => {
               const Icon = TYPE_ICONS[entry.entry_type as EntryType] || Tag;
               return (
-                <button
-                  key={entry.id}
-                  onClick={() => onSelect(entry.id)}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-secondary/50 text-left"
-                >
-                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
-                  <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <span className="text-sm truncate">{entry.name}</span>
-                </button>
+                <div key={entry.id} className="group flex items-center hover:bg-secondary/50">
+                  <button
+                    onClick={() => onSelect(entry.id)}
+                    className="flex-1 flex items-center gap-2.5 px-3 py-2 text-left min-w-0"
+                  >
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                    <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-sm truncate">{entry.name}</span>
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setMentionsEntry(entry); }}
+                    className="pr-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                    title="Mentions across scenes"
+                  >
+                    <BarChart2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               );
             })}
             {filtered.length === 0 && (
@@ -287,5 +307,14 @@ export function CodexSidebar({ entries, selectedId, onSelect, onClose, onAdd, sc
         </>
       )}
     </div>
+
+    {mentionsEntry && (
+      <EntryMentionsDialog
+        entry={mentionsEntry}
+        open={!!mentionsEntry}
+        onClose={() => setMentionsEntry(null)}
+      />
+    )}
+    </>
   );
 }

@@ -387,6 +387,7 @@ export default function ScenePage() {
             onClose={() => setChatPanelOpen(false)}
           />
         )}
+
       </div>
 
       <CodexEntryDialog
