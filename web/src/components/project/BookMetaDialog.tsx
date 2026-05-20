@@ -164,19 +164,17 @@ export function BookMetaDialog({ projectTitle, initial, open, onClose, onSave }:
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <Field label="Author" hint="dc:creator — appears on the title page">
-                <MetaInput
+                <Input
                   value={meta.author ?? ""}
-                  onChange={v => {
-                    // Auto-fill copyright only when the rights field is still empty
-                    setMeta(prev => ({
-                      ...prev,
-                      author: v,
-                      rights: prev.rights
-                        ? prev.rights
-                        : v ? `© ${new Date().getFullYear()} ${v}. All rights reserved.` : "",
-                    }));
+                  onChange={e => set("author", e.target.value)}
+                  onBlur={e => {
+                    const v = e.target.value;
+                    if (v && !meta.rights) {
+                      set("rights", `© ${new Date().getFullYear()} ${v}. All rights reserved.`);
+                    }
                   }}
                   placeholder="Jane Doe"
+                  className="h-8 text-sm"
                 />
               </Field>
             </div>
