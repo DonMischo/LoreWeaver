@@ -7,7 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Chapter, Scene, SceneVersion, MentionStat, CodexEntry
+from models import Chapter, Scene, SceneVersion, MentionStat, CodexEntry, WritingLog
 from schemas import SceneCreate, SceneOut, SceneUpdate, ReorderRequest, SceneVersionOut, SceneVersionDetail, CreateVersionRequest, MentionStatOut
 
 
@@ -33,22 +33,39 @@ def _scan_mentions(content: str, entries: list[CodexEntry]) -> dict[int, int]:
     return counts
 
 
-def _update_mention_stats(scene_id: int, content: str, db: Session) -> None:
-    """Rescan a scene and upsert mention_stats rows. Called after every content save."""
-    # Resolve project_id via scene→chapter→act chain
+def _get_project_id(scene_id: int, db: Session) -> int | None:
+    """Resolve scene → project_id via the chapter/act chain."""
     row = db.execute(
         text("""
-            SELECT a.project_id
-            FROM scenes s
+            SELECT a.project_id FROM scenes s
             JOIN chapters c ON c.id = s.chapter_id
             JOIN acts a     ON a.id = c.act_id
             WHERE s.id = :sid
         """),
         {"sid": scene_id},
     ).first()
-    if not row:
+    return row[0] if row else None
+
+
+def _log_writing(project_id: int, delta: int, db: Session) -> None:
+    """Add word delta to today's writing_log entry (insert-or-update)."""
+    if delta <= 0:
         return
-    project_id = row[0]
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    row = db.query(WritingLog).filter_by(project_id=project_id, date=today).first()
+    if row:
+        row.words_added += delta
+    else:
+        db.add(WritingLog(project_id=project_id, date=today, words_added=delta))
+    db.flush()
+
+
+def _update_mention_stats(scene_id: int, content: str, db: Session) -> None:
+    """Rescan a scene and upsert mention_stats rows. Called after every content save."""
+    # Resolve project_id via scene→chapter→act chain
+    project_id = _get_project_id(scene_id, db)
+    if project_id is None:
+        return
 
     entries = db.query(CodexEntry).filter(CodexEntry.project_id == project_id).all()
     counts = _scan_mentions(content, entries)
@@ -113,7 +130,11 @@ def update_scene(scene_id: int, body: SceneUpdate, db: Session = Depends(get_db)
     if "content" in data:
         if not scene.title and not body.title:
             scene.title = _auto_title(data["content"])
-        data["word_count"] = _count_words(data["content"])
+        new_wc = _count_words(data["content"])
+        wc_delta = new_wc - (scene.word_count or 0)
+        data["word_count"] = new_wc
+    else:
+        wc_delta = 0
     # Handle scene_time separately — None means "clear it", so bypass exclude_none
     if "scene_time" in body.model_fields_set:
         st = body.scene_time
@@ -121,6 +142,9 @@ def update_scene(scene_id: int, body: SceneUpdate, db: Session = Depends(get_db)
     for k, v in data.items():
         setattr(scene, k, v)
     if "content" in data:
+        project_id = _get_project_id(scene_id, db)
+        if project_id:
+            _log_writing(project_id, wc_delta, db)
         _update_mention_stats(scene_id, data["content"], db)
     db.commit()
     db.refresh(scene)
@@ -305,3 +329,54 @@ def rescan_project_mentions(project_id: int, db: Session = Depends(get_db)):
         _update_mention_stats(scene_id, content or "", db)
     db.commit()
     return {"scanned": len(rows)}
+
+
+# ── Writing log endpoints ─────────────────────────────────────────────────────
+
+@router.get("/api/projects/{project_id}/writing-log")
+def get_project_writing_log(project_id: int, db: Session = Depends(get_db)):
+    """Return all writing-log entries for a project (for per-project heatmap)."""
+    rows = db.query(WritingLog).filter_by(project_id=project_id).order_by(WritingLog.date).all()
+    return [{"date": r.date, "words": r.words_added} for r in rows]
+
+
+@router.get("/api/writing-log")
+def get_global_writing_log(db: Session = Depends(get_db)):
+    """Return daily word totals aggregated across all projects."""
+    rows = db.execute(
+        text("SELECT date, SUM(words_added) FROM writing_log GROUP BY date ORDER BY date")
+    ).fetchall()
+    return [{"date": r[0], "words": r[1]} for r in rows]
+
+
+# ── Ghost text scanner ────────────────────────────────────────────────────────
+
+@router.get("/api/projects/{project_id}/ghost-texts")
+def get_project_ghost_texts(project_id: int, db: Session = Depends(get_db)):
+    """Return scenes that contain ghost-text placeholders (data-ghost spans)."""
+    rows = db.execute(
+        text("""
+            SELECT s.id, COALESCE(s.title, 'Untitled Scene') AS scene_title,
+                   s.content, a.title AS act_title, c.title AS chapter_title
+            FROM scenes s
+            JOIN chapters c ON c.id = s.chapter_id
+            JOIN acts     a ON a.id = c.act_id
+            WHERE a.project_id = :pid AND s.content LIKE '%data-ghost%'
+        """),
+        {"pid": project_id},
+    ).fetchall()
+
+    import re as _re
+    ghost_pat = _re.compile(r'<span[^>]+data-ghost[^>]*>([^<]*)</span>')
+    result = []
+    for scene_id, scene_title, content, act_title, chapter_title in rows:
+        texts = ghost_pat.findall(content or "")
+        if texts:
+            result.append({
+                "scene_id": scene_id,
+                "scene_title": scene_title,
+                "act_title": act_title,
+                "chapter_title": chapter_title,
+                "ghost_texts": texts,
+            })
+    return result

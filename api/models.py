@@ -3,7 +3,7 @@ from typing import Optional
 import json
 
 from sqlalchemy import (
-    Integer, String, Text, DateTime, ForeignKey, Enum, JSON, event
+    Integer, String, Text, DateTime, ForeignKey, Enum, JSON, event, UniqueConstraint
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 import enum
@@ -257,6 +257,18 @@ class MentionStat(Base):
     scene_id: Mapped[int] = mapped_column(Integer, ForeignKey("scenes.id", ondelete="CASCADE"))
     codex_id: Mapped[int] = mapped_column(Integer, ForeignKey("codex_entries.id", ondelete="CASCADE"))
     count:    Mapped[int] = mapped_column(Integer, default=0)
+
+
+class WritingLog(Base):
+    """Daily writing activity. One row per (project, date); used for streaks + heatmap."""
+    __tablename__ = "writing_log"
+
+    id:          Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_id:  Mapped[int] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    date:        Mapped[str] = mapped_column(String(10), nullable=False)  # YYYY-MM-DD
+    words_added: Mapped[int] = mapped_column(Integer, default=0)
+
+    __table_args__ = (UniqueConstraint("project_id", "date"),)
 
 
 class SceneVersion(Base):

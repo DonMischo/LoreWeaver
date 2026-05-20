@@ -111,6 +111,20 @@ def migrate_mention_stats():
         """))
 
 
+def migrate_writing_log():
+    """Create the writing_log table if it does not yet exist."""
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS writing_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                date        TEXT    NOT NULL,
+                words_added INTEGER NOT NULL DEFAULT 0,
+                UNIQUE (project_id, date)
+            )
+        """))
+
+
 def migrate_entry_groups():
     """Convert entry_group plain-string values to JSON arrays (one-time migration)."""
     with engine.connect() as conn:
