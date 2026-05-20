@@ -6,6 +6,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Extension } from "@tiptap/core";
 import Suggestion, { exitSuggestion } from "@tiptap/suggestion";
+import type { EditorView } from "@tiptap/pm/view";
 import type { CodexEntry } from "@/types";
 import { createCodexHighlightPlugin, patchEntryAliases, type PatchedEntry, PLUGIN_KEY } from "./CodexHighlightExtension";
 import { TagDecorationExtension } from "./TagDecorationExtension";
@@ -36,6 +37,25 @@ interface SlashState {
   command: (item: CommandItem) => void;
 }
 
+// ── Typewriter scroll helper ───────────────────────────────────────────────────
+// Called either from handleScrollToSelection (typing) or selectionUpdate (click/arrow).
+// Returns true if a scroll was applied.
+function applyTypewriterScroll(
+  view: EditorView,
+  container: HTMLDivElement,
+  offsetPct: number,
+): void {
+  try {
+    const { from } = view.state.selection;
+    const coords  = view.coordsAtPos(from);
+    const rect    = container.getBoundingClientRect();
+    const target  = rect.height * (offsetPct / 100);
+    const current = coords.top - rect.top;
+    const diff    = current - target;
+    if (Math.abs(diff) > 2) container.scrollTop += diff;
+  } catch { /* view not mounted */ }
+}
+
 export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId, onOpenChat }: Props) {
   const showLineNumbers  = useUIStore((s) => s.showParagraphNumbers);
   const typewriterMode   = useUIStore((s) => s.typewriterMode);
@@ -47,10 +67,9 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
   entriesRef.current = patchEntryAliases(codexEntries);
   onClickRef.current = onCodexEntryClick;
 
-  // Scroll container ref — used by typewriter mode
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Always-current refs for typewriter — avoids re-registering event handlers on every change.
+  // Always-current refs so closures inside useEditor (created once) see live values.
   const typewriterModeRef   = useRef(typewriterMode);
   const typewriterOffsetRef = useRef(typewriterOffset);
   typewriterModeRef.current   = typewriterMode;
@@ -116,7 +135,6 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
               editor.chain().focus().deleteRange(range).run();
               onOpenChatRef.current?.();
             } else if (props.id === "placeholder") {
-              // Insert ghost-text then immediately exit the mark so typing continues normally.
               editor.chain()
                 .focus()
                 .deleteRange(range)
@@ -155,6 +173,15 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
     },
     editorProps: {
       attributes: { class: "story-prose prose-invert max-w-2xl mx-auto w-full focus:outline-none min-h-full px-8 py-6" },
+      // Intercept ProseMirror's own "scroll cursor into view" so we own the
+      // scroll entirely — no race condition with the browser/PM auto-scroll.
+      handleScrollToSelection: (view) => {
+        if (!typewriterModeRef.current) return false; // let PM scroll normally
+        const container = scrollRef.current;
+        if (!container) return false;
+        requestAnimationFrame(() => applyTypewriterScroll(view, container, typewriterOffsetRef.current));
+        return true; // consumed — PM will not scroll
+      },
     },
   });
 
@@ -183,34 +210,36 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
     editor.view.dispatch(editor.state.tr.setMeta(FOCUS_DIM_KEY, focusMode));
   }, [editor, focusMode]);
 
-  // Typewriter scroll: keep cursor at typewriterOffset% from top.
-  // Handlers are registered once; current values are read from refs to avoid
-  // re-registering (and re-triggering) on every mode/offset change.
+  // Typewriter: also snap on cursor movement (click / arrow keys).
+  // Typing is already handled by handleScrollToSelection above.
   useEffect(() => {
     if (!editor) return;
-    const doScroll = () => {
-      if (!typewriterModeRef.current) return;
+    const onSelectionUpdate = () => {
+      if (!typewriterModeRef.current || !scrollRef.current) return;
       requestAnimationFrame(() => {
-        const container = scrollRef.current;
-        if (!container || !editor.view) return;
-        try {
-          const { from } = editor.state.selection;
-          const coords = editor.view.coordsAtPos(from);
-          const rect   = container.getBoundingClientRect();
-          const target  = rect.height * (typewriterOffsetRef.current / 100);
-          const current = coords.top - rect.top;
-          const diff    = current - target;
-          if (Math.abs(diff) > 2) container.scrollTop += diff;
-        } catch { /* editor not ready */ }
+        if (scrollRef.current) {
+          applyTypewriterScroll(editor.view, scrollRef.current, typewriterOffsetRef.current);
+        }
       });
     };
-    editor.on("selectionUpdate", doScroll);
-    editor.on("update", doScroll);
-    return () => {
-      editor.off("selectionUpdate", doScroll);
-      editor.off("update", doScroll);
-    };
-  }, [editor]); // intentionally only depends on editor
+    editor.on("selectionUpdate", onSelectionUpdate);
+    return () => editor.off("selectionUpdate", onSelectionUpdate);
+  }, [editor]);
+
+  // Typewriter: update ProseMirror top/bottom padding so the cursor can reach
+  // the target position even on the very first or very last line.
+  useEffect(() => {
+    if (!editor) return;
+    const pm = editor.view.dom as HTMLElement;
+    const h  = scrollRef.current?.clientHeight ?? 0;
+    if (typewriterMode && h > 0) {
+      pm.style.paddingTop    = `${(typewriterOffset / 100) * h}px`;
+      pm.style.paddingBottom = `${((100 - typewriterOffset) / 100) * h}px`;
+    } else {
+      pm.style.paddingTop    = "";
+      pm.style.paddingBottom = "";
+    }
+  }, [editor, typewriterMode, typewriterOffset]);
 
   const characters = codexEntries.filter((e) => e.entry_type === "character");
   const items = codexEntries.filter((e) => e.entry_type === "item");
