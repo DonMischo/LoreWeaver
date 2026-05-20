@@ -272,12 +272,14 @@ class FragmentCreate(BaseModel):
     tab: str = "snippets"
     title: Optional[str] = None
     content: Optional[str] = ""
+    category: Optional[str] = None
     order_index: int = 0
 
 class FragmentUpdate(BaseModel):
     tab: Optional[str] = None
     title: Optional[str] = None
     content: Optional[str] = None
+    category: Optional[str] = None
     order_index: Optional[int] = None
 
 class FragmentOut(BaseModel):
@@ -286,6 +288,7 @@ class FragmentOut(BaseModel):
     tab: str
     title: Optional[str]
     content: Optional[str]
+    category: Optional[str]
     order_index: int
     created_at: datetime
     updated_at: datetime

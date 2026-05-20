@@ -59,6 +59,8 @@ function useFragmentEdit(fragment: FragmentItem, projectId: number) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [localTitle, setLocalTitle] = useState(fragment.title ?? "");
   const [localContent, setLocalContent] = useState(fragment.content ?? "");
+  const [localCategory, setLocalCategory] = useState(fragment.category ?? "");
+  const [editingCategory, setEditingCategory] = useState(false);
   const [showMove, setShowMove] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -77,6 +79,14 @@ function useFragmentEdit(fragment: FragmentItem, projectId: number) {
     }
   };
 
+  const commitCategory = () => {
+    setEditingCategory(false);
+    const next = localCategory.trim() || null;
+    if (next !== fragment.category) {
+      updateFragment.mutate({ id: fragment.id, data: { category: next } });
+    }
+  };
+
   const moveToTab = (tab: string) => {
     updateFragment.mutate({ id: fragment.id, data: { tab } });
     setShowMove(false);
@@ -90,8 +100,10 @@ function useFragmentEdit(fragment: FragmentItem, projectId: number) {
     editingTitle, setEditingTitle,
     localTitle, setLocalTitle,
     localContent, setLocalContent,
+    localCategory, setLocalCategory,
+    editingCategory, setEditingCategory,
     showMove, setShowMove,
-    scheduleContentSave, commitTitle, moveToTab,
+    scheduleContentSave, commitTitle, commitCategory, moveToTab,
     wordCount,
     deleteFragment,
   };
@@ -112,8 +124,10 @@ function FragmentCard({
     editingTitle, setEditingTitle,
     localTitle, setLocalTitle,
     localContent, setLocalContent,
+    localCategory, setLocalCategory,
+    editingCategory, setEditingCategory,
     showMove, setShowMove,
-    scheduleContentSave, commitTitle, moveToTab,
+    scheduleContentSave, commitTitle, commitCategory, moveToTab,
     wordCount, deleteFragment,
   } = useFragmentEdit(fragment, projectId);
 
@@ -209,7 +223,34 @@ function FragmentCard({
 
       {/* Footer */}
       <div className="flex items-center justify-between text-[10px] text-muted-foreground/50">
-        <span>{new Date(fragment.updated_at).toLocaleDateString()}</span>
+        <div className="flex items-center gap-1.5">
+          <span>{new Date(fragment.updated_at).toLocaleDateString()}</span>
+          {/* Category badge — click to edit */}
+          {editingCategory ? (
+            <input
+              value={localCategory}
+              onChange={e => setLocalCategory(e.target.value)}
+              onBlur={commitCategory}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") commitCategory(); }}
+              placeholder="category…"
+              className="text-[10px] bg-secondary/60 border border-border rounded px-1.5 py-0.5 focus:outline-none w-24"
+              autoFocus
+            />
+          ) : (
+            <button
+              onClick={() => setEditingCategory(true)}
+              className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded transition-colors",
+                localCategory
+                  ? "bg-primary/15 text-primary hover:bg-primary/25"
+                  : "text-muted-foreground/30 hover:text-muted-foreground hover:bg-secondary/60"
+              )}
+              title="Set category"
+            >
+              {localCategory || "+ label"}
+            </button>
+          )}
+        </div>
         <span>{wordCount} words</span>
       </div>
 
@@ -239,8 +280,10 @@ function FragmentRow({
     editingTitle, setEditingTitle,
     localTitle, setLocalTitle,
     localContent, setLocalContent,
+    localCategory, setLocalCategory,
+    editingCategory, setEditingCategory,
     showMove, setShowMove,
-    scheduleContentSave, commitTitle, moveToTab,
+    scheduleContentSave, commitTitle, commitCategory, moveToTab,
     wordCount, deleteFragment,
   } = useFragmentEdit(fragment, projectId);
 
@@ -318,6 +361,37 @@ function FragmentRow({
           <span className="text-[10px] text-muted-foreground/50 hidden md:block">
             {wordCount} words
           </span>
+          {/* Category badge */}
+          {editingCategory ? (
+            <input
+              value={localCategory}
+              onChange={e => setLocalCategory(e.target.value)}
+              onBlur={commitCategory}
+              onKeyDown={e => {
+                e.stopPropagation();
+                if (e.key === "Enter" || e.key === "Escape") commitCategory();
+              }}
+              onClick={e => e.stopPropagation()}
+              placeholder="category…"
+              className="text-[10px] bg-secondary/60 border border-border rounded px-1.5 py-0.5 focus:outline-none w-20"
+              autoFocus
+            />
+          ) : localCategory ? (
+            <button
+              onClick={e => { e.stopPropagation(); setEditingCategory(true); }}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary hover:bg-primary/25 transition-colors hidden sm:block"
+            >
+              {localCategory}
+            </button>
+          ) : (
+            <button
+              onClick={e => { e.stopPropagation(); setEditingCategory(true); }}
+              className="text-[10px] px-1.5 py-0.5 rounded text-muted-foreground/30 hover:text-muted-foreground hover:bg-secondary/60 transition-colors opacity-0 group-hover:opacity-100 hidden sm:block"
+              title="Set category"
+            >
+              + label
+            </button>
+          )}
           <span className="text-[10px] text-muted-foreground/50 hidden lg:block">
             {new Date(fragment.updated_at).toLocaleDateString()}
           </span>

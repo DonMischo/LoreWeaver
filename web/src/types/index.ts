@@ -173,6 +173,7 @@ export interface Fragment {
   tab: string;
   title: string | null;
   content: string | null;
+  category: string | null;
   order_index: number;
   created_at: string;
   updated_at: string;

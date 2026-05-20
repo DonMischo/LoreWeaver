@@ -198,6 +198,7 @@ class Fragment(Base):
     tab: Mapped[str] = mapped_column(String(100), default="snippets")
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="")
+    category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)

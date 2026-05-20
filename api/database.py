@@ -82,6 +82,7 @@ def migrate_new_columns():
         ("codex_entries", "image_path",              "TEXT"),
         ("user_settings", "enabled_models",          "TEXT DEFAULT '[]'"),
         ("user_settings", "default_chat_model",      "TEXT"),
+        ("fragments",     "category",                "TEXT"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in new_columns:
