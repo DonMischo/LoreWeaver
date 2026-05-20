@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronDown, ChevronRight, Plus, Trash2, BookOpen,
-  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors, Info, ListChecks,
+  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors, Info, ListChecks, MoreHorizontal,
 } from "lucide-react";
 import {
   DndContext, closestCenter, DragEndEvent,
@@ -367,6 +367,7 @@ export function ProjectSidebar({ projectId }: Props) {
   const [timeConfigOpen, setTimeConfigOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [metaOpen, setMetaOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const timeConfig = timeConfigData ?? DEFAULT_TIME_CONFIG;
 
   const sensors = useSensors(
@@ -426,78 +427,109 @@ export function ProjectSidebar({ projectId }: Props) {
         )}
       </div>
 
-      <div className="border-t border-border p-2 space-y-0.5">
-        <Link
-          href={`/projects/${projectId}/codex`}
-          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
-        >
-          <Book className="h-4 w-4" />
-          {t("nav_codex")}
-        </Link>
-        <Link
-          href={`/projects/${projectId}/plot`}
-          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
-        >
-          <ListChecks className="h-4 w-4" />
-          Plot Beats
-        </Link>
-        <Link
-          href={`/projects/${projectId}/relations`}
-          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
-        >
-          <Network className="h-4 w-4" />
-          {t("nav_relations")}
-        </Link>
-        <Link
-          href={`/projects/${projectId}/timeline`}
-          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
-        >
-          <Calendar className="h-4 w-4" />
-          {t("nav_timeline")}
-        </Link>
-        <Link
-          href={`/projects/${projectId}/fragments`}
-          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
-        >
-          <Scissors className="h-4 w-4" />
-          {t("nav_fragments")}
-        </Link>
-        <button
-          onClick={() => setTimeConfigOpen(true)}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
-        >
-          <Clock className="h-4 w-4" />
-          {t("nav_time_system")}
-        </button>
-        <button
-          onClick={() => setMetaOpen(true)}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
-        >
-          <Info className="h-4 w-4" />
-          {t("nav_project_info")}
-        </button>
+      <div className="border-t border-border p-2">
+        <div className="flex items-center gap-1">
+          <Link
+            href={`/projects/${projectId}/codex`}
+            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+          >
+            <Book className="h-4 w-4" />
+            {t("nav_codex")}
+          </Link>
+          <Link
+            href={`/projects/${projectId}/relations`}
+            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+          >
+            <Network className="h-4 w-4" />
+            {t("nav_relations")}
+          </Link>
 
-        <div className="border-t border-border/50 my-1" />
+          {/* Sandwich menu */}
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              className={cn(
+                "flex items-center justify-center h-8 w-8 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors",
+                menuOpen && "bg-secondary/50 text-foreground"
+              )}
+              title="More"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
 
-        <ImportButton projectId={projectId} mode="story" />
+            {menuOpen && (
+              <div className="absolute bottom-full right-0 mb-1 z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[190px]">
 
-        <button
-          onClick={() => setExportOpen(true)}
-          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
-        >
-          <Download className="h-4 w-4" />
-          {t("nav_export")}
-        </button>
+                {/* Pages */}
+                <Link
+                  href={`/projects/${projectId}/plot`}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+                >
+                  <ListChecks className="h-3.5 w-3.5" />
+                  Plot Beats
+                </Link>
+                <Link
+                  href={`/projects/${projectId}/timeline`}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                  {t("nav_timeline")}
+                </Link>
+                <Link
+                  href={`/projects/${projectId}/fragments`}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+                >
+                  <Scissors className="h-3.5 w-3.5" />
+                  {t("nav_fragments")}
+                </Link>
 
-        <div className="border-t border-border/50 my-1" />
+                <div className="border-t border-border/50 my-1" />
 
-        <Link
-          href="/settings"
-          className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
-        >
-          <Settings className="h-4 w-4" />
-          {t("nav_settings")}
-        </Link>
+                {/* Project config */}
+                <button
+                  onClick={() => { setTimeConfigOpen(true); setMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+                >
+                  <Clock className="h-3.5 w-3.5" />
+                  {t("nav_time_system")}
+                </button>
+                <button
+                  onClick={() => { setMetaOpen(true); setMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                  {t("nav_project_info")}
+                </button>
+
+                <div className="border-t border-border/50 my-1" />
+
+                {/* Import / Export */}
+                <ImportButton projectId={projectId} mode="story" />
+                <button
+                  onClick={() => { setExportOpen(true); setMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {t("nav_export")}
+                </button>
+
+                <div className="border-t border-border/50 my-1" />
+
+                <Link
+                  href="/settings"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                  {t("nav_settings")}
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <TimeConfigDialog
