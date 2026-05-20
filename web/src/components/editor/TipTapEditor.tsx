@@ -183,7 +183,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
       onFlagsChangeRef.current?.(getSensitivityFlags(editor));
     },
     editorProps: {
-      attributes: { class: "story-prose prose-invert max-w-2xl mx-auto w-full focus:outline-none min-h-full px-8 py-6" },
+      attributes: { class: "story-prose prose-invert max-w-2xl mx-auto w-full focus:outline-none min-h-full px-8 py-6", spellcheck: "true" },
       // Intercept ProseMirror's own "scroll cursor into view" so we own the
       // scroll entirely — no race condition with the browser/PM auto-scroll.
       handleScrollToSelection: (view) => {

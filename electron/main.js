@@ -129,6 +129,7 @@ function createMain(webPort) {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
+      spellcheck: true,
     },
   });
 
@@ -291,6 +292,24 @@ ipcMain.handle("lw:set-data-dir", (_, newPath) => {
 ipcMain.on("lw:restart", () => {
   app.relaunch();
   app.exit(0);
+});
+
+ipcMain.on("lw:set-spellcheck-language", (_, lang) => {
+  if (!mainWin) return;
+  // Normalise: Electron expects BCP-47 tags like "en-US" or "de-DE".
+  // Single-subtag codes (e.g. "en", "de") are expanded to their default locale.
+  const TAG_MAP = {
+    en: "en-US", de: "de-DE", fr: "fr-FR", es: "es-ES",
+    it: "it-IT", pt: "pt-PT", nl: "nl-NL", pl: "pl-PL",
+    ru: "ru-RU", ja: "ja-JP", zh: "zh-CN", ko: "ko-KR",
+    ar: "ar-SA", sv: "sv-SE", da: "da-DK", no: "nb-NO",
+  };
+  const resolved = TAG_MAP[lang] ?? lang;
+  try {
+    mainWin.webContents.session.setSpellCheckerLanguages([resolved]);
+  } catch (e) {
+    // If the locale isn't available, fall back silently
+  }
 });
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
