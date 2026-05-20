@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, Plus, Trash2, Calendar, BookCopy, Sparkles, TriangleAlert, Link2, ImageIcon, Settings, Upload, FileText, BookMarked, FolderOpen, Loader2, Download } from "lucide-react";
+import { BookOpen, Plus, Trash2, Calendar, BookCopy, Sparkles, TriangleAlert, Link2, ImageIcon, Settings, Upload, FileText, BookMarked, FolderOpen, Loader2, Download, Flame, BarChart2 } from "lucide-react";
 import { imagesApi, importApi } from "@/lib/api";
-import { useUploadProjectCover, useDeleteProjectCover } from "@/store/queries";
+import { useUploadProjectCover, useDeleteProjectCover, useGlobalWritingLog } from "@/store/queries";
+import type { WritingLogEntry } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -106,12 +107,72 @@ function ProjectCard({
 
 interface DeleteTarget { id: number; title: string }
 
+// ── Streak helpers ────────────────────────────────────────────────────────────
+
+function computeStreak(log: WritingLogEntry[]): number {
+  const active = new Set(log.filter((e) => e.words > 0).map((e) => e.date));
+  let streak = 0;
+  const d = new Date();
+  while (true) {
+    const key = d.toISOString().split("T")[0];
+    if (!active.has(key)) break;
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+function MiniHeatmap({ log }: { log: WritingLogEntry[] }) {
+  const WEEKS = 12;
+  const map = new Map(log.map((e) => [e.date, e.words]));
+  const max = Math.max(...log.map((e) => e.words), 1);
+
+  // Build cells for the last WEEKS*7 days, aligned to start-of-week (Mon)
+  const today = new Date();
+  const cells: { date: string; words: number }[] = [];
+  for (let i = WEEKS * 7 - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = d.toISOString().split("T")[0];
+    cells.push({ date: key, words: map.get(key) ?? 0 });
+  }
+
+  function intensity(words: number): string {
+    if (!words) return "bg-muted/40";
+    const pct = words / max;
+    if (pct < 0.25) return "bg-primary/25";
+    if (pct < 0.5)  return "bg-primary/50";
+    if (pct < 0.75) return "bg-primary/70";
+    return "bg-primary";
+  }
+
+  // 7 rows (days), WEEKS columns
+  return (
+    <div className="grid gap-px" style={{ gridTemplateColumns: `repeat(${WEEKS}, 1fr)`, gridTemplateRows: "repeat(7, 1fr)" }}>
+      {Array.from({ length: WEEKS }, (_, w) =>
+        Array.from({ length: 7 }, (_, d) => {
+          const cell = cells[w * 7 + d];
+          return (
+            <div
+              key={`${w}-${d}`}
+              className={`w-2.5 h-2.5 rounded-[2px] ${intensity(cell?.words ?? 0)}`}
+              title={cell ? `${cell.date}: ${cell.words} words` : ""}
+            />
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const { data: projects = [], isLoading } = useProjects();
   const createProject = useCreateProject();
   const deleteProject = useDeleteProject();
   const { t } = useLanguage();
+  const { data: writingLog = [] } = useGlobalWritingLog();
+  const streak = computeStreak(writingLog);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -246,6 +307,21 @@ export default function Dashboard() {
             <Plus className="h-4 w-4" />
             {t("dash_new_project")}
           </Button>
+          {/* Streak widget */}
+          {streak > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card">
+              <Flame className="h-4 w-4 text-orange-400" />
+              <span className="text-sm font-medium tabular-nums">{streak}</span>
+              <span className="text-xs text-muted-foreground">day{streak !== 1 ? "s" : ""}</span>
+            </div>
+          )}
+          <Link
+            href="/stats"
+            className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-input bg-background text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
+            title="Writing stats"
+          >
+            <BarChart2 className="h-4 w-4" />
+          </Link>
           <Link
             href="/settings"
             className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-input bg-background text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
@@ -285,6 +361,26 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+
+      {/* Mini heatmap strip */}
+      {writingLog.length > 0 && (
+        <div className="max-w-4xl mx-auto px-6 pb-6">
+          <div className="flex items-center gap-4 bg-card border border-border rounded-lg px-4 py-3">
+            <div className="shrink-0">
+              <p className="text-xs font-medium mb-0.5">Last 12 weeks</p>
+              <p className="text-[10px] text-muted-foreground">
+                {writingLog.reduce((s, e) => s + e.words, 0).toLocaleString()} words total
+              </p>
+            </div>
+            <div className="flex-1 flex justify-end">
+              <MiniHeatmap log={writingLog} />
+            </div>
+            <Link href="/stats" className="text-xs text-primary hover:underline shrink-0">
+              Full stats →
+            </Link>
+          </div>
+        </div>
+      )}
 
       <footer className="text-center pb-4 pt-2">
         <a
