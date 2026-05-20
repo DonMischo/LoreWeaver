@@ -171,3 +171,35 @@ def delete_relation(relation_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Relation not found")
     db.delete(rel)
     db.commit()
+
+
+@router.get("/api/codex/{entry_id}/scene-mentions")
+def get_entry_scene_mentions(entry_id: int, db: Session = Depends(get_db)):
+    """Return all scenes that mention this codex entry, ordered by story position."""
+    from sqlalchemy import text
+    rows = db.execute(
+        text("""
+            SELECT ms.scene_id,
+                   COALESCE(s.title, 'Untitled Scene') AS scene_title,
+                   a.title  AS act_title,
+                   c.title  AS chapter_title,
+                   ms.count
+            FROM mention_stats ms
+            JOIN scenes   s ON s.id = ms.scene_id
+            JOIN chapters c ON c.id = s.chapter_id
+            JOIN acts     a ON a.id = c.act_id
+            WHERE ms.codex_id = :eid AND ms.count > 0
+            ORDER BY a.order_index, c.order_index, s.order_index
+        """),
+        {"eid": entry_id},
+    ).fetchall()
+    return [
+        {
+            "scene_id":     r[0],
+            "scene_title":  r[1],
+            "act_title":    r[2],
+            "chapter_title": r[3],
+            "count":        r[4],
+        }
+        for r in rows
+    ]

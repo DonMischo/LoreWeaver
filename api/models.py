@@ -249,6 +249,16 @@ class AIPrompt(Base):
     word_count: Mapped[int] = mapped_column(Integer, default=400)
 
 
+class MentionStat(Base):
+    """Cached count of how many times a codex entry is mentioned in a scene."""
+    __tablename__ = "mention_stats"
+
+    id:       Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scene_id: Mapped[int] = mapped_column(Integer, ForeignKey("scenes.id", ondelete="CASCADE"))
+    codex_id: Mapped[int] = mapped_column(Integer, ForeignKey("codex_entries.id", ondelete="CASCADE"))
+    count:    Mapped[int] = mapped_column(Integer, default=0)
+
+
 class SceneVersion(Base):
     __tablename__ = "scene_versions"
 

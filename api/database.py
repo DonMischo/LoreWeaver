@@ -4,13 +4,17 @@ from sqlalchemy.orm import sessionmaker
 
 DATABASE_URL = "sqlite:///./loreweaver.db"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False, "timeout": 30},
+)
 
 
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_conn, _):
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=30000")
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
 
@@ -91,6 +95,20 @@ def migrate_new_columns():
                 conn.commit()
             except Exception:
                 pass  # column already exists
+
+
+def migrate_mention_stats():
+    """Create the mention_stats table if it does not yet exist."""
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS mention_stats (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                scene_id   INTEGER NOT NULL REFERENCES scenes(id) ON DELETE CASCADE,
+                codex_id   INTEGER NOT NULL REFERENCES codex_entries(id) ON DELETE CASCADE,
+                count      INTEGER NOT NULL DEFAULT 0,
+                UNIQUE (scene_id, codex_id)
+            )
+        """))
 
 
 def migrate_entry_groups():

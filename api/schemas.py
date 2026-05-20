@@ -442,6 +442,15 @@ class CreateVersionRequest(BaseModel):
     content: str
 
 
+# ── Mention stats ─────────────────────────────────────────────────────────────
+
+class MentionStatOut(BaseModel):
+    codex_id: int
+    scene_id: Optional[int]   # None for project-level aggregates
+    count: int
+    model_config = {"from_attributes": True}
+
+
 # ── Time Config ───────────────────────────────────────────────────────────────
 
 class TimeUnit(BaseModel):
