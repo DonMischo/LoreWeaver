@@ -10,11 +10,12 @@ interface Props {
   projectId: number;
   mode: "story" | "codex";
   className?: string;
+  buttonClassName?: string;
 }
 
 type Status = "idle" | "loading" | "success" | "error";
 
-export function ImportButton({ projectId, mode, className }: Props) {
+export function ImportButton({ projectId, mode, className, buttonClassName }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
@@ -93,7 +94,8 @@ export function ImportButton({ projectId, mode, className }: Props) {
           "flex items-center gap-2 px-2 py-1.5 text-sm rounded w-full",
           "hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors",
           "disabled:opacity-50 disabled:cursor-not-allowed",
-          status === "error" && "text-destructive"
+          status === "error" && "text-destructive",
+          buttonClassName
         )}
       >
         <Icon className={cn("h-4 w-4 shrink-0", iconClass)} />

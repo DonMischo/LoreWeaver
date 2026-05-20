@@ -507,7 +507,7 @@ export function ProjectSidebar({ projectId }: Props) {
                 <div className="border-t border-border/50 my-1" />
 
                 {/* Import / Export */}
-                <ImportButton projectId={projectId} mode="story" />
+                <ImportButton projectId={projectId} mode="story" buttonClassName="text-xs px-3 py-2 [&>svg]:h-3.5 [&>svg]:w-3.5" />
                 <button
                   onClick={() => { setExportOpen(true); setMenuOpen(false); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
