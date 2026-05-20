@@ -145,8 +145,8 @@ export default function PlotPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border px-6 py-4 flex items-center gap-3">
+    <div className="h-full flex flex-col bg-background overflow-hidden">
+      <header className="border-b border-border px-6 py-4 flex items-center gap-3 shrink-0">
         <Link
           href={`/projects/${projectId}`}
           className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
@@ -156,7 +156,8 @@ export default function PlotPage() {
         <h1 className="text-xl font-bold">Plot Beats</h1>
       </header>
 
-      <main className="max-w-2xl mx-auto px-6 py-8 space-y-6">
+      <main className="flex-1 overflow-y-auto">
+      <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
 
         {/* Template picker */}
         <div className="flex flex-wrap gap-2">
@@ -235,6 +236,7 @@ export default function PlotPage() {
           </div>
         )}
 
+      </div>
       </main>
     </div>
   );
