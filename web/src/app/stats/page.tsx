@@ -89,7 +89,7 @@ function FullHeatmap({ log }: { log: WritingLogEntry[] }) {
         <div className="grid gap-px" style={{ gridTemplateColumns: `repeat(${WEEKS}, 12px)` }}>
           {months.map(({ label, col }) => (
             <span
-              key={label}
+              key={`${label}-${col}`}
               className="text-[10px] text-muted-foreground"
               style={{ gridColumn: col }}
             >

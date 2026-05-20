@@ -23,6 +23,25 @@ export const GhostTextMark = Mark.create({
       }),
     ];
   },
+
+  // Space at the end of a ghost text run exits the mark.
+  addKeyboardShortcuts() {
+    return {
+      Space: ({ editor }) => {
+        if (!editor.isActive("ghostText")) return false;
+        const { $from, empty } = editor.state.selection;
+        if (!empty) return false;
+        // Allow spaces in the middle of the text; only exit at the boundary.
+        const nodeAfter = $from.nodeAfter;
+        if (nodeAfter && editor.schema.marks.ghostText.isInSet(nodeAfter.marks)) {
+          return false; // cursor is mid-run, let Space type normally
+        }
+        // At end of ghost text: insert a plain space outside the mark.
+        editor.chain().unsetMark("ghostText").insertContent(" ").run();
+        return true;
+      },
+    };
+  },
 });
 
 // ── Utility: collect all ghost texts from the editor doc ─────────────────────

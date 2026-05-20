@@ -50,6 +50,12 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
   // Scroll container ref — used by typewriter mode
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Always-current refs for typewriter — avoids re-registering event handlers on every change.
+  const typewriterModeRef   = useRef(typewriterMode);
+  const typewriterOffsetRef = useRef(typewriterOffset);
+  typewriterModeRef.current   = typewriterMode;
+  typewriterOffsetRef.current = typewriterOffset;
+
   // Slash menu state
   const [slashMenu, setSlashMenu] = useState<SlashState | null>(null);
   const setSlashMenuRef = useRef<(s: SlashState | null) => void>(() => {});
@@ -110,11 +116,12 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
               editor.chain().focus().deleteRange(range).run();
               onOpenChatRef.current?.();
             } else if (props.id === "placeholder") {
-              // Insert ghost-text HTML; parsed by GhostTextMark's parseHTML rule
+              // Insert ghost-text then immediately exit the mark so typing continues normally.
               editor.chain()
                 .focus()
                 .deleteRange(range)
                 .insertContent('<span data-ghost="" class="ghost-text">[placeholder]</span>')
+                .unsetMark("ghostText")
                 .run();
             } else if (props.content) {
               editor.chain().focus().deleteRange(range).insertContent(props.content()).run();
@@ -176,29 +183,34 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
     editor.view.dispatch(editor.state.tr.setMeta(FOCUS_DIM_KEY, focusMode));
   }, [editor, focusMode]);
 
-  // Typewriter scroll: keep cursor at typewriterOffset% from top
+  // Typewriter scroll: keep cursor at typewriterOffset% from top.
+  // Handlers are registered once; current values are read from refs to avoid
+  // re-registering (and re-triggering) on every mode/offset change.
   useEffect(() => {
-    if (!editor || !typewriterMode) return;
-    const scroll = () => {
-      const container = scrollRef.current;
-      if (!container) return;
-      try {
-        const { from } = editor.state.selection;
-        const coords = editor.view.coordsAtPos(from);
-        const rect = container.getBoundingClientRect();
-        const target = rect.height * (typewriterOffset / 100);
-        const current = coords.top - rect.top;
-        const diff = current - target;
-        if (Math.abs(diff) > 2) container.scrollTop += diff;
-      } catch { /* editor not mounted yet */ }
+    if (!editor) return;
+    const doScroll = () => {
+      if (!typewriterModeRef.current) return;
+      requestAnimationFrame(() => {
+        const container = scrollRef.current;
+        if (!container || !editor.view) return;
+        try {
+          const { from } = editor.state.selection;
+          const coords = editor.view.coordsAtPos(from);
+          const rect   = container.getBoundingClientRect();
+          const target  = rect.height * (typewriterOffsetRef.current / 100);
+          const current = coords.top - rect.top;
+          const diff    = current - target;
+          if (Math.abs(diff) > 2) container.scrollTop += diff;
+        } catch { /* editor not ready */ }
+      });
     };
-    editor.on("selectionUpdate", scroll);
-    editor.on("update", scroll);
+    editor.on("selectionUpdate", doScroll);
+    editor.on("update", doScroll);
     return () => {
-      editor.off("selectionUpdate", scroll);
-      editor.off("update", scroll);
+      editor.off("selectionUpdate", doScroll);
+      editor.off("update", doScroll);
     };
-  }, [editor, typewriterMode, typewriterOffset]);
+  }, [editor]); // intentionally only depends on editor
 
   const characters = codexEntries.filter((e) => e.entry_type === "character");
   const items = codexEntries.filter((e) => e.entry_type === "item");
