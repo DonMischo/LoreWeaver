@@ -10,6 +10,8 @@ import type { CodexEntry } from "@/types";
 import { createCodexHighlightPlugin, patchEntryAliases, type PatchedEntry, PLUGIN_KEY } from "./CodexHighlightExtension";
 import { TagDecorationExtension } from "./TagDecorationExtension";
 import { LineNumberExtension } from "./LineNumberExtension";
+import { GhostTextMark } from "./GhostTextExtension";
+import { FocusDimExtension, FOCUS_DIM_KEY } from "./FocusDimExtension";
 import { NoteNode } from "./nodes/NoteNode";
 import { CurrencyNode } from "./nodes/CurrencyNode";
 import { ItemNode } from "./nodes/ItemNode";
@@ -35,26 +37,28 @@ interface SlashState {
 }
 
 export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId, onOpenChat }: Props) {
-  const showLineNumbers = useUIStore((s) => s.showParagraphNumbers);
+  const showLineNumbers  = useUIStore((s) => s.showParagraphNumbers);
+  const typewriterMode   = useUIStore((s) => s.typewriterMode);
+  const typewriterOffset = useUIStore((s) => s.typewriterOffset);
+  const focusMode        = useUIStore((s) => s.focusMode);
+
   const entriesRef = useRef<PatchedEntry[]>(patchEntryAliases(codexEntries));
   const onClickRef = useRef(onCodexEntryClick);
   entriesRef.current = patchEntryAliases(codexEntries);
   onClickRef.current = onCodexEntryClick;
 
+  // Scroll container ref — used by typewriter mode
+  const scrollRef = useRef<HTMLDivElement>(null);
+
   // Slash menu state
   const [slashMenu, setSlashMenu] = useState<SlashState | null>(null);
-
-  // Bridge refs — accessible from inside the ProseMirror plugin (created once),
-  // but always pointing to the latest React state/callbacks via .current.
   const setSlashMenuRef = useRef<(s: SlashState | null) => void>(() => {});
   setSlashMenuRef.current = setSlashMenu;
-
   const menuHandleRef = useRef<SlashMenuHandle | null>(null);
-
   const onOpenChatRef = useRef(onOpenChat);
   onOpenChatRef.current = onOpenChat;
 
-  // --- Extensions (created once by useEditor) ---
+  // ── Extensions ──────────────────────────────────────────────────────────────
 
   const CodexHighlight = Extension.create({
     name: "codexHighlight",
@@ -68,8 +72,6 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
     },
   });
 
-  // Slash commands via @tiptap/suggestion — reliable ProseMirror-level detection
-  // that survives node insertions, cursor movements, and React re-renders.
   const SlashCommandExtension = Extension.create({
     name: "slashCommands",
     addProseMirrorPlugins() {
@@ -78,7 +80,6 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
           editor: this.editor,
           char: "/",
           allowSpaces: false,
-          // null = any character (or start-of-block) may precede the trigger
           allowedPrefixes: null,
           startOfLine: false,
           items({ query }) {
@@ -93,39 +94,30 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
           },
           render: () => ({
             onStart(props) {
-              setSlashMenuRef.current({
-                items: props.items,
-                rect: props.clientRect?.() ?? null,
-                command: props.command,
-              });
+              setSlashMenuRef.current({ items: props.items, rect: props.clientRect?.() ?? null, command: props.command });
             },
             onUpdate(props) {
-              setSlashMenuRef.current({
-                items: props.items,
-                rect: props.clientRect?.() ?? null,
-                command: props.command,
-              });
+              setSlashMenuRef.current({ items: props.items, rect: props.clientRect?.() ?? null, command: props.command });
             },
-            onExit() {
-              setSlashMenuRef.current(null);
-            },
+            onExit() { setSlashMenuRef.current(null); },
             onKeyDown({ event, view }) {
-              if (event.key === "Escape") {
-                // exitSuggestion dispatches a metadata-only transaction that
-                // signals the plugin to call onExit and clear its state.
-                exitSuggestion(view);
-                return true;
-              }
+              if (event.key === "Escape") { exitSuggestion(view); return true; }
               return menuHandleRef.current?.handleKey(event) ?? false;
             },
           }),
           command({ editor, range, props }) {
-            if (props.content) {
-              // Single atomic transaction: delete the "/" + query, then insert the node.
-              editor.chain().focus().deleteRange(range).insertContent(props.content()).run();
-            } else if (props.id === "chat") {
+            if (props.id === "chat") {
               editor.chain().focus().deleteRange(range).run();
               onOpenChatRef.current?.();
+            } else if (props.id === "placeholder") {
+              // Insert ghost-text HTML; parsed by GhostTextMark's parseHTML rule
+              editor.chain()
+                .focus()
+                .deleteRange(range)
+                .insertContent('<span data-ghost="" class="ghost-text">[placeholder]</span>')
+                .run();
+            } else if (props.content) {
+              editor.chain().focus().deleteRange(range).insertContent(props.content()).run();
             }
           },
         }),
@@ -147,6 +139,8 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
       KiNode,
       SlashCommandExtension,
       LineNumberExtension,
+      GhostTextMark,
+      FocusDimExtension,
     ],
     content,
     onUpdate({ editor }) {
@@ -176,18 +170,53 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
     editor.view.dispatch(tr.setMeta(PLUGIN_KEY, true));
   }, [codexEntries, editor]);
 
+  // Toggle focus-dim plugin when focusMode changes
+  useEffect(() => {
+    if (!editor) return;
+    editor.view.dispatch(editor.state.tr.setMeta(FOCUS_DIM_KEY, focusMode));
+  }, [editor, focusMode]);
+
+  // Typewriter scroll: keep cursor at typewriterOffset% from top
+  useEffect(() => {
+    if (!editor || !typewriterMode) return;
+    const scroll = () => {
+      const container = scrollRef.current;
+      if (!container) return;
+      try {
+        const { from } = editor.state.selection;
+        const coords = editor.view.coordsAtPos(from);
+        const rect = container.getBoundingClientRect();
+        const target = rect.height * (typewriterOffset / 100);
+        const current = coords.top - rect.top;
+        const diff = current - target;
+        if (Math.abs(diff) > 2) container.scrollTop += diff;
+      } catch { /* editor not mounted yet */ }
+    };
+    editor.on("selectionUpdate", scroll);
+    editor.on("update", scroll);
+    return () => {
+      editor.off("selectionUpdate", scroll);
+      editor.off("update", scroll);
+    };
+  }, [editor, typewriterMode, typewriterOffset]);
+
   const characters = codexEntries.filter((e) => e.entry_type === "character");
   const items = codexEntries.filter((e) => e.entry_type === "item");
 
-  // Dismiss the slash menu and tell the Suggestion plugin to exit cleanly.
   const closeSlash = useCallback(() => {
     setSlashMenuRef.current(null);
     if (editor) exitSuggestion(editor.view);
   }, [editor]);
 
+  const wrapperClass = [
+    "h-full overflow-y-auto relative",
+    showLineNumbers ? "has-line-numbers" : "",
+    focusMode ? "focus-mode" : "",
+  ].filter(Boolean).join(" ");
+
   return (
     <EditorContext.Provider value={{ characters, items, allEntries: codexEntries, sceneId, projectId: codexEntries[0]?.project_id ?? 0 }}>
-      <div className={`h-full overflow-y-auto relative${showLineNumbers ? " has-line-numbers" : ""}`}>
+      <div ref={scrollRef} className={wrapperClass}>
         <EditorContent editor={editor} className="h-full" />
         {slashMenu && (
           <SlashCommandMenu

@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
-import { StickyNote, Coins, Package, ImageIcon, Sparkles, MessageSquare } from "lucide-react";
+import { StickyNote, Coins, Package, ImageIcon, Sparkles, MessageSquare, Braces } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface CommandItem {
@@ -67,6 +67,15 @@ export const COMMANDS: CommandItem[] = [
     icon: MessageSquare,
     color: "#06b6d4",
     keywords: ["chat", "discuss", "brainstorm", "ideas", "talk"],
+    content: null,
+  },
+  {
+    id: "placeholder",
+    label: "Placeholder",
+    description: "Insert a [ghost text] placeholder to fill in later",
+    icon: Braces,
+    color: "#f59e0b",
+    keywords: ["placeholder", "ghost", "todo", "fill", "bracket"],
     content: null,
   },
 ];
