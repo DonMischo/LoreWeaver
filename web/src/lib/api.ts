@@ -297,7 +297,7 @@ export const fragmentsApi = {
     req<Fragment[]>(`/projects/${projectId}/fragments${tab ? `?tab=${encodeURIComponent(tab)}` : ""}`),
   create: (projectId: number, data: { tab: string; title?: string; content?: string }) =>
     req<Fragment>(`/projects/${projectId}/fragments`, { method: "POST", body: JSON.stringify(data) }),
-  update: (id: number, data: Partial<Pick<Fragment, "tab" | "title" | "content" | "order_index">>) =>
+  update: (id: number, data: Partial<Pick<Fragment, "tab" | "title" | "content" | "category" | "order_index">>) =>
     req<Fragment>(`/fragments/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: number) => req<void>(`/fragments/${id}`, { method: "DELETE" }),
   import: (projectId: number, files: File[]): Promise<{ message: string; created: number; skipped: number }> => {
@@ -346,12 +346,28 @@ export const promptsApi = {
 
 export const dataDirApi = {
   get: () => req<{ current: string; configured: string | null }>("/settings/data-dir"),
-  pick: () => req<{ path: string | null }>("/settings/data-dir/pick"),
+  pick: async (): Promise<{ path: string | null }> => {
+    // Start the native dialog in a background thread (returns immediately).
+    const { session_id } = await req<{ session_id: string }>(
+      "/settings/data-dir/pick", { method: "POST" }
+    );
+    // Poll until the user closes the dialog (up to 5 minutes).
+    for (let i = 0; i < 300; i++) {
+      await new Promise<void>(r => setTimeout(r, 1000));
+      const res = await req<{ status: string; path?: string | null; error?: string }>(
+        `/settings/data-dir/pick/${session_id}`
+      );
+      if (res.status === "done")  return { path: res.path ?? null };
+      if (res.status === "error") throw new Error(res.error ?? "Folder picker failed");
+    }
+    throw new Error("Timed out waiting for folder selection");
+  },
   set: (p: string | null, migrate = false) =>
     req<{ current: string; configured: string | null }>("/settings/data-dir", {
       method: "POST",
       body: JSON.stringify({ path: p, migrate }),
     }),
+  restart: () => req<{ status: string }>("/settings/restart", { method: "POST" }),
 };
 
 // ── Scene Versions ────────────────────────────────────────────────────────────

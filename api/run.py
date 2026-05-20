@@ -31,6 +31,11 @@ def _read_config() -> dict:
         return {}
 
 if __name__ == "__main__":
+    # ── Stash absolute script path BEFORE any chdir ───────────────────────────
+    # The restart endpoint uses this so os.execv can find run.py regardless of
+    # where the working directory ends up after os.chdir(data_dir).
+    os.environ.setdefault("LW_RUN_SCRIPT", os.path.abspath(__file__))
+
     # ── Resolve data directory ────────────────────────────────────────────────
     data_dir = os.environ.get("LW_DATA_DIR") or _read_config().get("dataDir")
 

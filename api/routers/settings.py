@@ -1,6 +1,12 @@
 import json
 import os
 import shutil
+import sqlite3
+import sys
+import subprocess
+import threading
+import time
+import uuid
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -78,20 +84,151 @@ def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
     return _settings_out(s)
 
 
-@router.get("/data-dir/pick")
-def pick_data_dir():
-    """Open a native folder-picker dialog on the server machine (dev / local use)."""
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-        chosen = filedialog.askdirectory(title="Choose LoreWeaver Data Folder")
-        root.destroy()
-        return {"path": chosen or None}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not open folder dialog: {exc}")
+# ── Folder-picker: polling pattern ───────────────────────────────────────────
+# The picker dialog blocks until the user makes a selection.  Running it inside
+# an HTTP handler that goes through the Next.js proxy causes ECONNRESET because
+# the proxy times out.  Instead we start the dialog in a background thread and
+# let the client poll for the result.
+
+_pick_sessions: dict[str, dict] = {}
+
+
+def _open_folder_dialog() -> str | None:
+    """Open a native OS folder picker and return the chosen path (or None)."""
+    if sys.platform == "win32":
+        # -STA is required for COM/WinForms GUI.  Drop -NonInteractive — it
+        # blocks GUI dialogs.  FolderBrowserDialog on .NET 6+ uses the modern
+        # Explorer-style picker automatically.
+        ps = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$d = New-Object System.Windows.Forms.FolderBrowserDialog; "
+            "$d.Description = 'Choose LoreWeaver Data Folder'; "
+            "$d.ShowNewFolderButton = $true; "
+            "$d.UseDescriptionForTitle = $true; "
+            "if ($d.ShowDialog() -eq 'OK') { Write-Output $d.SelectedPath }"
+        )
+        r = subprocess.run(
+            ["powershell", "-STA", "-Command", ps],
+            capture_output=True, text=True, timeout=300,
+        )
+        return r.stdout.strip() or None
+
+    elif sys.platform == "darwin":
+        # Native macOS Finder folder picker via AppleScript.
+        r = subprocess.run(
+            ["osascript", "-e",
+             'tell app "Finder" to POSIX path of (choose folder with prompt "Choose LoreWeaver Data Folder")'],
+            capture_output=True, text=True, timeout=300,
+        )
+        return r.stdout.strip().rstrip("/") or None
+
+    else:
+        # Linux: zenity first, tkinter subprocess as fallback.
+        try:
+            r = subprocess.run(
+                ["zenity", "--file-selection", "--directory",
+                 "--title=Choose LoreWeaver Data Folder"],
+                capture_output=True, text=True, timeout=300,
+            )
+            return r.stdout.strip() or None
+        except FileNotFoundError:
+            r = subprocess.run(
+                [sys.executable, "-c",
+                 "import tkinter as tk; from tkinter import filedialog; "
+                 "root=tk.Tk(); root.withdraw(); root.attributes('-topmost',True); "
+                 "p=filedialog.askdirectory(title='Choose LoreWeaver Data Folder'); "
+                 "root.destroy(); print(p or '')"],
+                capture_output=True, text=True, timeout=300,
+            )
+            return r.stdout.strip() or None
+
+
+@router.post("/data-dir/pick")
+def start_pick_data_dir():
+    """Start a native folder-picker in a background thread.
+
+    Returns immediately with a ``session_id``.
+    Poll ``GET /data-dir/pick/{session_id}`` (every ~1 s) until status is
+    ``"done"`` or ``"error"``.
+    """
+    sid = str(uuid.uuid4())
+    _pick_sessions[sid] = {"status": "pending"}
+
+    def _run():
+        try:
+            path = _open_folder_dialog()
+            _pick_sessions[sid] = {"status": "done", "path": path}
+        except Exception as exc:
+            _pick_sessions[sid] = {"status": "error", "error": str(exc)}
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"session_id": sid}
+
+
+@router.get("/data-dir/pick/{session_id}")
+def poll_pick_data_dir(session_id: str):
+    """Poll the result of a folder-picker session.
+
+    Returns ``{"status": "pending"}`` while the dialog is open, or
+    ``{"status": "done", "path": "..."}`` / ``{"status": "error", ...}`` once closed.
+    """
+    result = _pick_sessions.get(session_id)
+    if result is None:
+        raise HTTPException(404, "Pick session not found or already consumed")
+    if result["status"] != "pending":
+        _pick_sessions.pop(session_id, None)   # clean up after reading
+    return result
+
+
+@router.post("/restart")
+def restart_server():
+    """Restart the API process so a new data directory takes effect.
+
+    Production mode (no --dev):
+        os.execv replaces the current process cleanly.
+
+    Dev mode (--dev / uvicorn --reload):
+        uvicorn runs a supervisor (the original run.py) + a server worker
+        (subprocess that handles requests).  We are inside the worker, so
+        os.execv would only replace the worker — the supervisor still owns
+        the port.  Instead we:
+          1. Spawn the replacement run.py (non-blocking).
+          2. Kill the supervisor so it releases the port and doesn't spawn
+             a competing new worker.
+          3. Exit ourselves to free any socket we hold.
+        The replacement process starts importing *before* we release the
+        port, giving it time to be ready to bind the moment the port is free.
+    """
+    def do_restart():
+        time.sleep(0.6)  # let the HTTP response flush first
+        script = os.environ.get("LW_RUN_SCRIPT") or os.path.abspath(sys.argv[0])
+        args   = [sys.executable, script] + sys.argv[1:]
+
+        if "--dev" in sys.argv:
+            # Start the replacement process first so module imports can
+            # overlap with the teardown of the old process tree.
+            subprocess.Popen(args)
+            ppid = os.getppid()
+            if sys.platform == "win32":
+                # Kill only the supervisor (no /T so we don't kill ourselves).
+                subprocess.run(
+                    ["taskkill", "/F", "/PID", str(ppid)],
+                    capture_output=True,
+                )
+            else:
+                import signal as _signal
+                try:
+                    os.kill(ppid, _signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+            # Exit this worker — releases the server socket so the new
+            # process can bind to it.
+            os._exit(0)
+        else:
+            os.execv(sys.executable, args)
+
+    threading.Thread(target=do_restart, daemon=True).start()
+    return {"status": "restarting"}
 
 
 @router.get("/data-dir")
@@ -108,23 +245,33 @@ def set_data_dir(body: DataDirUpdate):
     cfg = _read_lw_config()
 
     if body.path and body.migrate:
-        src = Path(os.getcwd())
-        dst = Path(body.path)
-        dst.mkdir(parents=True, exist_ok=True)
-        (dst / "uploads").mkdir(exist_ok=True)
+        try:
+            src = Path(os.getcwd())
+            dst = Path(body.path)
+            dst.mkdir(parents=True, exist_ok=True)
+            (dst / "uploads").mkdir(exist_ok=True)
 
-        db_src = src / "loreweaver.db"
-        if db_src.exists():
-            shutil.copy2(db_src, dst / "loreweaver.db")
+            # Use SQLite's backup API so we can copy the live, open database safely.
+            db_src = src / "loreweaver.db"
+            if db_src.exists():
+                src_conn = sqlite3.connect(str(db_src))
+                dst_conn = sqlite3.connect(str(dst / "loreweaver.db"))
+                try:
+                    src_conn.backup(dst_conn)
+                finally:
+                    dst_conn.close()
+                    src_conn.close()
 
-        uploads_src = src / "uploads"
-        if uploads_src.exists():
-            for item in uploads_src.iterdir():
-                dest_item = dst / "uploads" / item.name
-                if item.is_dir():
-                    shutil.copytree(item, dest_item, dirs_exist_ok=True)
-                else:
-                    shutil.copy2(item, dest_item)
+            uploads_src = src / "uploads"
+            if uploads_src.exists():
+                for item in uploads_src.iterdir():
+                    dest_item = dst / "uploads" / item.name
+                    if item.is_dir():
+                        shutil.copytree(item, dest_item, dirs_exist_ok=True)
+                    else:
+                        shutil.copy2(item, dest_item)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Migration failed: {exc}")
 
     if body.path:
         cfg["dataDir"] = body.path

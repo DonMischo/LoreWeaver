@@ -53,9 +53,10 @@ export default function SettingsPage() {
   const isElectron = typeof window !== "undefined" && !!(window as any).electron;
   const [dataDir, setDataDir]               = useState<string>("");
   const [dataDirConfigured, setDataDirConfigured] = useState<string | null>(null);
-  const [dataDirPending, setDataDirPending] = useState(false);
-  const [dataDirSaved, setDataDirSaved]     = useState(false);
-  const [dataDirMigrate, setDataDirMigrate] = useState(true);
+  const [dataDirPending, setDataDirPending]   = useState(false);
+  const [dataDirMigrate, setDataDirMigrate]   = useState(true);
+  const [dataDirBrowseErr, setDataDirBrowseErr] = useState<string | null>(null);
+  const [dataDirRestarting, setDataDirRestarting] = useState(false);
 
   useEffect(() => {
     dataDirApi.get().then((res) => {
@@ -152,6 +153,19 @@ export default function SettingsPage() {
 
   // Default model dropdown: available models or just stored enabled ones
   const defaultModelChoices = availableModels.length > 0 ? availableModels : listModels;
+
+  // Full-screen restart overlay — rendered while backend is cycling.
+  // Covering the whole page prevents React Query hooks from firing more
+  // requests into the dead server and flooding the console with ECONNRESET.
+  if (dataDirRestarting) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm font-medium">Restarting…</p>
+        <p className="text-xs text-muted-foreground">Waiting for backend to come back up</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -506,16 +520,24 @@ export default function SettingsPage() {
               size="sm"
               variant="outline"
               onClick={async () => {
-                const picked = isElectron
-                  ? await (window as any).electron.pickDataDir()
-                  : (await dataDirApi.pick()).path;
-                if (picked) setDataDir(picked);
+                setDataDirBrowseErr(null);
+                try {
+                  const picked = isElectron
+                    ? await (window as any).electron.pickDataDir()
+                    : (await dataDirApi.pick()).path;
+                  if (picked) setDataDir(picked);
+                } catch (e) {
+                  setDataDirBrowseErr("Could not open folder picker. Try typing the path manually.");
+                }
               }}
             >
               <FolderOpen className="h-3.5 w-3.5 mr-1.5" />
               Browse
             </Button>
           </div>
+          {dataDirBrowseErr && (
+            <p className="text-xs text-destructive">{dataDirBrowseErr}</p>
+          )}
           {dataDir && dataDir !== dataDirConfigured && (
             <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
               <input
@@ -527,7 +549,7 @@ export default function SettingsPage() {
               Copy existing database &amp; uploads to new folder
             </label>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               size="sm"
               disabled={dataDirPending}
@@ -535,19 +557,37 @@ export default function SettingsPage() {
                 setDataDirPending(true);
                 try {
                   const shouldMigrate = dataDirMigrate && !!dataDir && dataDir !== dataDirConfigured;
-                  const res = await dataDirApi.set(dataDir || null, shouldMigrate);
-                  setDataDirConfigured(res.configured);
-                  setDataDirSaved(true);
-                  setTimeout(() => setDataDirSaved(false), 2000);
-                  if (isElectron) (window as any).electron.restart();
+                  await dataDirApi.set(dataDir || null, shouldMigrate);
+                  if (isElectron) {
+                    (window as any).electron.restart();
+                    return;
+                  }
+                  // Browser mode: restart backend then reload the whole page.
+                  // Show the overlay immediately so no further requests are made
+                  // while the server is cycling (prevents ECONNRESET spam).
+                  setDataDirRestarting(true);
+                  try { await dataDirApi.restart(); } catch { /* process exits — expected */ }
+                  // Give the old process time to die and the new one to bind.
+                  await new Promise(r => setTimeout(r, 2500));
+                  // Poll /api/health — simpler than /settings/data-dir and
+                  // guaranteed to return 200 once the server is fully up.
+                  // Use raw fetch so we break on any 200, not just parsed JSON.
+                  for (let i = 0; i < 60; i++) {
+                    await new Promise(r => setTimeout(r, 1500));
+                    try {
+                      const res = await fetch("/api/health");
+                      if (res.ok) break;
+                    } catch { /* still starting */ }
+                  }
+                  window.location.href = "/";
                 } finally {
                   setDataDirPending(false);
                 }
               }}
             >
-              {isElectron
-                ? <><RotateCw className="h-3.5 w-3.5 mr-1.5" />Apply &amp; Restart</>
-                : dataDirSaved ? "Saved — restart backend to apply" : "Save"}
+              {dataDirPending
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <><RotateCw className="h-3.5 w-3.5 mr-1.5" />Apply &amp; Restart</>}
             </Button>
             {dataDirConfigured && (
               <Button
