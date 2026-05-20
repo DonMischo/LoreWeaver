@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare } from "lucide-react";
+import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare, Focus, Braces, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
@@ -81,8 +81,22 @@ export default function ScenePage() {
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
   const [chatPanelOpen, setChatPanelOpen] = useState(false);
 
-  const codexSidebarOpen = useUIStore((s) => s.codexSidebarOpen);
+  const codexSidebarOpen    = useUIStore((s) => s.codexSidebarOpen);
   const setCodexSidebarOpen = useUIStore((s) => s.setCodexSidebarOpen);
+  const focusMode           = useUIStore((s) => s.focusMode);
+  const setFocusMode        = useUIStore((s) => s.setFocusMode);
+
+  const [ghostPopoverOpen, setGhostPopoverOpen] = useState(false);
+
+  // Count ghost-text placeholders in current content
+  const ghostTexts = useMemo(() => {
+    if (!content) return [] as string[];
+    const dom = typeof document !== "undefined"
+      ? new DOMParser().parseFromString(content, "text/html")
+      : null;
+    if (!dom) return [] as string[];
+    return Array.from(dom.querySelectorAll("[data-ghost]")).map((el) => el.textContent ?? "");
+  }, [content]);
 
   const editorRef = useRef<{ insertContent: (text: string) => void } | null>(null);
   const contentRef = useRef<string>("");
@@ -157,6 +171,15 @@ export default function ScenePage() {
   };
 
   useAutosave({ sceneId: sceneIdNum, content, enabled: !!scene });
+
+  // ESC exits focus mode
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && focusMode) setFocusMode(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focusMode, setFocusMode]);
 
   // 5-minute auto-snapshot
   useEffect(() => {
@@ -249,8 +272,15 @@ export default function ScenePage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-card">
+      {/* ESC hint while in focus mode */}
+      {focusMode && (
+        <div className="fixed top-3 right-4 z-50 text-[11px] text-muted-foreground/40 pointer-events-none select-none">
+          ESC — exit focus
+        </div>
+      )}
+
+      {/* Toolbar — hidden in focus mode */}
+      {!focusMode && <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-card">
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -331,7 +361,52 @@ export default function ScenePage() {
           <MessageSquare className="h-3.5 w-3.5" />
           Chat
         </Button>
-      </div>
+
+        {/* Ghost text tracker */}
+        {ghostTexts.length > 0 && (
+          <div className="relative">
+            <button
+              onClick={() => setGhostPopoverOpen((v) => !v)}
+              className="flex items-center gap-1 text-xs px-2 py-1 rounded text-amber-400 hover:bg-amber-400/10 transition-colors"
+              title="Pending placeholders"
+            >
+              <Braces className="h-3.5 w-3.5" />
+              {ghostTexts.length}
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </button>
+            {ghostPopoverOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg p-2 min-w-[200px] max-w-[280px]">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5 px-1">Placeholders</p>
+                <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                  {ghostTexts.map((text, i) => (
+                    <div key={i} className="text-xs px-2 py-1 rounded text-amber-300/80 bg-amber-400/5 font-mono truncate">
+                      {text}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Focus mode */}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            setFocusMode(true);
+            setCodexSidebarOpen(false);
+            setTimePanelOpen(false);
+            setHistoryPanelOpen(false);
+            setChatPanelOpen(false);
+          }}
+          className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          title="Focus mode (ESC to exit)"
+        >
+          <Focus className="h-3.5 w-3.5" />
+          Focus
+        </Button>
+      </div>}
 
       {/* Main area */}
       <div className="flex flex-1 overflow-hidden">

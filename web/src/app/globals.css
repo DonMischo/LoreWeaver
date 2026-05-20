@@ -283,3 +283,28 @@
   user-select: none;
 }
 
+/* ── Ghost text placeholders ───────────────────────────────────────────────── */
+
+.ghost-text {
+  color: hsl(38 92% 65%);
+  background: hsl(38 92% 65% / 0.08);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-style: italic;
+  cursor: text;
+}
+
+/* ── Focus / zen mode ──────────────────────────────────────────────────────── */
+
+/* Dim all top-level paragraphs that the plugin marks with .focus-dim */
+.focus-mode .ProseMirror > *.focus-dim {
+  opacity: 0.2;
+  transition: opacity 0.15s ease;
+}
+
+/* Active paragraph stays fully visible */
+.focus-mode .ProseMirror > *:not(.focus-dim) {
+  opacity: 1;
+  transition: opacity 0.15s ease;
+}
+
