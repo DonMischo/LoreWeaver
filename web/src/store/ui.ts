@@ -14,6 +14,11 @@ interface UIState {
   typewriterMode: boolean;
   typewriterOffset: number;   // 0-100, vertical % position for cursor
   focusMode: boolean;
+  // Session timer
+  sessionTimerEnabled: boolean;
+  sessionGoal: number | null;       // target word delta for this session
+  sessionStartTime: number | null;  // Date.now() when session began
+  sessionBaseWords: number | null;  // word count at session start
   setSidebarOpen: (open: boolean) => void;
   setCodexSidebarOpen: (open: boolean) => void;
   setSaveStatus: (status: SaveStatus) => void;
@@ -21,6 +26,9 @@ interface UIState {
   setTypewriterMode: (on: boolean) => void;
   setTypewriterOffset: (pct: number) => void;
   setFocusMode: (on: boolean) => void;
+  setSessionTimerEnabled: (on: boolean) => void;
+  setSessionGoal: (goal: number, baseWords: number) => void;
+  clearSession: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -31,6 +39,10 @@ export const useUIStore = create<UIState>((set) => ({
   typewriterMode: ls("lw_typewriter", "false") === "true",
   typewriterOffset: Number(ls("lw_typewriter_offset", "50")),
   focusMode: false,
+  sessionTimerEnabled: ls("lw_session_timer", "true") === "true",
+  sessionGoal: null,
+  sessionStartTime: null,
+  sessionBaseWords: null,
 
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setCodexSidebarOpen: (open) => set({ codexSidebarOpen: open }),
@@ -48,4 +60,12 @@ export const useUIStore = create<UIState>((set) => ({
     set({ typewriterOffset: pct });
   },
   setFocusMode: (on) => set({ focusMode: on }),
+  setSessionTimerEnabled: (on) => {
+    localStorage.setItem("lw_session_timer", String(on));
+    set({ sessionTimerEnabled: on, sessionGoal: null, sessionStartTime: null, sessionBaseWords: null });
+  },
+  setSessionGoal: (goal, baseWords) =>
+    set({ sessionGoal: goal, sessionStartTime: Date.now(), sessionBaseWords: baseWords }),
+  clearSession: () =>
+    set({ sessionGoal: null, sessionStartTime: null, sessionBaseWords: null }),
 }));

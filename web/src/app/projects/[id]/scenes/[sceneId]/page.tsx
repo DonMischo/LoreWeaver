@@ -2,11 +2,13 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare, Focus, Braces, ChevronDown, AlignCenter } from "lucide-react";
+import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare, Focus, Braces, ChevronDown, AlignCenter, Timer, Flag, BookMarked } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
 import { StatusBar } from "@/components/editor/StatusBar";
+import { ThesaurusPanel } from "@/components/editor/ThesaurusPanel";
+import { SENSITIVITY_TYPES, type FlagItem, type SensitivityType } from "@/components/editor/SensitivityExtension";
 import { CodexSidebar } from "@/components/codex/CodexSidebar";
 import { CodexEntryDialog } from "@/components/codex/CodexEntryDialog";
 import { VersionHistoryPanel } from "@/components/editor/VersionHistoryPanel";
@@ -87,8 +89,20 @@ export default function ScenePage() {
   const setFocusMode        = useUIStore((s) => s.setFocusMode);
   const typewriterMode      = useUIStore((s) => s.typewriterMode);
   const setTypewriterMode   = useUIStore((s) => s.setTypewriterMode);
+  const sessionTimerEnabled = useUIStore((s) => s.sessionTimerEnabled);
+  const sessionGoal         = useUIStore((s) => s.sessionGoal);
+  const setSessionGoal      = useUIStore((s) => s.setSessionGoal);
+  const clearSession        = useUIStore((s) => s.clearSession);
 
-  const [ghostPopoverOpen, setGhostPopoverOpen] = useState(false);
+  const [ghostPopoverOpen, setGhostPopoverOpen]   = useState(false);
+  const [flagMenuOpen, setFlagMenuOpen]           = useState(false);
+  const [flagsPopoverOpen, setFlagsPopoverOpen]   = useState(false);
+  const [flags, setFlags]                         = useState<FlagItem[]>([]);
+  const [thesaurusOpen, setThesaurusOpen]         = useState(false);
+  const [selectedWord, setSelectedWord]           = useState<string>("");
+  const [goalPopoverOpen, setGoalPopoverOpen]     = useState(false);
+  const replaceWordRef = useRef<((word: string) => void) | null>(null);
+  const applyFlagRef   = useRef<((type: string) => void) | null>(null);
 
   // Count ghost-text placeholders in current content
   const ghostTexts = useMemo(() => {
@@ -182,6 +196,9 @@ export default function ScenePage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [focusMode, setFocusMode]);
+
+  // Clear session when navigating to a different scene
+  useEffect(() => { clearSession(); }, [sceneIdNum]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 5-minute auto-snapshot
   useEffect(() => {
@@ -403,6 +420,119 @@ export default function ScenePage() {
           Typewriter
         </Button>
 
+        {/* Thesaurus */}
+        <Button
+          size="sm"
+          variant={thesaurusOpen ? "secondary" : "ghost"}
+          onClick={() => setThesaurusOpen((v) => !v)}
+          className="gap-1.5 text-xs"
+          title="Thesaurus"
+        >
+          <BookMarked className="h-3.5 w-3.5" />
+          Thesaurus
+        </Button>
+
+        {/* Sensitivity flag */}
+        <div className="relative">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setFlagMenuOpen((v) => !v)}
+            className="gap-1.5 text-xs"
+            title="Flag passage"
+          >
+            <Flag className="h-3.5 w-3.5" />
+            Flag
+          </Button>
+          {flagMenuOpen && (
+            <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[170px]">
+              {SENSITIVITY_TYPES.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    applyFlagRef.current?.(t.id);
+                    setFlagMenuOpen(false);
+                  }}
+                  className={cn("w-full text-left text-xs px-3 py-2 hover:bg-secondary/50 flex items-center gap-2", t.color)}
+                >
+                  <Flag className="h-3 w-3" />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Flags badge */}
+        {flags.length > 0 && (
+          <div className="relative">
+            <button
+              onClick={() => setFlagsPopoverOpen((v) => !v)}
+              className="flex items-center gap-1 text-xs px-2 py-1 rounded text-rose-400 hover:bg-rose-400/10 transition-colors"
+              title="Flagged passages"
+            >
+              <Flag className="h-3.5 w-3.5" />
+              {flags.length}
+            </button>
+            {flagsPopoverOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg p-2 min-w-[220px] max-w-[300px]">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5 px-1">Flagged passages</p>
+                <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                  {flags.map((f, i) => {
+                    const type = SENSITIVITY_TYPES.find((t) => t.id === f.type);
+                    return (
+                      <div key={i} className="text-xs px-2 py-1.5 rounded bg-secondary/30">
+                        <span className={cn("text-[10px] font-medium mr-1.5", type?.color)}>{type?.label}</span>
+                        <span className="text-muted-foreground/80 truncate block">{f.text}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Session goal */}
+        {sessionTimerEnabled && (
+          <div className="relative">
+            <Button
+              size="sm"
+              variant={sessionGoal ? "secondary" : "ghost"}
+              onClick={() => setGoalPopoverOpen((v) => !v)}
+              className="gap-1.5 text-xs"
+              title="Writing goal"
+            >
+              <Timer className="h-3.5 w-3.5" />
+              {sessionGoal ? `Goal` : "Goal"}
+            </Button>
+            {goalPopoverOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg p-3 min-w-[180px]">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Set word goal</p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[250, 500, 1000, 1500].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => { setSessionGoal(n, wordCount); setGoalPopoverOpen(false); }}
+                      className="text-xs px-2 py-1 rounded border border-border hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-colors"
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                {sessionGoal && (
+                  <button
+                    onClick={() => { clearSession(); setGoalPopoverOpen(false); }}
+                    className="text-xs text-muted-foreground hover:text-foreground w-full text-left"
+                  >
+                    Stop session
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Focus mode */}
         <Button
           size="sm"
@@ -433,6 +563,10 @@ export default function ScenePage() {
             onCodexEntryClick={handleCodexEntryClick}
             sceneId={sceneIdNum}
             onOpenChat={() => setChatPanelOpen(true)}
+            onWordSelect={(w) => { if (w) setSelectedWord(w); }}
+            onFlagsChange={setFlags}
+            replaceWordRef={replaceWordRef}
+            applyFlagRef={applyFlagRef}
           />
           <StatusBar sceneWordCount={wordCount} />
         </div>
@@ -474,6 +608,15 @@ export default function ScenePage() {
           <ChatPanel
             sceneId={sceneIdNum}
             onClose={() => setChatPanelOpen(false)}
+          />
+        )}
+
+        {/* Thesaurus panel */}
+        {thesaurusOpen && (
+          <ThesaurusPanel
+            selectedWord={selectedWord}
+            onReplaceWord={(word) => replaceWordRef.current?.(word)}
+            onClose={() => setThesaurusOpen(false)}
           />
         )}
 

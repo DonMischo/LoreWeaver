@@ -13,6 +13,7 @@ import { TagDecorationExtension } from "./TagDecorationExtension";
 import { LineNumberExtension } from "./LineNumberExtension";
 import { GhostTextMark } from "./GhostTextExtension";
 import { FocusDimExtension, FOCUS_DIM_KEY } from "./FocusDimExtension";
+import { SensitivityMark, getSensitivityFlags, type FlagItem } from "./SensitivityExtension";
 import { NoteNode } from "./nodes/NoteNode";
 import { CurrencyNode } from "./nodes/CurrencyNode";
 import { ItemNode } from "./nodes/ItemNode";
@@ -29,6 +30,10 @@ interface Props {
   onCodexEntryClick: (id: number) => void;
   sceneId: number;
   onOpenChat?: () => void;
+  onWordSelect?: (word: string | null) => void;
+  onFlagsChange?: (flags: FlagItem[]) => void;
+  replaceWordRef?: React.MutableRefObject<((word: string) => void) | null>;
+  applyFlagRef?: React.MutableRefObject<((type: string) => void) | null>;
 }
 
 interface SlashState {
@@ -56,7 +61,7 @@ function applyTypewriterScroll(
   } catch { /* view not mounted */ }
 }
 
-export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId, onOpenChat }: Props) {
+export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId, onOpenChat, onWordSelect, onFlagsChange, replaceWordRef, applyFlagRef }: Props) {
   const showLineNumbers  = useUIStore((s) => s.showParagraphNumbers);
   const typewriterMode   = useUIStore((s) => s.typewriterMode);
   const typewriterOffset = useUIStore((s) => s.typewriterOffset);
@@ -82,6 +87,10 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
   const menuHandleRef = useRef<SlashMenuHandle | null>(null);
   const onOpenChatRef = useRef(onOpenChat);
   onOpenChatRef.current = onOpenChat;
+  const onWordSelectRef  = useRef(onWordSelect);
+  onWordSelectRef.current  = onWordSelect;
+  const onFlagsChangeRef = useRef(onFlagsChange);
+  onFlagsChangeRef.current = onFlagsChange;
 
   // ── Extensions ──────────────────────────────────────────────────────────────
 
@@ -166,10 +175,12 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
       LineNumberExtension,
       GhostTextMark,
       FocusDimExtension,
+      SensitivityMark,
     ],
     content,
     onUpdate({ editor }) {
       onChange(editor.getHTML());
+      onFlagsChangeRef.current?.(getSensitivityFlags(editor));
     },
     editorProps: {
       attributes: { class: "story-prose prose-invert max-w-2xl mx-auto w-full focus:outline-none min-h-full px-8 py-6" },
@@ -212,19 +223,62 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
 
   // Typewriter: also snap on cursor movement (click / arrow keys).
   // Typing is already handled by handleScrollToSelection above.
+  // Also fires onWordSelect for the thesaurus panel.
   useEffect(() => {
     if (!editor) return;
     const onSelectionUpdate = () => {
-      if (!typewriterModeRef.current || !scrollRef.current) return;
-      requestAnimationFrame(() => {
-        if (scrollRef.current) {
-          applyTypewriterScroll(editor.view, scrollRef.current, typewriterOffsetRef.current);
+      // Typewriter scroll
+      if (typewriterModeRef.current && scrollRef.current) {
+        requestAnimationFrame(() => {
+          if (scrollRef.current) {
+            applyTypewriterScroll(editor.view, scrollRef.current, typewriterOffsetRef.current);
+          }
+        });
+      }
+      // Word selection for thesaurus
+      if (onWordSelectRef.current) {
+        const { from, to, empty } = editor.state.selection;
+        if (!empty) {
+          const text = editor.state.doc.textBetween(from, to, " ").trim();
+          // Only fire for single-word selections (no spaces)
+          onWordSelectRef.current(/^\S+$/.test(text) ? text : null);
+        } else {
+          onWordSelectRef.current(null);
         }
-      });
+      }
+      // Flags
+      onFlagsChangeRef.current?.(getSensitivityFlags(editor));
     };
     editor.on("selectionUpdate", onSelectionUpdate);
-    return () => editor.off("selectionUpdate", onSelectionUpdate);
+    return () => { editor.off("selectionUpdate", onSelectionUpdate); };
   }, [editor]);
+
+  // Wire replaceWordRef so parent can trigger word replacement
+  useEffect(() => {
+    if (!replaceWordRef) return;
+    replaceWordRef.current = (word: string) => {
+      if (!editor) return;
+      const { from, to, empty } = editor.state.selection;
+      if (empty) return;
+      editor.chain().focus().deleteRange({ from, to }).insertContent(word).run();
+    };
+  }, [editor, replaceWordRef]);
+
+  // Wire applyFlagRef so parent can apply sensitivity marks
+  useEffect(() => {
+    if (!applyFlagRef) return;
+    applyFlagRef.current = (type: string) => {
+      if (!editor) return;
+      const { empty } = editor.state.selection;
+      if (empty) return;
+      const isActive = editor.isActive("sensitivityFlag", { type });
+      if (isActive) {
+        editor.chain().focus().unsetMark("sensitivityFlag").run();
+      } else {
+        editor.chain().focus().setMark("sensitivityFlag", { type }).run();
+      }
+    };
+  }, [editor, applyFlagRef]);
 
   // Typewriter: update ProseMirror top/bottom padding so the cursor can reach
   // the target position even on the very first or very last line.
