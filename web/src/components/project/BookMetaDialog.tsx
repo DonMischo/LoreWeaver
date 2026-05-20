@@ -166,7 +166,16 @@ export function BookMetaDialog({ projectTitle, initial, open, onClose, onSave }:
               <Field label="Author" hint="dc:creator — appears on the title page">
                 <MetaInput
                   value={meta.author ?? ""}
-                  onChange={v => set("author", v)}
+                  onChange={v => {
+                    // Auto-fill copyright only when the rights field is still empty
+                    setMeta(prev => ({
+                      ...prev,
+                      author: v,
+                      rights: prev.rights
+                        ? prev.rights
+                        : v ? `© ${new Date().getFullYear()} ${v}. All rights reserved.` : "",
+                    }));
+                  }}
                   placeholder="Jane Doe"
                 />
               </Field>

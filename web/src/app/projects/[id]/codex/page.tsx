@@ -347,6 +347,7 @@ export default function CodexPage() {
             webkitdirectory="" multiple className="hidden"
             onChange={dir.handleChange}
           />
+          <ImportButton projectId={projectId} mode="codex" className="w-auto" />
           <Button size="sm" variant="ghost" className="gap-1.5 text-xs text-muted-foreground"
             title="Import all .md files from a folder"
             onClick={() => dir.inputRef.current?.click()}
@@ -354,7 +355,6 @@ export default function CodexPage() {
           >
             <FolderOpen className="h-3.5 w-3.5" /> {t("codex_import_folder")}
           </Button>
-          <ImportButton projectId={projectId} mode="codex" className="w-auto" />
           <button
             onClick={() => setView(view === "grid" ? "list" : "grid")}
             className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
