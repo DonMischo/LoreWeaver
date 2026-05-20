@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, Plus, Trash2, Calendar, BookCopy, Sparkles, TriangleAlert, Link2, ImageIcon, Settings, Upload, FileText, BookMarked } from "lucide-react";
+import { BookOpen, Plus, Trash2, Calendar, BookCopy, Sparkles, TriangleAlert, Link2, ImageIcon, Settings, Upload, FileText, BookMarked, FolderOpen, Loader2, Download } from "lucide-react";
 import { imagesApi, importApi } from "@/lib/api";
 import { useUploadProjectCover, useDeleteProjectCover } from "@/store/queries";
 import { Button } from "@/components/ui/button";
@@ -131,9 +131,11 @@ export default function Dashboard() {
   const [importTargetId, setImportTargetId] = useState<number | "">("");
   const [importStoryFile, setImportStoryFile] = useState<File | null>(null);
   const [importCodexFile, setImportCodexFile] = useState<File | null>(null);
+  const [importCodexFolder, setImportCodexFolder] = useState<File[]>([]);
   const [importNewTitle, setImportNewTitle] = useState("");
   const [importNewDesc, setImportNewDesc] = useState("");
   const [importPending, setImportPending] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
@@ -142,10 +144,12 @@ export default function Dashboard() {
     setImportTargetId("");
     setImportStoryFile(null);
     setImportCodexFile(null);
+    setImportCodexFolder([]);
     setImportNewTitle("");
     setImportNewDesc("");
     setImportResult(null);
     setImportError(null);
+    setImportProgress(null);
     setImportOpen(true);
   };
 
@@ -153,6 +157,7 @@ export default function Dashboard() {
     setImportPending(true);
     setImportResult(null);
     setImportError(null);
+    setImportProgress(null);
     try {
       let projectId: number;
       if (importMode === "new") {
@@ -172,12 +177,28 @@ export default function Dashboard() {
         const r = await importApi.codex(projectId, importCodexFile);
         messages.push(r.message);
       }
+      // Codex folder: import each .md file individually
+      if (importCodexFolder.length > 0) {
+        let created = 0, skipped = 0, errors = 0;
+        setImportProgress({ done: 0, total: importCodexFolder.length });
+        for (let i = 0; i < importCodexFolder.length; i++) {
+          try {
+            const r = await importApi.codex(projectId, importCodexFolder[i]);
+            created += r.created ?? 0;
+            skipped += r.skipped ?? 0;
+          } catch { errors++; }
+          setImportProgress({ done: i + 1, total: importCodexFolder.length });
+        }
+        messages.push(`Folder: ${created} imported, ${skipped} skipped${errors ? `, ${errors} error(s)` : ""} from ${importCodexFolder.length} file(s).`);
+      }
+      setImportProgress(null);
       setImportResult(messages.join(" "));
       if (importMode === "new") router.push(`/projects/${projectId}`);
     } catch (err) {
       setImportError(err instanceof Error ? err.message.replace(/^\d+: /, "") : "Import failed.");
     } finally {
       setImportPending(false);
+      setImportProgress(null);
     }
   };
 
@@ -388,18 +409,61 @@ export default function Dashboard() {
                 <p className="text-[11px] text-muted-foreground">Use ## Acts, ### Chapters, #### Scenes.</p>
               </div>
               <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5">
-                  <BookMarked className="h-3.5 w-3.5" />
-                  Codex file <span className="text-muted-foreground font-normal">(Markdown — optional)</span>
+                <Label className="flex items-center justify-between gap-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <BookMarked className="h-3.5 w-3.5" />
+                    Codex file <span className="text-muted-foreground font-normal">(single .md — optional)</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const SAMPLE = `# Codex Sample\n\n## character: Aria Voss\nalias: The Wanderer\ncolor: #a855f7\ndescription: A seasoned explorer with a mysterious past.\ntags: protagonist, explorer\n\n## location: The Hollow Keep\ncolor: #3b82f6\ndescription: An ancient fortress carved into a cliffside.\ntags: fortress, ancient\n\n## item: Starstone Amulet\ncolor: #f59e0b\ndescription: A glowing amulet said to grant visions of the future.\ntags: artifact, magical\n`;
+                      const blob = new Blob([SAMPLE], { type: "text/markdown" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url; a.download = "codex-sample.md"; a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+                  >
+                    <Download className="h-3 w-3" /> sample file
+                  </button>
                 </Label>
                 <input
                   type="file"
                   accept=".md,.txt"
-                  onChange={(e) => setImportCodexFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => { setImportCodexFile(e.target.files?.[0] ?? null); setImportCodexFolder([]); }}
                   className="text-sm text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-border file:text-xs file:bg-background file:text-foreground hover:file:bg-secondary/50 file:cursor-pointer"
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5">
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  Codex folder <span className="text-muted-foreground font-normal">(all .md files — optional)</span>
+                </Label>
+                <input
+                  type="file"
+                  accept=".md"
+                  // @ts-ignore
+                  webkitdirectory="" multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []).filter(f => f.name.endsWith(".md"));
+                    setImportCodexFolder(files);
+                    if (files.length) setImportCodexFile(null);
+                  }}
+                  className="text-sm text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-border file:text-xs file:bg-background file:text-foreground hover:file:bg-secondary/50 file:cursor-pointer"
+                />
+                {importCodexFolder.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">{importCodexFolder.length} .md file(s) selected</p>
+                )}
+              </div>
             </div>
+            {importProgress && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Importing {importProgress.done} / {importProgress.total}…
+              </div>
+            )}
 
             {importResult && (
               <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-foreground">
@@ -418,7 +482,7 @@ export default function Dashboard() {
                 onClick={handleImport}
                 disabled={
                   importPending ||
-                  (!importStoryFile && !importCodexFile) ||
+                  (!importStoryFile && !importCodexFile && importCodexFolder.length === 0) ||
                   (importMode === "existing" && importTargetId === "") ||
                   (importMode === "new" && !importNewTitle.trim())
                 }
