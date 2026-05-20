@@ -318,15 +318,15 @@
   text-underline-offset: 2px;
 }
 .sensitivity-flag--sensitivity {
-  background: hsl(350 80% 60% / 0.12);
-  text-decoration-color: hsl(350 80% 60% / 0.8);
+  background: hsl(350 80% 60% / 0.25);
+  text-decoration-color: hsl(350 80% 60%);
 }
 .sensitivity-flag--cultural {
-  background: hsl(270 70% 65% / 0.12);
-  text-decoration-color: hsl(270 70% 65% / 0.8);
+  background: hsl(270 70% 65% / 0.25);
+  text-decoration-color: hsl(270 70% 65%);
 }
 .sensitivity-flag--research {
-  background: hsl(210 80% 60% / 0.12);
-  text-decoration-color: hsl(210 80% 60% / 0.8);
+  background: hsl(210 80% 60% / 0.25);
+  text-decoration-color: hsl(210 80% 60%);
 }
 

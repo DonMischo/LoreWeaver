@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare, Focus, Braces, ChevronDown, AlignCenter, Timer, Flag, BookMarked } from "lucide-react";
+import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare, Focus, Braces, ChevronDown, AlignCenter, Timer, Flag, BookMarked, MoreHorizontal, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
@@ -95,12 +95,10 @@ export default function ScenePage() {
   const clearSession        = useUIStore((s) => s.clearSession);
 
   const [ghostPopoverOpen, setGhostPopoverOpen]   = useState(false);
-  const [flagMenuOpen, setFlagMenuOpen]           = useState(false);
-  const [flagsPopoverOpen, setFlagsPopoverOpen]   = useState(false);
+  const [menuOpen, setMenuOpen]                   = useState(false);
   const [flags, setFlags]                         = useState<FlagItem[]>([]);
   const [thesaurusOpen, setThesaurusOpen]         = useState(false);
   const [selectedWord, setSelectedWord]           = useState<string>("");
-  const [goalPopoverOpen, setGoalPopoverOpen]     = useState(false);
   const replaceWordRef = useRef<((word: string) => void) | null>(null);
   const applyFlagRef   = useRef<((type: string) => void) | null>(null);
 
@@ -309,7 +307,7 @@ export default function ScenePage() {
         />
         <div className="flex-1" />
 
-        {/* Time indicator badge */}
+        {/* Day/night badge */}
         {hasTime && dayNight && (
           <span className={cn(
             "flex items-center gap-1 text-xs px-2 py-0.5 rounded-full",
@@ -322,66 +320,7 @@ export default function ScenePage() {
           </span>
         )}
 
-        <Button
-          size="sm"
-          variant={timePanelOpen ? "secondary" : hasTime ? "outline" : "ghost"}
-          onClick={() => {
-            setTimePanelOpen(!timePanelOpen);
-            if (codexSidebarOpen) setCodexSidebarOpen(false);
-          }}
-          className={cn("gap-1.5 text-xs", hasTime && !timePanelOpen && "border-primary/50 text-primary")}
-        >
-          <Clock className="h-3.5 w-3.5" />
-          Time
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={handleArchiveScene}
-          className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-          title="Archive this scene to Fragments"
-        >
-          <Archive className="h-3.5 w-3.5" />
-          Archive
-        </Button>
-        <Button
-          size="sm"
-          variant={historyPanelOpen ? "secondary" : "ghost"}
-          onClick={() => {
-            setHistoryPanelOpen(!historyPanelOpen);
-            if (timePanelOpen) setTimePanelOpen(false);
-          }}
-          className="gap-1.5 text-xs"
-        >
-          <History className="h-3.5 w-3.5" />
-          History
-        </Button>
-        <Button
-          size="sm"
-          variant={codexSidebarOpen ? "secondary" : "ghost"}
-          onClick={() => {
-            setCodexSidebarOpen(!codexSidebarOpen);
-            if (timePanelOpen) setTimePanelOpen(false);
-          }}
-          className="gap-1.5 text-xs"
-        >
-          <BookOpen className="h-3.5 w-3.5" />
-          Codex
-        </Button>
-        <Button
-          size="sm"
-          variant={chatPanelOpen ? "secondary" : "ghost"}
-          onClick={() => {
-            setChatPanelOpen(!chatPanelOpen);
-            if (timePanelOpen) setTimePanelOpen(false);
-          }}
-          className="gap-1.5 text-xs"
-        >
-          <MessageSquare className="h-3.5 w-3.5" />
-          Chat
-        </Button>
-
-        {/* Ghost text tracker */}
+        {/* Ghost text placeholder badge */}
         {ghostTexts.length > 0 && (
           <div className="relative">
             <button
@@ -408,148 +347,175 @@ export default function ScenePage() {
           </div>
         )}
 
-        {/* Typewriter mode */}
+        {/* History */}
         <Button
           size="sm"
-          variant={typewriterMode ? "secondary" : "ghost"}
-          onClick={() => setTypewriterMode(!typewriterMode)}
+          variant={historyPanelOpen ? "secondary" : "ghost"}
+          onClick={() => {
+            setHistoryPanelOpen(!historyPanelOpen);
+            if (timePanelOpen) setTimePanelOpen(false);
+          }}
           className="gap-1.5 text-xs"
-          title="Typewriter scrolling"
         >
-          <AlignCenter className="h-3.5 w-3.5" />
-          Typewriter
+          <History className="h-3.5 w-3.5" />
+          History
         </Button>
 
-        {/* Thesaurus */}
+        {/* Codex */}
         <Button
           size="sm"
-          variant={thesaurusOpen ? "secondary" : "ghost"}
-          onClick={() => setThesaurusOpen((v) => !v)}
+          variant={codexSidebarOpen ? "secondary" : "ghost"}
+          onClick={() => {
+            setCodexSidebarOpen(!codexSidebarOpen);
+            if (timePanelOpen) setTimePanelOpen(false);
+          }}
           className="gap-1.5 text-xs"
-          title="Thesaurus"
         >
-          <BookMarked className="h-3.5 w-3.5" />
-          Thesaurus
+          <BookOpen className="h-3.5 w-3.5" />
+          Codex
         </Button>
 
-        {/* Sensitivity flag */}
+        {/* ── Sandwich menu ──────────────────────────────────────────────── */}
         <div className="relative">
           <Button
             size="sm"
-            variant="ghost"
-            onClick={() => setFlagMenuOpen((v) => !v)}
-            className="gap-1.5 text-xs"
-            title="Flag passage"
+            variant={menuOpen ? "secondary" : "ghost"}
+            onClick={() => setMenuOpen((v) => !v)}
+            className="px-2"
+            title="More options"
           >
-            <Flag className="h-3.5 w-3.5" />
-            Flag
+            <MoreHorizontal className="h-4 w-4" />
           </Button>
-          {flagMenuOpen && (
-            <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[170px]">
+
+          {menuOpen && (
+            <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[200px]" onClick={(e) => e.stopPropagation()}>
+
+              {/* Scene tools */}
+              <button
+                onClick={() => { setTimePanelOpen(!timePanelOpen); if (codexSidebarOpen) setCodexSidebarOpen(false); setMenuOpen(false); }}
+                className={cn("w-full text-left text-xs px-3 py-2 hover:bg-secondary/50 flex items-center gap-2", timePanelOpen && "text-primary")}
+              >
+                <Clock className={cn("h-3.5 w-3.5", hasTime ? "text-primary" : "text-muted-foreground")} />
+                Time
+                {hasTime && <span className="ml-auto text-[10px] text-primary">set</span>}
+              </button>
+              <button
+                onClick={() => { setChatPanelOpen(!chatPanelOpen); if (timePanelOpen) setTimePanelOpen(false); setMenuOpen(false); }}
+                className={cn("w-full text-left text-xs px-3 py-2 hover:bg-secondary/50 flex items-center gap-2", chatPanelOpen && "text-primary")}
+              >
+                <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                Chat
+                {chatPanelOpen && <Check className="ml-auto h-3 w-3 text-primary" />}
+              </button>
+
+              <div className="border-t border-border my-1" />
+
+              {/* Writing tools */}
+              <button
+                onClick={() => { setTypewriterMode(!typewriterMode); }}
+                className="w-full text-left text-xs px-3 py-2 hover:bg-secondary/50 flex items-center gap-2"
+              >
+                <AlignCenter className="h-3.5 w-3.5 text-muted-foreground" />
+                Typewriter
+                {typewriterMode && <Check className="ml-auto h-3 w-3 text-primary" />}
+              </button>
+              <button
+                onClick={() => { setThesaurusOpen((v) => !v); setMenuOpen(false); }}
+                className={cn("w-full text-left text-xs px-3 py-2 hover:bg-secondary/50 flex items-center gap-2", thesaurusOpen && "text-primary")}
+              >
+                <BookMarked className="h-3.5 w-3.5 text-muted-foreground" />
+                Thesaurus
+                {thesaurusOpen && <Check className="ml-auto h-3 w-3 text-primary" />}
+              </button>
+
+              <div className="border-t border-border my-1" />
+
+              {/* Flag submenu */}
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-1 pb-0.5">Flag selection</p>
               {SENSITIVITY_TYPES.map((t) => (
                 <button
                   key={t.id}
-                  onClick={() => {
-                    applyFlagRef.current?.(t.id);
-                    setFlagMenuOpen(false);
-                  }}
-                  className={cn("w-full text-left text-xs px-3 py-2 hover:bg-secondary/50 flex items-center gap-2", t.color)}
+                  onClick={() => { applyFlagRef.current?.(t.id); setMenuOpen(false); }}
+                  className={cn("w-full text-left text-xs px-3 py-1.5 hover:bg-secondary/50 flex items-center gap-2", t.color)}
                 >
                   <Flag className="h-3 w-3" />
                   {t.label}
                 </button>
               ))}
+
+              {/* Flags list */}
+              {flags.length > 0 && (
+                <>
+                  <div className="border-t border-border my-1" />
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-1 pb-0.5">
+                    Flagged passages ({flags.length})
+                  </p>
+                  <div className="max-h-32 overflow-y-auto">
+                    {flags.map((f, i) => {
+                      const type = SENSITIVITY_TYPES.find((t) => t.id === f.type);
+                      return (
+                        <div key={i} className="text-xs px-3 py-1">
+                          <span className={cn("text-[10px] font-medium mr-1", type?.color)}>{type?.label}</span>
+                          <span className="text-muted-foreground/70 truncate">{f.text}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* Session goal */}
+              {sessionTimerEnabled && (
+                <>
+                  <div className="border-t border-border my-1" />
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-1 pb-1">Writing goal</p>
+                  <div className="flex flex-wrap gap-1 px-3 pb-1.5">
+                    {[250, 500, 1000, 1500].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => { setSessionGoal(n, wordCount); setMenuOpen(false); }}
+                        className={cn(
+                          "text-xs px-2 py-0.5 rounded border transition-colors",
+                          sessionGoal === n
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border hover:bg-primary/10 hover:border-primary/40 hover:text-primary"
+                        )}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                    {sessionGoal && (
+                      <button
+                        onClick={() => { clearSession(); setMenuOpen(false); }}
+                        className="text-xs px-2 py-0.5 rounded border border-border text-muted-foreground hover:text-foreground"
+                      >
+                        Stop
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+
+              <div className="border-t border-border my-1" />
+
+              {/* Destructive / exit */}
+              <button
+                onClick={() => { handleArchiveScene(); setMenuOpen(false); }}
+                className="w-full text-left text-xs px-3 py-2 hover:bg-secondary/50 flex items-center gap-2 text-muted-foreground"
+              >
+                <Archive className="h-3.5 w-3.5" />
+                Archive scene
+              </button>
+              <button
+                onClick={() => { setFocusMode(true); setCodexSidebarOpen(false); setTimePanelOpen(false); setHistoryPanelOpen(false); setChatPanelOpen(false); setMenuOpen(false); }}
+                className="w-full text-left text-xs px-3 py-2 hover:bg-secondary/50 flex items-center gap-2 text-muted-foreground"
+              >
+                <Focus className="h-3.5 w-3.5" />
+                Focus mode
+              </button>
             </div>
           )}
         </div>
-
-        {/* Flags badge */}
-        {flags.length > 0 && (
-          <div className="relative">
-            <button
-              onClick={() => setFlagsPopoverOpen((v) => !v)}
-              className="flex items-center gap-1 text-xs px-2 py-1 rounded text-rose-400 hover:bg-rose-400/10 transition-colors"
-              title="Flagged passages"
-            >
-              <Flag className="h-3.5 w-3.5" />
-              {flags.length}
-            </button>
-            {flagsPopoverOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg p-2 min-w-[220px] max-w-[300px]">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5 px-1">Flagged passages</p>
-                <div className="space-y-0.5 max-h-48 overflow-y-auto">
-                  {flags.map((f, i) => {
-                    const type = SENSITIVITY_TYPES.find((t) => t.id === f.type);
-                    return (
-                      <div key={i} className="text-xs px-2 py-1.5 rounded bg-secondary/30">
-                        <span className={cn("text-[10px] font-medium mr-1.5", type?.color)}>{type?.label}</span>
-                        <span className="text-muted-foreground/80 truncate block">{f.text}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Session goal */}
-        {sessionTimerEnabled && (
-          <div className="relative">
-            <Button
-              size="sm"
-              variant={sessionGoal ? "secondary" : "ghost"}
-              onClick={() => setGoalPopoverOpen((v) => !v)}
-              className="gap-1.5 text-xs"
-              title="Writing goal"
-            >
-              <Timer className="h-3.5 w-3.5" />
-              {sessionGoal ? `Goal` : "Goal"}
-            </Button>
-            {goalPopoverOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-lg p-3 min-w-[180px]">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Set word goal</p>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {[250, 500, 1000, 1500].map((n) => (
-                    <button
-                      key={n}
-                      onClick={() => { setSessionGoal(n, wordCount); setGoalPopoverOpen(false); }}
-                      className="text-xs px-2 py-1 rounded border border-border hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-colors"
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-                {sessionGoal && (
-                  <button
-                    onClick={() => { clearSession(); setGoalPopoverOpen(false); }}
-                    className="text-xs text-muted-foreground hover:text-foreground w-full text-left"
-                  >
-                    Stop session
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Focus mode */}
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => {
-            setFocusMode(true);
-            setCodexSidebarOpen(false);
-            setTimePanelOpen(false);
-            setHistoryPanelOpen(false);
-            setChatPanelOpen(false);
-          }}
-          className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-          title="Focus mode (ESC to exit)"
-        >
-          <Focus className="h-3.5 w-3.5" />
-          Focus
-        </Button>
       </div>}
 
       {/* Main area */}
