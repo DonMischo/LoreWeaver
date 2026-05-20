@@ -258,3 +258,18 @@ export interface SceneMentionStat {
   chapter_title: string;
   count: number;
 }
+
+// ── Writing log / streaks ─────────────────────────────────────────────────────
+
+export interface WritingLogEntry {
+  date: string;   // YYYY-MM-DD
+  words: number;
+}
+
+export interface GhostTextScene {
+  scene_id: number;
+  scene_title: string;
+  act_title: string;
+  chapter_title: string;
+  ghost_texts: string[];
+}

@@ -3,6 +3,7 @@ import type {
   Settings, ChapterReadData, ActReadData, TimeConfig, SceneTime,
   Fragment, FragmentTabs, BookMeta, AIPrompt, ProjectSceneItem,
   SceneVersion, SceneVersionDetail, MentionStat, SceneMentionStat,
+  WritingLogEntry, GhostTextScene,
 } from "@/types";
 
 const BASE = "/api";
@@ -409,6 +410,17 @@ export const mentionStatsApi = {
     req<SceneMentionStat[]>(`/codex/${entryId}/scene-mentions`),
   rescanProject: (projectId: number) =>
     req<{ scanned: number }>(`/projects/${projectId}/mentions/rescan`, { method: "POST" }),
+};
+
+// ── Writing log / streaks ─────────────────────────────────────────────────────
+
+export const writingLogApi = {
+  forProject: (projectId: number) =>
+    req<WritingLogEntry[]>(`/projects/${projectId}/writing-log`),
+  global: () =>
+    req<WritingLogEntry[]>(`/writing-log`),
+  ghostTexts: (projectId: number) =>
+    req<GhostTextScene[]>(`/projects/${projectId}/ghost-texts`),
 };
 
 export const chatApi = {

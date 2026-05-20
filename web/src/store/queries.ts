@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi, writingLogApi } from "@/lib/api";
 import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry, OpenRouterModel } from "@/lib/api";
 import type { AIPrompt, ProjectSceneItem, SceneVersion, SceneVersionDetail } from "@/types";
 
@@ -486,6 +486,28 @@ export const useRescanProjectMentions = (projectId: number) => {
     },
   });
 };
+
+// ── Writing log ───────────────────────────────────────────────────────────────
+
+export const useProjectWritingLog = (projectId: number) =>
+  useQuery({
+    queryKey: ["writing-log", "project", projectId],
+    queryFn: () => writingLogApi.forProject(projectId),
+    enabled: projectId > 0,
+  });
+
+export const useGlobalWritingLog = () =>
+  useQuery({
+    queryKey: ["writing-log", "global"],
+    queryFn: () => writingLogApi.global(),
+  });
+
+export const useProjectGhostTexts = (projectId: number) =>
+  useQuery({
+    queryKey: ["ghost-texts", projectId],
+    queryFn: () => writingLogApi.ghostTexts(projectId),
+    enabled: projectId > 0,
+  });
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
