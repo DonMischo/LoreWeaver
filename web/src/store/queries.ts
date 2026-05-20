@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi } from "@/lib/api";
 import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry, OpenRouterModel } from "@/lib/api";
 import type { AIPrompt, ProjectSceneItem, SceneVersion, SceneVersionDetail } from "@/types";
 
@@ -450,6 +450,40 @@ export const useDeleteCodexImage = (entryId: number, projectId: number) => {
   return useMutation({
     mutationFn: () => imagesApi.deleteCodexImage(entryId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["codex", projectId] }),
+  });
+};
+
+// ── Mention stats ─────────────────────────────────────────────────────────────
+
+export const useSceneMentionStats = (sceneId: number) =>
+  useQuery({
+    queryKey: ["mention-stats", "scene", sceneId],
+    queryFn: () => mentionStatsApi.forScene(sceneId),
+    enabled: sceneId > 0,
+  });
+
+export const useProjectMentionStats = (projectId: number) =>
+  useQuery({
+    queryKey: ["mention-stats", "project", projectId],
+    queryFn: () => mentionStatsApi.forProject(projectId),
+    enabled: projectId > 0,
+  });
+
+export const useEntrySceneMentions = (entryId: number) =>
+  useQuery({
+    queryKey: ["entry-scene-mentions", entryId],
+    queryFn: () => mentionStatsApi.forEntry(entryId),
+    enabled: entryId > 0,
+  });
+
+export const useRescanProjectMentions = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => mentionStatsApi.rescanProject(projectId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["entry-scene-mentions"] });
+      qc.invalidateQueries({ queryKey: ["mention-stats"] });
+    },
   });
 };
 

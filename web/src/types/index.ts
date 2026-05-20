@@ -242,3 +242,19 @@ export interface SceneVersion {
 export interface SceneVersionDetail extends SceneVersion {
   content: string;
 }
+
+// ── Mention stats ─────────────────────────────────────────────────────────────
+
+export interface MentionStat {
+  codex_id: number;
+  scene_id: number | null;
+  count: number;
+}
+
+export interface SceneMentionStat {
+  scene_id: number;
+  scene_title: string;
+  act_title: string;
+  chapter_title: string;
+  count: number;
+}

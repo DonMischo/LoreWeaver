@@ -2,7 +2,7 @@ import type {
   Project, Act, Chapter, Scene, CodexEntry, CodexRelation, CodexRelationResolved,
   Settings, ChapterReadData, ActReadData, TimeConfig, SceneTime,
   Fragment, FragmentTabs, BookMeta, AIPrompt, ProjectSceneItem,
-  SceneVersion, SceneVersionDetail,
+  SceneVersion, SceneVersionDetail, MentionStat, SceneMentionStat,
 } from "@/types";
 
 const BASE = "/api";
@@ -396,6 +396,19 @@ export const kiApi = {
     entry_type?: string;
     word_count?: number | null;
   }) => req<{ text: string }>("/ai/ki", { method: "POST", body: JSON.stringify(data) }),
+};
+
+// ── Mention stats ─────────────────────────────────────────────────────────────
+
+export const mentionStatsApi = {
+  forScene: (sceneId: number) =>
+    req<MentionStat[]>(`/scenes/${sceneId}/mention-stats`),
+  forProject: (projectId: number) =>
+    req<MentionStat[]>(`/projects/${projectId}/mention-stats`),
+  forEntry: (entryId: number) =>
+    req<SceneMentionStat[]>(`/codex/${entryId}/scene-mentions`),
+  rescanProject: (projectId: number) =>
+    req<{ scanned: number }>(`/projects/${projectId}/mentions/rescan`, { method: "POST" }),
 };
 
 export const chatApi = {
