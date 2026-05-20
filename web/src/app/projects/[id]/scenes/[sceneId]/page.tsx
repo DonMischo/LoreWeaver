@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare, Focus, Braces, ChevronDown } from "lucide-react";
+import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare, Focus, Braces, ChevronDown, AlignCenter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
@@ -85,6 +85,8 @@ export default function ScenePage() {
   const setCodexSidebarOpen = useUIStore((s) => s.setCodexSidebarOpen);
   const focusMode           = useUIStore((s) => s.focusMode);
   const setFocusMode        = useUIStore((s) => s.setFocusMode);
+  const typewriterMode      = useUIStore((s) => s.typewriterMode);
+  const setTypewriterMode   = useUIStore((s) => s.setTypewriterMode);
 
   const [ghostPopoverOpen, setGhostPopoverOpen] = useState(false);
 
@@ -388,6 +390,18 @@ export default function ScenePage() {
             )}
           </div>
         )}
+
+        {/* Typewriter mode */}
+        <Button
+          size="sm"
+          variant={typewriterMode ? "secondary" : "ghost"}
+          onClick={() => setTypewriterMode(!typewriterMode)}
+          className="gap-1.5 text-xs"
+          title="Typewriter scrolling"
+        >
+          <AlignCenter className="h-3.5 w-3.5" />
+          Typewriter
+        </Button>
 
         {/* Focus mode */}
         <Button

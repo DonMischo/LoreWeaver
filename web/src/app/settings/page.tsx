@@ -37,8 +37,6 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const showParagraphNumbers    = useUIStore((s) => s.showParagraphNumbers);
   const setShowParagraphNumbers = useUIStore((s) => s.setShowParagraphNumbers);
-  const typewriterMode          = useUIStore((s) => s.typewriterMode);
-  const setTypewriterMode       = useUIStore((s) => s.setTypewriterMode);
   const typewriterOffset        = useUIStore((s) => s.typewriterOffset);
   const setTypewriterOffset     = useUIStore((s) => s.setTypewriterOffset);
 
@@ -529,34 +527,11 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          {/* Typewriter mode */}
-          <div className="flex items-center justify-between pt-1">
-            <div className="flex items-center gap-2">
-              <AlignCenter className="h-3.5 w-3.5 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">Typewriter scrolling</p>
-                <p className="text-xs text-muted-foreground">Keep the cursor at a fixed vertical position while writing</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={typewriterMode}
-              onClick={() => setTypewriterMode(!typewriterMode)}
-              className={cn(
-                "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                typewriterMode ? "bg-primary" : "bg-input"
-              )}
-            >
-              <span className={cn(
-                "pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
-                typewriterMode ? "translate-x-4" : "translate-x-0"
-              )} />
-            </button>
-          </div>
-          {typewriterMode && (
-            <div className="flex items-center gap-3 pl-6 pt-0.5">
-              <p className="text-xs text-muted-foreground shrink-0">Cursor position</p>
+          {/* Typewriter cursor position */}
+          <div className="flex items-center gap-2 pt-1">
+            <AlignCenter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <div className="flex flex-1 items-center gap-3">
+              <p className="text-sm font-medium shrink-0">Typewriter position</p>
               <input
                 type="range"
                 min={10}
@@ -568,7 +543,7 @@ export default function SettingsPage() {
               />
               <span className="text-xs tabular-nums text-muted-foreground w-8 text-right">{typewriterOffset}%</span>
             </div>
-          )}
+          </div>
         </section>
 
         <div className="border-t border-border" />
