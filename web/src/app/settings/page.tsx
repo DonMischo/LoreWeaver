@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Key, Cpu, Globe, Loader2, RefreshCw, Sparkles, Plus, Trash2, RotateCcw, HelpCircle, Palette, FolderOpen, RotateCw } from "lucide-react";
+import { ArrowLeft, Key, Cpu, Globe, Loader2, RefreshCw, Sparkles, Plus, Trash2, RotateCcw, HelpCircle, Palette, FolderOpen, RotateCw, Hash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSettings, useUpdateSettings, useOpenRouterModels, usePrompts, useCreatePrompt, useUpdatePrompt, useDeletePrompt, useRevertPrompt } from "@/store/queries";
 import { dataDirApi } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useUIStore } from "@/store/ui";
 import { useTheme, THEMES, THEME_LABELS, THEME_PREVIEW } from "@/contexts/ThemeContext";
 import { LOCALE_NAMES, type Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,8 @@ export default function SettingsPage() {
   const { data: availableModels = [], isLoading: modelsLoading, refetch: refetchModels } = useOpenRouterModels();
   const { t, locale, setLocale } = useLanguage();
   const { theme, setTheme } = useTheme();
+  const showParagraphNumbers    = useUIStore((s) => s.showParagraphNumbers);
+  const setShowParagraphNumbers = useUIStore((s) => s.setShowParagraphNumbers);
 
   const { data: prompts = [] } = usePrompts();
   const createPrompt  = useCreatePrompt();
@@ -492,6 +495,34 @@ export default function SettingsPage() {
                 );
               })}
             </div>
+          </div>
+
+          {/* Editor options */}
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center gap-2">
+              <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Paragraph numbers</p>
+                <p className="text-xs text-muted-foreground">Show a count every 5 / 10 paragraphs in the scene editor</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showParagraphNumbers}
+              onClick={() => setShowParagraphNumbers(!showParagraphNumbers)}
+              className={cn(
+                "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                showParagraphNumbers ? "bg-primary" : "bg-input"
+              )}
+            >
+              <span
+                className={cn(
+                  "pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
+                  showParagraphNumbers ? "translate-x-4" : "translate-x-0"
+                )}
+              />
+            </button>
           </div>
         </section>
 

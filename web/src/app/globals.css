@@ -254,3 +254,32 @@
   opacity: 0.85;
 }
 
+/* ── Line numbers ──────────────────────────────────────────────────────────── */
+
+/* When line numbers are active, shift the editor right to make room for the gutter */
+.has-line-numbers .ProseMirror {
+  padding-left: 4rem !important;
+  position: relative;
+}
+
+/* Every top-level block gets a ::before pseudo-element for the gutter */
+.has-line-numbers .ProseMirror > * {
+  position: relative;
+}
+
+.has-line-numbers .ProseMirror > *::before {
+  content: attr(data-line);
+  position: absolute;
+  left: -3.5rem;
+  width: 3rem;
+  text-align: right;
+  color: hsl(var(--muted-foreground) / 0.5);
+  font-size: 0.65rem;
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  padding-top: 0.05em;
+  pointer-events: none;
+  user-select: none;
+}
+

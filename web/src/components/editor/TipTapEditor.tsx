@@ -9,6 +9,7 @@ import Suggestion, { exitSuggestion } from "@tiptap/suggestion";
 import type { CodexEntry } from "@/types";
 import { createCodexHighlightPlugin, patchEntryAliases, type PatchedEntry, PLUGIN_KEY } from "./CodexHighlightExtension";
 import { TagDecorationExtension } from "./TagDecorationExtension";
+import { LineNumberExtension } from "./LineNumberExtension";
 import { NoteNode } from "./nodes/NoteNode";
 import { CurrencyNode } from "./nodes/CurrencyNode";
 import { ItemNode } from "./nodes/ItemNode";
@@ -16,6 +17,7 @@ import { SceneImageNode } from "./nodes/SceneImageNode";
 import { KiNode } from "./nodes/KiNode";
 import { SlashCommandMenu, COMMANDS, type CommandItem, type SlashMenuHandle } from "./SlashCommandMenu";
 import { EditorContext } from "@/contexts/EditorContext";
+import { useUIStore } from "@/store/ui";
 
 interface Props {
   content: string;
@@ -33,6 +35,7 @@ interface SlashState {
 }
 
 export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId, onOpenChat }: Props) {
+  const showLineNumbers = useUIStore((s) => s.showParagraphNumbers);
   const entriesRef = useRef<PatchedEntry[]>(patchEntryAliases(codexEntries));
   const onClickRef = useRef(onCodexEntryClick);
   entriesRef.current = patchEntryAliases(codexEntries);
@@ -143,6 +146,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
       SceneImageNode,
       KiNode,
       SlashCommandExtension,
+      LineNumberExtension,
     ],
     content,
     onUpdate({ editor }) {
@@ -183,7 +187,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
 
   return (
     <EditorContext.Provider value={{ characters, items, allEntries: codexEntries, sceneId, projectId: codexEntries[0]?.project_id ?? 0 }}>
-      <div className="h-full overflow-y-auto relative">
+      <div className={`h-full overflow-y-auto relative${showLineNumbers ? " has-line-numbers" : ""}`}>
         <EditorContent editor={editor} className="h-full" />
         {slashMenu && (
           <SlashCommandMenu
