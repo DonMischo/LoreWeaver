@@ -50,7 +50,11 @@ export function ImportButton({ projectId, mode, className, buttonClassName }: Pr
 
       // Invalidate relevant caches
       if (mode === "story") {
-        qc.invalidateQueries({ queryKey: ["chapters", projectId] });
+        qc.invalidateQueries({ queryKey: ["acts", projectId] });
+        qc.invalidateQueries({ queryKey: ["chapters"] });        // keyed by actId — invalidate all
+        qc.invalidateQueries({ queryKey: ["scenes"] });          // keyed by chapterId — invalidate all
+        qc.invalidateQueries({ queryKey: ["structure", projectId] });
+        qc.invalidateQueries({ queryKey: ["corkboard", projectId] });
       } else {
         qc.invalidateQueries({ queryKey: ["codex", projectId] });
       }
