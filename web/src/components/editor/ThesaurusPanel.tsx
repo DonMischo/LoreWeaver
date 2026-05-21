@@ -48,17 +48,30 @@ async function fetchOpenThesaurus(word: string): Promise<string[]> {
   )];
 }
 
+// ── Supported languages ───────────────────────────────────────────────────────
+// Languages with a usable free public thesaurus API. Everything else shows a
+// "not available" notice rather than silently returning English results.
+
+const SUPPORTED: Record<string, { source: string; hasAntonyms: boolean }> = {
+  en:    { source: "via Datamuse",      hasAntonyms: true  },
+  es:    { source: "via Datamuse",      hasAntonyms: true  },
+  de:    { source: "via OpenThesaurus", hasAntonyms: false },
+};
+
+function langSupported(lang: string): boolean {
+  return lang in SUPPORTED;
+}
+
 async function fetchAllTabs(word: string, lang: string): Promise<Record<Tab, string[]>> {
   const empty: Record<Tab, string[]> = { synonyms: [], antonyms: [], related: [] };
-  if (!word.trim()) return empty;
+  if (!word.trim() || !langSupported(lang)) return empty;
 
-  // German → OpenThesaurus (no antonyms available)
   if (lang === "de") {
     const synonyms = await fetchOpenThesaurus(word);
     return { synonyms, antonyms: [], related: synonyms };
   }
 
-  // All other languages → Datamuse (v=es for Spanish, default for rest)
+  // en / es → Datamuse (v=es for Spanish)
   const [synonyms, antonyms, related] = await Promise.all([
     fetchDatamuse("rel_syn", word, lang),
     fetchDatamuse("rel_ant", word, lang),
@@ -67,12 +80,9 @@ async function fetchAllTabs(word: string, lang: string): Promise<Record<Tab, str
   return { synonyms, antonyms, related };
 }
 
-const SOURCE_LABEL: Record<string, string> = {
-  de: "via OpenThesaurus",
-};
-
 export function ThesaurusPanel({ selectedWord, onReplaceWord, onClose, language = "en" }: Props) {
-  const lang = language.split("-")[0].toLowerCase(); // "de-DE" → "de"
+  const lang    = language.split("-")[0].toLowerCase(); // "de-DE" → "de"
+  const support = SUPPORTED[lang] ?? null;
   const [query, setQuery]   = useState(selectedWord);
   const [tab, setTab]       = useState<Tab>("synonyms");
   const [results, setResults] = useState<Record<Tab, string[]>>({ synonyms: [], antonyms: [], related: [] });
@@ -147,14 +157,20 @@ export function ThesaurusPanel({ selectedWord, onReplaceWord, onClose, language 
 
       {/* Results */}
       <div className="flex-1 overflow-y-auto p-3">
-        {loading ? (
+        {!support ? (
+          <p className="text-xs text-muted-foreground text-center py-4 leading-relaxed">
+            Thesaurus not available for <span className="font-medium">{language}</span>.
+            <br />
+            <span className="text-[10px]">Supported: English, German, Spanish.</span>
+          </p>
+        ) : loading ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground py-4 justify-center">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Looking up…
           </div>
-        ) : tab === "antonyms" && lang === "de" ? (
+        ) : tab === "antonyms" && !support.hasAntonyms ? (
           <p className="text-xs text-muted-foreground text-center py-4">
-            Antonyms not available for German.
+            Antonyms not available for this language.
           </p>
         ) : currentResults.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">
@@ -176,7 +192,7 @@ export function ThesaurusPanel({ selectedWord, onReplaceWord, onClose, language 
       </div>
 
       <p className="text-[9px] text-muted-foreground/40 text-center pb-2">
-        {SOURCE_LABEL[lang] ?? "via Datamuse API"}
+        {support?.source ?? "thesaurus"}
       </p>
     </div>
   );
