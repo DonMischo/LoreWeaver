@@ -200,6 +200,7 @@ class CodexEntryBase(BaseModel):
     is_main_char: bool = False
     inventory: Optional[Any] = None  # CharacterInventory JSON or None
     image_path: Optional[str] = None
+    name_type: Optional[str] = None  # name generation style (NameType key)
 
 
 class CodexEntryCreate(CodexEntryBase):
@@ -219,6 +220,7 @@ class CodexEntryUpdate(BaseModel):
     tags: Optional[list[str]] = None
     is_main_char: Optional[bool] = None
     inventory: Optional[Any] = None
+    name_type: Optional[str] = None
 
 
 class CodexEntryOut(CodexEntryBase):
@@ -253,6 +255,7 @@ class CodexEntryOut(CodexEntryBase):
             "is_main_char": bool(entry.is_main_char),
             "inventory": inv,
             "image_path": entry.image_path,
+            "name_type": entry.name_type,
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
         }

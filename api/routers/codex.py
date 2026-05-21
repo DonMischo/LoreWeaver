@@ -72,8 +72,9 @@ def update_codex_entry(entry_id: int, body: CodexEntryUpdate, db: Session = Depe
         entry.set_aliases(data.pop("aliases"))
     if "tags" in data:
         entry.set_tags(data.pop("tags"))
-    if "groups" in data:
-        entry.set_groups(data.pop("groups"))
+    new_groups = data.pop("groups", None)
+    if new_groups is not None:
+        entry.set_groups(new_groups)
     if "inventory" in data:
         inv = data.pop("inventory")
         entry.inventory = json.dumps(inv) if inv is not None else None
@@ -81,6 +82,28 @@ def update_codex_entry(entry_id: int, body: CodexEntryUpdate, db: Session = Depe
         entry.is_main_char = int(data.pop("is_main_char"))
     for k, v in data.items():
         setattr(entry, k, v)
+
+    # Auto-create codex entries for new species / group names (empty stubs)
+    project_id = entry.project_id
+    auto_create: list[tuple[str, str]] = []
+    if body.species and body.species.strip():
+        auto_create.append((body.species.strip(), "lore"))
+    if new_groups:
+        for g in new_groups:
+            if g.strip():
+                auto_create.append((g.strip(), "custom"))
+    for aname, atype in auto_create:
+        exists = db.query(CodexEntry).filter(
+            CodexEntry.project_id == project_id,
+            CodexEntry.name == aname,
+        ).first()
+        if not exists:
+            stub = CodexEntry(project_id=project_id, name=aname, entry_type=atype)
+            stub.set_aliases([])
+            stub.set_tags([])
+            stub.set_groups([])
+            db.add(stub)
+
     db.commit()
     db.refresh(entry)
     return CodexEntryOut.from_orm_entry(entry)

@@ -129,6 +129,7 @@ class CodexEntry(Base):
     entry_group: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array of group strings
     species:     Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     subtype:     Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    name_type:   Mapped[Optional[str]] = mapped_column(String(50),  nullable=True)  # name generation style
     tags:        Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="[]")
     is_main_char: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     inventory:   Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: CharacterInventory

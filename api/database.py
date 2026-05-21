@@ -93,6 +93,7 @@ def migrate_new_columns():
         ("scenes",        "stack_group",             "TEXT"),
         ("scenes",        "node_x",                  "REAL"),
         ("scenes",        "node_y",                  "REAL"),
+        ("codex_entries", "name_type",               "TEXT"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in new_columns:
