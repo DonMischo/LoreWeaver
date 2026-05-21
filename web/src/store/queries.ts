@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi, writingLogApi, synopsisApi } from "@/lib/api";
 import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry, OpenRouterModel } from "@/lib/api";
 import type { AIPrompt, ProjectSceneItem, SceneVersion, SceneVersionDetail, CorkboardAct, CorkboardData } from "@/types";
@@ -190,6 +190,18 @@ export const useReorderScenes = (chapterId: number) => {
     mutationFn: scenesApi.reorder,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["scenes", chapterId] }),
   });
+};
+
+/** Load scenes for an arbitrary list of chapter IDs in a single hook call (uses useQueries). */
+export const useAllScenesForChapters = (chapterIds: number[]) => {
+  const results = useQueries({
+    queries: chapterIds.map((chapterId) => ({
+      queryKey: ["scenes", chapterId] as const,
+      queryFn: () => scenesApi.list(chapterId),
+      enabled: chapterId > 0,
+    })),
+  });
+  return results.map((r) => r.data ?? []);
 };
 
 // ── Codex ─────────────────────────────────────────────────────────────────────
@@ -630,9 +642,12 @@ export const useMoveScene = (projectId: number) => {
   return useMutation({
     mutationFn: ({ sceneId, data }: { sceneId: number; data: Parameters<typeof scenesApi.update>[1] }) =>
       scenesApi.update(sceneId, data),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["corkboard", projectId] });
       qc.invalidateQueries({ queryKey: ["scenes"] });
+      if (variables.data.chapter_id !== undefined) {
+        qc.invalidateQueries({ queryKey: ["structure", projectId] });
+      }
     },
   });
 };

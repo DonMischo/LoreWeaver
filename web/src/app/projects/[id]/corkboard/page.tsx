@@ -646,10 +646,12 @@ export default function CorkboardPage() {
   nodesRef.current      = nodes;
   const structureRef    = useRef(structure);
   structureRef.current  = structure;
-  const showFramesRef   = useRef(showFrames);
-  showFramesRef.current = showFrames;
-  const scratchModeRef  = useRef(scratchMode);
+  const showFramesRef    = useRef(showFrames);
+  showFramesRef.current  = showFrames;
+  const scratchModeRef   = useRef(scratchMode);
   scratchModeRef.current = scratchMode;
+  const showHierarchyRef    = useRef(showHierarchy);
+  showHierarchyRef.current  = showHierarchy;
 
   // Drag-state tracking (frame drag and scratch drag)
   const dragStartRef = useRef<{
@@ -802,10 +804,33 @@ export default function CorkboardPage() {
       sceneIds = isNaN(sid) ? [] : [sid];
     }
     if (sceneIds.length === 0) return;
+
+    // Tree view: detect chapter the scene was dropped into for cross-chapter moves
+    let treeChapterId: number | null = null;
+    if (showHierarchyRef.current && sceneIds.length === 1) {
+      for (const n of nodesRef.current) {
+        if (!n.id.startsWith("chapter-")) continue;
+        const cs = n.style as { width?: number; height?: number } | undefined;
+        const cw = cs?.width ?? 0;
+        const ch = cs?.height ?? 0;
+        if (x >= n.position.x && x <= n.position.x + cw && y >= n.position.y && y <= n.position.y + ch) {
+          treeChapterId = parseInt(n.id.replace("chapter-", ""), 10);
+          break;
+        }
+      }
+    }
+
     setLocalScenes((prev) =>
       prev.map((s) => sceneIds.includes(s.id) ? { ...s, node_x: x, node_y: y } : s)
     );
-    sceneIds.forEach((sid) => mutateRef.current.move({ sceneId: sid, data: { node_x: x, node_y: y } }));
+    sceneIds.forEach((sid) => {
+      const data: Record<string, unknown> = { node_x: x, node_y: y };
+      if (treeChapterId !== null) {
+        const currentChapterId = localScenesRef.current.find((s) => s.id === sid)?.chapter_id;
+        if (currentChapterId !== treeChapterId) data.chapter_id = treeChapterId;
+      }
+      mutateRef.current.move({ sceneId: sid, data });
+    });
   }, []); // stable — reads all values via refs
 
   // ── Subplot management ────────────────────────────────────────────────────

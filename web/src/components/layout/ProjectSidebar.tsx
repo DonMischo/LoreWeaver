@@ -20,11 +20,14 @@ import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useQueryClient } from "@tanstack/react-query";
+import { scenesApi } from "@/lib/api";
 import {
-  useActs, useChapters, useScenes,
+  useActs, useChapters,
   useCreateAct, useCreateChapter, useCreateScene,
   useDeleteAct, useDeleteChapter, useDeleteScene,
   useReorderActs, useReorderChapters, useReorderScenes,
+  useReorderScenesGlobal, useAllScenesForChapters,
   useUpdateAct, useUpdateChapter, useProject, useUpdateProject,
   useTimeConfig, useUpdateTimeConfig,
 } from "@/store/queries";
@@ -61,7 +64,7 @@ function SceneItem({
   scene, projectId, currentSceneId, index,
 }: { scene: Scene; projectId: number; currentSceneId?: number; index: number }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: scene.id });
+    useSortable({ id: scene.id, data: { type: "scene", chapterId: scene.chapter_id } });
   const deleteScene = useDeleteScene(scene.chapter_id);
   const router = useRouter();
   const { t } = useLanguage();
@@ -110,26 +113,20 @@ function SceneItem({
 // ── Chapter item ──────────────────────────────────────────────────────────────
 
 function ChapterItem({
-  chapter, projectId, currentSceneId,
-}: { chapter: Chapter; projectId: number; currentSceneId?: number }) {
+  chapter, projectId, currentSceneId, scenes,
+}: { chapter: Chapter; projectId: number; currentSceneId?: number; scenes: Scene[] }) {
   const [expanded, setExpanded] = useState(true);
   const [renaming, setRenaming] = useState(false);
   const [newTitle, setNewTitle] = useState(chapter.title);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: chapter.id });
+    useSortable({ id: chapter.id, data: { type: "chapter", chapterId: chapter.id } });
 
   const { t } = useLanguage();
-  const { data: scenes = [] } = useScenes(chapter.id);
   const createScene = useCreateScene(chapter.id);
   const deleteChapter = useDeleteChapter(chapter.act_id);
   const updateChapter = useUpdateChapter(chapter.act_id);
   const reorderScenes = useReorderScenes(chapter.id);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
 
   const style = { transform: CSS.Transform.toString(transform), transition };
 
@@ -144,16 +141,6 @@ function ChapterItem({
       ...scenes.slice(afterIndex + 1).map((s, i) => ({ id: s.id, order_index: afterIndex + 2 + i })),
     ];
     reorderScenes.mutate(newOrder);
-  };
-
-  const handleSceneDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      const oldIdx = scenes.findIndex((s) => s.id === active.id);
-      const newIdx = scenes.findIndex((s) => s.id === over.id);
-      const reordered = arrayMove(scenes, oldIdx, newIdx);
-      reorderScenes.mutate(reordered.map((s, i) => ({ id: s.id, order_index: i })));
-    }
   };
 
   const handleRename = () => {
@@ -214,20 +201,18 @@ function ChapterItem({
         </div>
       </div>
 
-      {/* Scene list */}
+      {/* Scene list — DndContext lives in parent ActItem for cross-chapter drag support */}
       {expanded && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSceneDragEnd}>
-          <SortableContext items={scenes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-            {scenes.map((scene, idx) => (
-              <div key={scene.id}>
-                <SceneItem scene={scene} projectId={projectId} currentSceneId={currentSceneId} index={idx + 1} />
-                {idx < scenes.length - 1 && (
-                  <SceneDivider onInsert={() => handleInsertAfter(idx)} />
-                )}
-              </div>
-            ))}
-          </SortableContext>
-        </DndContext>
+        <SortableContext items={scenes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+          {scenes.map((scene, idx) => (
+            <div key={scene.id}>
+              <SceneItem scene={scene} projectId={projectId} currentSceneId={currentSceneId} index={idx + 1} />
+              {idx < scenes.length - 1 && (
+                <SceneDivider onInsert={() => handleInsertAfter(idx)} />
+              )}
+            </div>
+          ))}
+        </SortableContext>
       )}
     </div>
   );
@@ -247,10 +232,13 @@ function ActItem({
 
   const { t } = useLanguage();
   const { data: chapters = [] } = useChapters(act.id);
+  const allScenesData = useAllScenesForChapters(chapters.map((c) => c.id));
   const createChapter = useCreateChapter(act.id);
   const deleteAct = useDeleteAct(projectId);
   const updateAct = useUpdateAct(projectId);
   const reorderChapters = useReorderChapters(act.id);
+  const reorderScenesGlobal = useReorderScenesGlobal(projectId);
+  const qc = useQueryClient();
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -259,13 +247,58 @@ function ActItem({
 
   const style = { transform: CSS.Transform.toString(transform), transition };
 
-  const handleChapterDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    if (over && active.id !== over.id) {
+    if (!over || active.id === over.id) return;
+
+    const activeData = active.data.current as { type?: string; chapterId?: number } | undefined;
+    const overData   = over.data.current   as { type?: string; chapterId?: number } | undefined;
+
+    // ── Chapter reorder ───────────────────────────────────────────────────────
+    if (activeData?.type !== "scene") {
       const oldIdx = chapters.findIndex((c) => c.id === active.id);
       const newIdx = chapters.findIndex((c) => c.id === over.id);
-      const reordered = arrayMove(chapters, oldIdx, newIdx);
-      reorderChapters.mutate(reordered.map((c, i) => ({ id: c.id, order_index: i })));
+      if (oldIdx < 0 || newIdx < 0) return;
+      reorderChapters.mutate(arrayMove(chapters, oldIdx, newIdx).map((c, i) => ({ id: c.id, order_index: i })));
+      return;
+    }
+
+    // ── Scene reorder / cross-chapter move ────────────────────────────────────
+    const srcChapterId = activeData.chapterId!;
+    const tgtChapterId = overData?.chapterId ?? srcChapterId;
+    const sceneId      = active.id as number;
+    const srcIdx  = chapters.findIndex((c) => c.id === srcChapterId);
+    const tgtIdx  = chapters.findIndex((c) => c.id === tgtChapterId);
+    const srcScenes = allScenesData[srcIdx] ?? [];
+    const tgtScenes = allScenesData[tgtIdx] ?? [];
+
+    if (srcChapterId === tgtChapterId) {
+      // Same chapter: reorder
+      const from = srcScenes.findIndex((s) => s.id === sceneId);
+      const to   = srcScenes.findIndex((s) => s.id === (over.id as number));
+      if (from < 0 || to < 0) return;
+      reorderScenesGlobal.mutate(arrayMove(srcScenes, from, to).map((s, i) => ({ id: s.id, order_index: i })));
+    } else {
+      // Cross-chapter: move scene, insert at drop position
+      const overSceneId  = over.id as number;
+      const insertBefore = overData?.type === "scene" ? tgtScenes.findIndex((s) => s.id === overSceneId) : -1;
+      const insertAt     = insertBefore >= 0 ? insertBefore : tgtScenes.length;
+      const newTgt = [...tgtScenes];
+      newTgt.splice(insertAt, 0, { id: sceneId } as Scene);
+
+      scenesApi.update(sceneId, { chapter_id: tgtChapterId })
+        .then(() => Promise.all([
+          scenesApi.reorder(newTgt.map((s, i) => ({ id: s.id, order_index: i }))),
+          srcScenes.length > 1
+            ? scenesApi.reorder(srcScenes.filter((s) => s.id !== sceneId).map((s, i) => ({ id: s.id, order_index: i })))
+            : Promise.resolve(),
+        ]))
+        .then(() => {
+          qc.invalidateQueries({ queryKey: ["scenes", srcChapterId] });
+          qc.invalidateQueries({ queryKey: ["scenes", tgtChapterId] });
+          qc.invalidateQueries({ queryKey: ["structure", projectId] });
+          qc.invalidateQueries({ queryKey: ["corkboard", projectId] });
+        });
     }
   };
 
@@ -332,14 +365,15 @@ function ActItem({
         </div>
       </div>
 
-      {/* Chapter list */}
+      {/* Chapter list — single DndContext handles both chapter reorder and cross-chapter scene drag */}
       {expanded && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleChapterDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={chapters.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-            {chapters.map((chapter) => (
+            {chapters.map((chapter, idx) => (
               <ChapterItem
                 key={chapter.id}
                 chapter={chapter}
+                scenes={allScenesData[idx] ?? []}
                 projectId={projectId}
                 currentSceneId={currentSceneId}
               />
