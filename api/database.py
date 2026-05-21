@@ -87,6 +87,12 @@ def migrate_new_columns():
         ("user_settings", "enabled_models",          "TEXT DEFAULT '[]'"),
         ("user_settings", "default_chat_model",      "TEXT"),
         ("fragments",     "category",                "TEXT"),
+        ("scenes",        "synopsis",                "TEXT"),
+        ("scenes",        "subplot",                 "TEXT"),
+        ("scenes",        "global_order",            "INTEGER"),
+        ("scenes",        "stack_group",             "TEXT"),
+        ("scenes",        "node_x",                  "REAL"),
+        ("scenes",        "node_y",                  "REAL"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in new_columns:

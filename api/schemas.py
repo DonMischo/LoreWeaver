@@ -143,16 +143,29 @@ class SceneCreate(SceneBase):
 class SceneUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
+    synopsis: Optional[str] = None
     order_index: Optional[int] = None
     word_count: Optional[int] = None
     scene_time: Optional[Any] = None  # JSON dict or None to clear
+    chapter_id: Optional[int] = None  # for cross-column corkboard DnD
+    subplot: Optional[str] = None
+    global_order: Optional[int] = None
+    stack_group: Optional[str] = None
+    node_x: Optional[float] = None
+    node_y: Optional[float] = None
 
 
 class SceneOut(SceneBase):
     id: int
     chapter_id: int
     word_count: int
+    synopsis: Optional[str] = None
     scene_time: Optional[Any] = None
+    subplot: Optional[str] = None
+    global_order: Optional[int] = None
+    stack_group: Optional[str] = None
+    node_x: Optional[float] = None
+    node_y: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 
