@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useState, useCallback, useEffect } from "react";
 import type { ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { settingsApi } from "@/lib/api";
 
 export const THEMES = ["dark", "light", "midnight", "forest", "sepia", "ocean", "rose", "amber"] as const;
 export type Theme = typeof THEMES[number];
@@ -145,18 +147,22 @@ function applyTheme(theme: Theme) {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: settingsApi.get });
 
+  // Sync theme from DB once settings load
   useEffect(() => {
-    const stored = localStorage.getItem("lw-theme") as Theme | null;
-    const t = stored && (THEMES as readonly string[]).includes(stored) ? stored : "dark";
-    setThemeState(t as Theme);
-    applyTheme(t as Theme);
-  }, []);
+    if (!settings) return;
+    const t = (THEMES as readonly string[]).includes(settings.theme)
+      ? (settings.theme as Theme)
+      : "dark";
+    setThemeState(t);
+    applyTheme(t);
+  }, [settings?.theme]);
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
-    localStorage.setItem("lw-theme", t);
     applyTheme(t);
+    settingsApi.update({ theme: t });
   }, []);
 
   return (

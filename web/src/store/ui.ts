@@ -1,10 +1,6 @@
 import { create } from "zustand";
 import type { SaveStatus } from "@/types";
-
-function ls(key: string, fallback: string): string {
-  if (typeof localStorage === "undefined") return fallback;
-  return localStorage.getItem(key) ?? fallback;
-}
+import type { Settings } from "@/types";
 
 interface UIState {
   sidebarOpen: boolean;
@@ -29,17 +25,19 @@ interface UIState {
   setSessionTimerEnabled: (on: boolean) => void;
   setSessionGoal: (goal: number, baseWords: number) => void;
   clearSession: () => void;
+  /** Called once after settings load from DB to hydrate UI prefs. */
+  initFromSettings: (s: Pick<Settings, "show_paragraph_numbers" | "typewriter_mode" | "typewriter_offset" | "session_timer_enabled">) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
   sidebarOpen: true,
   codexSidebarOpen: false,
   saveStatus: "idle",
-  showParagraphNumbers: ls("lw_para_numbers", "false") === "true",
-  typewriterMode: ls("lw_typewriter", "false") === "true",
-  typewriterOffset: Number(ls("lw_typewriter_offset", "50")),
+  showParagraphNumbers: false,
+  typewriterMode: false,
+  typewriterOffset: 50,
   focusMode: false,
-  sessionTimerEnabled: ls("lw_session_timer", "true") === "true",
+  sessionTimerEnabled: true,
   sessionGoal: null,
   sessionStartTime: null,
   sessionBaseWords: null,
@@ -47,25 +45,21 @@ export const useUIStore = create<UIState>((set) => ({
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setCodexSidebarOpen: (open) => set({ codexSidebarOpen: open }),
   setSaveStatus: (saveStatus) => set({ saveStatus }),
-  setShowParagraphNumbers: (show) => {
-    localStorage.setItem("lw_para_numbers", String(show));
-    set({ showParagraphNumbers: show });
-  },
-  setTypewriterMode: (on) => {
-    localStorage.setItem("lw_typewriter", String(on));
-    set({ typewriterMode: on });
-  },
-  setTypewriterOffset: (pct) => {
-    localStorage.setItem("lw_typewriter_offset", String(pct));
-    set({ typewriterOffset: pct });
-  },
+  setShowParagraphNumbers: (show) => set({ showParagraphNumbers: show }),
+  setTypewriterMode: (on) => set({ typewriterMode: on }),
+  setTypewriterOffset: (pct) => set({ typewriterOffset: pct }),
   setFocusMode: (on) => set({ focusMode: on }),
-  setSessionTimerEnabled: (on) => {
-    localStorage.setItem("lw_session_timer", String(on));
-    set({ sessionTimerEnabled: on, sessionGoal: null, sessionStartTime: null, sessionBaseWords: null });
-  },
+  setSessionTimerEnabled: (on) =>
+    set({ sessionTimerEnabled: on, sessionGoal: null, sessionStartTime: null, sessionBaseWords: null }),
   setSessionGoal: (goal, baseWords) =>
     set({ sessionGoal: goal, sessionStartTime: Date.now(), sessionBaseWords: baseWords }),
   clearSession: () =>
     set({ sessionGoal: null, sessionStartTime: null, sessionBaseWords: null }),
+  initFromSettings: (s) =>
+    set({
+      showParagraphNumbers: s.show_paragraph_numbers,
+      typewriterMode:       s.typewriter_mode,
+      typewriterOffset:     s.typewriter_offset,
+      sessionTimerEnabled:  s.session_timer_enabled,
+    }),
 }));

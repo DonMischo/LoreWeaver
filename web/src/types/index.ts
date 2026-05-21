@@ -197,6 +197,11 @@ export interface Settings {
   default_chat_model: string | null;
   theme: string;
   enabled_models: string[];
+  language: string;
+  show_paragraph_numbers: boolean;
+  typewriter_mode: boolean;
+  typewriter_offset: number;
+  session_timer_enabled: boolean;
 }
 
 // ── Fragments ─────────────────────────────────────────────────────────────────

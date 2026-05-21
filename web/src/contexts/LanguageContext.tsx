@@ -3,6 +3,8 @@
 import { createContext, useContext, useState, useCallback, useEffect } from "react";
 import type { ReactNode } from "react";
 import { type Locale, translate } from "@/lib/i18n";
+import { useQuery } from "@tanstack/react-query";
+import { settingsApi } from "@/lib/api";
 
 interface LanguageContextValue {
   locale: Locale;
@@ -17,17 +19,17 @@ const LanguageContext = createContext<LanguageContextValue>({
 });
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  // Always start with "en" to match the server render, then sync after mount.
+  // Always start with "en" to match the server render, then sync from DB after load.
   const [locale, setLocaleState] = useState<Locale>("en");
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: settingsApi.get });
 
   useEffect(() => {
-    const stored = localStorage.getItem("lw-language") as Locale | null;
-    if (stored) setLocaleState(stored);
-  }, []);
+    if (settings?.language) setLocaleState(settings.language as Locale);
+  }, [settings?.language]);
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);
-    localStorage.setItem("lw-language", l);
+    settingsApi.update({ language: l });
   }, []);
 
   const t = useCallback(

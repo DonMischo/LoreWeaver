@@ -24,6 +24,7 @@ import {
   useTimeConfig, useUpdateTimeConfig,
   useCreateFragment, useDeleteScene,
   useSyncSceneCommands, useCreateSceneVersion,
+  useUpdateSettings,
 } from "@/store/queries";
 import type { SceneTime } from "@/types";
 import type { SceneCommandIn } from "@/lib/api";
@@ -68,6 +69,7 @@ export default function ScenePage() {
   const deleteScene = useDeleteScene(scene?.chapter_id ?? 0);
   const syncCommands = useSyncSceneCommands(sceneIdNum);
   const createVersion = useCreateSceneVersion(sceneIdNum);
+  const updateSettings = useUpdateSettings();
   const qc = useQueryClient();
 
   const timeConfig = timeConfigData ?? DEFAULT_TIME_CONFIG;
@@ -412,7 +414,7 @@ export default function ScenePage() {
 
               {/* Writing tools */}
               <button
-                onClick={() => { setTypewriterMode(!typewriterMode); }}
+                onClick={() => { const next = !typewriterMode; setTypewriterMode(next); updateSettings.mutate({ typewriter_mode: next }); }}
                 className="w-full text-left text-xs px-3 py-2 hover:bg-secondary/50 flex items-center gap-2"
               >
                 <AlignCenter className="h-3.5 w-3.5 text-muted-foreground" />

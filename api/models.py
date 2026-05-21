@@ -239,8 +239,13 @@ class UserSettings(Base):
         String(100), default="anthropic/claude-3.5-sonnet"
     )
     default_chat_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    theme: Mapped[str] = mapped_column(String(20), default="system")
+    theme: Mapped[str] = mapped_column(String(20), default="dark")
     enabled_models: Mapped[str] = mapped_column(Text, default="[]")  # JSON list of model IDs
+    language: Mapped[str] = mapped_column(String(10), default="en")
+    show_paragraph_numbers: Mapped[int] = mapped_column(Integer, default=0)
+    typewriter_mode: Mapped[int] = mapped_column(Integer, default=0)
+    typewriter_offset: Mapped[int] = mapped_column(Integer, default=50)
+    session_timer_enabled: Mapped[int] = mapped_column(Integer, default=1)
 
 
 class AIPrompt(Base):
