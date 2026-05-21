@@ -335,6 +335,11 @@ export const settingsApi = {
     default_chat_model?: string | null;
     theme?: string;
     enabled_models?: string[];
+    language?: string;
+    show_paragraph_numbers?: boolean;
+    typewriter_mode?: boolean;
+    typewriter_offset?: number;
+    session_timer_enabled?: boolean;
   }) => req<Settings>("/settings", { method: "POST", body: JSON.stringify(data) }),
   getModels: () => req<OpenRouterModel[]>("/settings/models"),
 };
@@ -371,6 +376,8 @@ export const dataDirApi = {
     }
     throw new Error("Timed out waiting for folder selection");
   },
+  check: (path: string) =>
+    req<{ has_db: boolean }>(`/settings/data-dir/check?path=${encodeURIComponent(path)}`),
   set: (p: string | null, migrate = false) =>
     req<{ current: string; configured: string | null }>("/settings/data-dir", {
       method: "POST",

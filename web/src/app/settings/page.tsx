@@ -64,6 +64,8 @@ export default function SettingsPage() {
   const [dataDirMigrate, setDataDirMigrate]   = useState(true);
   const [dataDirBrowseErr, setDataDirBrowseErr] = useState<string | null>(null);
   const [dataDirRestarting, setDataDirRestarting] = useState(false);
+  const [hasDbConflict, setHasDbConflict] = useState(false);
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
 
   useEffect(() => {
     dataDirApi.get().then((res) => {
@@ -71,6 +73,14 @@ export default function SettingsPage() {
       setDataDirConfigured(res.configured);
     }).catch(() => {});
   }, []);
+
+  // Check if target directory already has a DB when migrate is on and path changed
+  useEffect(() => {
+    setHasDbConflict(false);
+    setConfirmOverwrite(false);
+    if (!dataDirMigrate || !dataDir || dataDir === dataDirConfigured) return;
+    dataDirApi.check(dataDir).then((r) => setHasDbConflict(r.has_db)).catch(() => {});
+  }, [dataDir, dataDirMigrate, dataDirConfigured]);
 
   const [selectedPromptId, setSelectedPromptId] = useState<number | null>(null);
   const [editName, setEditName]                 = useState("");
@@ -514,7 +524,11 @@ export default function SettingsPage() {
               type="button"
               role="switch"
               aria-checked={showParagraphNumbers}
-              onClick={() => setShowParagraphNumbers(!showParagraphNumbers)}
+              onClick={() => {
+                const next = !showParagraphNumbers;
+                setShowParagraphNumbers(next);
+                updateSettings.mutate({ show_paragraph_numbers: next });
+              }}
               className={cn(
                 "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 showParagraphNumbers ? "bg-primary" : "bg-input"
@@ -542,7 +556,11 @@ export default function SettingsPage() {
               type="button"
               role="switch"
               aria-checked={sessionTimerEnabled}
-              onClick={() => setSessionTimerEnabled(!sessionTimerEnabled)}
+              onClick={() => {
+                const next = !sessionTimerEnabled;
+                setSessionTimerEnabled(next);
+                updateSettings.mutate({ session_timer_enabled: next });
+              }}
               className={cn(
                 "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 sessionTimerEnabled ? "bg-primary" : "bg-input"
@@ -567,6 +585,7 @@ export default function SettingsPage() {
                 step={5}
                 value={typewriterOffset}
                 onChange={(e) => setTypewriterOffset(Number(e.target.value))}
+                onMouseUp={(e) => updateSettings.mutate({ typewriter_offset: Number((e.target as HTMLInputElement).value) })}
                 className="flex-1 accent-primary"
               />
               <span className="text-xs tabular-nums text-muted-foreground w-8 text-right">{typewriterOffset}%</span>
@@ -628,10 +647,25 @@ export default function SettingsPage() {
               Copy existing database &amp; uploads to new folder
             </label>
           )}
+          {hasDbConflict && dataDirMigrate && (
+            <div className="rounded border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive space-y-2">
+              <p className="font-medium">⚠ The target folder already contains a database.</p>
+              <p className="text-destructive/80">Continuing will permanently overwrite it with your current data.</p>
+              <label className="flex items-center gap-2 cursor-pointer select-none font-medium">
+                <input
+                  type="checkbox"
+                  checked={confirmOverwrite}
+                  onChange={e => setConfirmOverwrite(e.target.checked)}
+                  className="accent-destructive"
+                />
+                I understand — overwrite the existing database
+              </label>
+            </div>
+          )}
           <div className="flex items-center gap-2 flex-wrap">
             <Button
               size="sm"
-              disabled={dataDirPending}
+              disabled={dataDirPending || (hasDbConflict && dataDirMigrate && !confirmOverwrite)}
               onClick={async () => {
                 setDataDirPending(true);
                 try {

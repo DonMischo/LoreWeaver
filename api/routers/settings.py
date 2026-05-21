@@ -56,8 +56,13 @@ def _settings_out(s: UserSettings) -> SettingsOut:
         has_api_key=bool(s.openrouter_api_key),
         default_model=s.default_model,
         default_chat_model=s.default_chat_model or None,
-        theme=s.theme,
+        theme=s.theme or "dark",
         enabled_models=enabled,
+        language=s.language or "en",
+        show_paragraph_numbers=bool(s.show_paragraph_numbers),
+        typewriter_mode=bool(s.typewriter_mode),
+        typewriter_offset=s.typewriter_offset if s.typewriter_offset is not None else 50,
+        session_timer_enabled=bool(s.session_timer_enabled) if s.session_timer_enabled is not None else True,
     )
 
 
@@ -79,6 +84,16 @@ def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
         s.theme = body.theme
     if body.enabled_models is not None:
         s.enabled_models = json.dumps(body.enabled_models)
+    if body.language is not None:
+        s.language = body.language
+    if body.show_paragraph_numbers is not None:
+        s.show_paragraph_numbers = int(body.show_paragraph_numbers)
+    if body.typewriter_mode is not None:
+        s.typewriter_mode = int(body.typewriter_mode)
+    if body.typewriter_offset is not None:
+        s.typewriter_offset = body.typewriter_offset
+    if body.session_timer_enabled is not None:
+        s.session_timer_enabled = int(body.session_timer_enabled)
     db.commit()
     db.refresh(s)
     return _settings_out(s)
@@ -238,6 +253,14 @@ def get_data_dir():
         "current": os.getcwd(),
         "configured": cfg.get("dataDir"),
     }
+
+
+@router.get("/data-dir/check")
+def check_data_dir(path: str):
+    try:
+        return {"has_db": (Path(path) / "loreweaver.db").exists()}
+    except Exception:
+        return {"has_db": False}
 
 
 @router.post("/data-dir")

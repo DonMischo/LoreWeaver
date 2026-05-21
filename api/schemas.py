@@ -371,6 +371,11 @@ class SettingsUpdate(BaseModel):
     default_chat_model: Optional[str] = None
     theme: Optional[str] = None
     enabled_models: Optional[list[str]] = None
+    language: Optional[str] = None
+    show_paragraph_numbers: Optional[bool] = None
+    typewriter_mode: Optional[bool] = None
+    typewriter_offset: Optional[int] = None
+    session_timer_enabled: Optional[bool] = None
 
 
 class SettingsOut(BaseModel):
@@ -380,6 +385,11 @@ class SettingsOut(BaseModel):
     default_chat_model: Optional[str] = None
     theme: str
     enabled_models: list[str]
+    language: str
+    show_paragraph_numbers: bool
+    typewriter_mode: bool
+    typewriter_offset: int
+    session_timer_enabled: bool
 
     model_config = {"from_attributes": True}
 
