@@ -21,7 +21,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   }, [project?.book_meta?.language]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-dvh overflow-hidden">
       {!focusMode && <ProjectSidebar projectId={projectId} />}
       <main className="flex-1 overflow-hidden">{children}</main>
     </div>

@@ -10,15 +10,15 @@ import {
 } from "@xyflow/react";
 import type { Node, Edge, OnNodeDrag } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Plus, X, AlignJustify, ZoomOut, Layers2, LayoutGrid, TreePine } from "lucide-react";
+import { Plus, X, AlignJustify, ZoomOut, Layers2, LayoutGrid, TreePine, Group, Link2 } from "lucide-react";
 import {
   useCorkboard, useUpdateSceneSynopsis, useGenerateSynopsis,
   useMoveScene, useCodexEntries, useProjectStructure,
 } from "@/store/queries";
 import { SceneNode } from "@/components/corkboard/SceneNode";
 import type { SceneNodeType, SceneNodeData } from "@/components/corkboard/SceneNode";
-import { ActNode, ChapterNode } from "@/components/corkboard/HierarchyNodes";
-import type { ActNodeType, ChapterNodeType } from "@/components/corkboard/HierarchyNodes";
+import { ActNode, ChapterNode, GroupFrameNode } from "@/components/corkboard/HierarchyNodes";
+import type { ActNodeType, ChapterNodeType, GroupFrameNodeType } from "@/components/corkboard/HierarchyNodes";
 import { ColorPicker, hexToRgba, MAIN_COLOR, SUBPLOT_PALETTE } from "@/components/corkboard/ColorPicker";
 import type { CorkboardScene, CorkboardAct } from "@/types";
 
@@ -29,6 +29,11 @@ const CARD_W    = 230;
 const CARD_W_SM = 160;
 const COL_GAP   = 100;
 const ROW_H     = 200;  // approximate card height + gap
+
+// Group frame geometry
+const FRAME_PAD    = 24;   // padding around scenes inside a chapter frame
+const SCENE_H_FULL = 180;  // approx card height (normal mode)
+const SCENE_H_CMP  = 130;  // approx card height (compact mode)
 
 // Cascade layout geometry
 const CDX = 12;   // x offset per scene in a pile
@@ -251,7 +256,7 @@ function chapterBoxSize(nScenes: number, compact: boolean): { w: number; h: numb
   };
 }
 
-type AnyNode = SceneNodeType | ActNodeType | ChapterNodeType;
+type AnyNode = SceneNodeType | ActNodeType | ChapterNodeType | GroupFrameNodeType;
 
 function buildHierarchyNodes(
   localScenes: CorkboardScene[],
@@ -319,7 +324,7 @@ function buildHierarchyNodes(
           type: "sceneNode",
           position: { x: sx, y: sy },
           dragHandle: '[data-drag="handle"]',
-          zIndex: 1000 - i,  // first scene on top of pile
+          zIndex: 10 + i,   // later scenes sit on top (like papers laid down in sequence)
           data: {
             scenes: [scene],
             projectId,
@@ -374,9 +379,47 @@ function buildHierarchyNodes(
   return { nodes: allNodes, edges, positions };
 }
 
+// ── Chapter group frames (free-form mode) ────────────────────────────────────
+
+function buildGroupFrames(
+  structure: CorkboardAct[],
+  scenePositions: Map<number, { x: number; y: number }>,
+  compact: boolean,
+): GroupFrameNodeType[] {
+  const sh = compact ? SCENE_H_CMP : SCENE_H_FULL;
+  const sw = compact ? CARD_W_SM : CARD_W;
+  const frames: GroupFrameNodeType[] = [];
+
+  for (const act of structure) {
+    for (const chapter of act.chapters) {
+      const positions = chapter.scenes
+        .map((s) => scenePositions.get(s.id))
+        .filter((p): p is { x: number; y: number } => !!p);
+      if (positions.length === 0) continue;
+
+      const minX = Math.min(...positions.map((p) => p.x));
+      const minY = Math.min(...positions.map((p) => p.y));
+      const maxX = Math.max(...positions.map((p) => p.x)) + sw;
+      const maxY = Math.max(...positions.map((p) => p.y)) + sh;
+
+      frames.push({
+        id: `frame-chapter-${chapter.id}`,
+        type: "groupFrameNode",
+        position: { x: minX - FRAME_PAD, y: minY - FRAME_PAD - 20 },
+        style: { width: maxX - minX + FRAME_PAD * 2, height: maxY - minY + FRAME_PAD * 2 + 20 },
+        data: { label: chapter.title, chapterId: chapter.id },
+        zIndex: -1,
+        selectable: false,
+        draggable: true,
+      } as GroupFrameNodeType);
+    }
+  }
+  return frames;
+}
+
 // ── Node types registration (stable outside component) ────────────────────────
 
-const nodeTypes = { sceneNode: SceneNode, actNode: ActNode, chapterNode: ChapterNode };
+const nodeTypes = { sceneNode: SceneNode, actNode: ActNode, chapterNode: ChapterNode, groupFrameNode: GroupFrameNode };
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -422,6 +465,8 @@ export default function CorkboardPage() {
   const [compact, setCompact]               = useState(false);
   const [showHierarchy, setShowHierarchy]   = useState(false);
   const [generatingId, setGeneratingId]     = useState<number | null>(null);
+  const [showFrames, setShowFrames]         = useState(false);
+  const [scratchMode, setScratchMode]       = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -551,11 +596,21 @@ export default function CorkboardPage() {
         showSynopsis, compact, generatingId, availableSubplots, handlers, projectId,
       );
       const newEdges = buildRFEdges(groups);
-      setNodes(newNodes);
+      if (showFrames && structure?.length) {
+        const scenePositions = new Map(
+          newNodes
+            .filter((n) => n.id.startsWith("scene-"))
+            .map((n) => [parseInt(n.id.replace("scene-", ""), 10), { ...n.position }]),
+        );
+        const frames = buildGroupFrames(structure, scenePositions, compact);
+        setNodes([...frames, ...newNodes]);
+      } else {
+        setNodes(newNodes);
+      }
       setEdges(newEdges);
     }
   }, [
-    localScenes, structure, showHierarchy,
+    localScenes, structure, showHierarchy, showFrames,
     allCols, sceneColors, resolvedColColors,
     showSynopsis, compact, generatingId, availableSubplots,
     handlers, projectId, setNodes, setEdges,
@@ -586,22 +641,172 @@ export default function CorkboardPage() {
   const compactRef = useRef(compact);
   compactRef.current = compact;
 
+  // Extra refs for frame-drag and scratch-mode (stable closures)
+  const nodesRef        = useRef<Node[]>(nodes);
+  nodesRef.current      = nodes;
+  const structureRef    = useRef(structure);
+  structureRef.current  = structure;
+  const showFramesRef   = useRef(showFrames);
+  showFramesRef.current = showFrames;
+  const scratchModeRef  = useRef(scratchMode);
+  scratchModeRef.current = scratchMode;
+
+  // Drag-state tracking (frame drag and scratch drag)
+  const dragStartRef = useRef<{
+    nodeId: string;
+    nodeType: "frame" | "scratch";
+    startPos: { x: number; y: number };
+    followers: Array<{ id: string; startPos: { x: number; y: number } }>;
+  } | null>(null);
+
+  // ── Drag start — register followers for frame and scratch modes ──────────
+
+  const onNodeDragStart: OnNodeDrag = useCallback((_, node) => {
+    const nodeId = node.id;
+
+    // Frame drag: identify all scene nodes that belong to this chapter
+    if (nodeId.startsWith("frame-chapter-")) {
+      const chapterId = parseInt(nodeId.replace("frame-chapter-", ""), 10);
+      const chapterSceneIds = new Set(
+        (structureRef.current ?? [])
+          .flatMap((act) => act.chapters)
+          .find((ch) => ch.id === chapterId)
+          ?.scenes.map((s) => s.id) ?? [],
+      );
+      const followers = nodesRef.current
+        .filter((n) => n.id.startsWith("scene-") && chapterSceneIds.has(parseInt(n.id.replace("scene-", ""), 10)))
+        .map((n) => ({ id: n.id, startPos: { ...n.position } }));
+      dragStartRef.current = { nodeId, nodeType: "frame", startPos: { ...node.position }, followers };
+      return;
+    }
+
+    // Scratch drag: identify all scene nodes structurally after the dragged one
+    if (scratchModeRef.current && nodeId.startsWith("scene-")) {
+      const sceneId = parseInt(nodeId.replace("scene-", ""), 10);
+      const flatOrder = (structureRef.current ?? [])
+        .slice()
+        .sort((a, b) => a.order_index - b.order_index)
+        .flatMap((act) =>
+          [...act.chapters]
+            .sort((a, b) => a.order_index - b.order_index)
+            .flatMap((ch) => ch.scenes.map((s) => s.id)),
+        );
+      const idx = flatOrder.indexOf(sceneId);
+      const followerIds = new Set(idx >= 0 ? flatOrder.slice(idx + 1) : []);
+      const followers = nodesRef.current
+        .filter((n) => n.id.startsWith("scene-") && followerIds.has(parseInt(n.id.replace("scene-", ""), 10)))
+        .map((n) => ({ id: n.id, startPos: { ...n.position } }));
+      dragStartRef.current = { nodeId, nodeType: "scratch", startPos: { ...node.position }, followers };
+    }
+  }, []); // stable — reads via refs
+
+  // ── Drag — move follower nodes by the same delta ──────────────────────────
+
+  const onNodeDrag: OnNodeDrag = useCallback((_, node) => {
+    const drag = dragStartRef.current;
+    if (!drag || drag.nodeId !== node.id || drag.followers.length === 0) return;
+    const dx = node.position.x - drag.startPos.x;
+    const dy = node.position.y - drag.startPos.y;
+    setNodes((prev) =>
+      prev.map((n) => {
+        const f = drag.followers.find((fl) => fl.id === n.id);
+        return f ? { ...n, position: { x: f.startPos.x + dx, y: f.startPos.y + dy } } : n;
+      }),
+    );
+  }, [setNodes]); // setNodes is stable
+
   const onNodeDragStop: OnNodeDrag = useCallback((_, node) => {
+    const drag = dragStartRef.current;
+
+    // ── Case 1: frame drag — save follower positions by delta ────────────────
+    if (drag && drag.nodeType === "frame" && drag.nodeId === node.id) {
+      dragStartRef.current = null;
+      const dx = node.position.x - drag.startPos.x;
+      const dy = node.position.y - drag.startPos.y;
+      const updates = drag.followers.map(({ id, startPos }) => ({
+        sceneId: parseInt(id.replace("scene-", ""), 10),
+        nx: startPos.x + dx,
+        ny: startPos.y + dy,
+      }));
+      setLocalScenes((prev) =>
+        prev.map((s) => {
+          const u = updates.find((up) => up.sceneId === s.id);
+          return u ? { ...s, node_x: u.nx, node_y: u.ny } : s;
+        })
+      );
+      updates.forEach(({ sceneId, nx, ny }) =>
+        mutateRef.current.move({ sceneId, data: { node_x: nx, node_y: ny } })
+      );
+      return;
+    }
+
+    // ── Case 2: scratch drag — save dragged + followers, optional chapter ───
+    if (drag && drag.nodeType === "scratch" && drag.nodeId === node.id) {
+      dragStartRef.current = null;
+      const dx = node.position.x - drag.startPos.x;
+      const dy = node.position.y - drag.startPos.y;
+      const droppedSceneId = parseInt(node.id.replace("scene-", ""), 10);
+
+      // Hit-test: find which chapter frame the dragged scene was dropped into
+      let targetChapterId: number | null = null;
+      if (showFramesRef.current) {
+        for (const frame of nodesRef.current) {
+          if (!frame.id.startsWith("frame-chapter-")) continue;
+          const s = frame.style as { width?: number; height?: number } | undefined;
+          const fw = s?.width ?? 0;
+          const fh = s?.height ?? 0;
+          if (
+            node.position.x >= frame.position.x && node.position.x <= frame.position.x + fw &&
+            node.position.y >= frame.position.y && node.position.y <= frame.position.y + fh
+          ) {
+            targetChapterId = parseInt(frame.id.replace("frame-chapter-", ""), 10);
+            break;
+          }
+        }
+      }
+
+      // Build full update list: dragged scene + all followers at their new positions
+      const allUpdates = [
+        { sceneId: droppedSceneId, nx: node.position.x, ny: node.position.y },
+        ...drag.followers.map(({ id, startPos }) => ({
+          sceneId: parseInt(id.replace("scene-", ""), 10),
+          nx: startPos.x + dx,
+          ny: startPos.y + dy,
+        })),
+      ];
+      setLocalScenes((prev) =>
+        prev.map((s) => {
+          const u = allUpdates.find((up) => up.sceneId === s.id);
+          return u ? { ...s, node_x: u.nx, node_y: u.ny } : s;
+        })
+      );
+      allUpdates.forEach(({ sceneId, nx, ny }) => {
+        const data: Record<string, unknown> = { node_x: nx, node_y: ny };
+        if (targetChapterId !== null) data.chapter_id = targetChapterId;
+        mutateRef.current.move({ sceneId, data });
+      });
+      return;
+    }
+
+    // ── Case 3: normal drag ──────────────────────────────────────────────────
+    dragStartRef.current = null;
     const { x, y } = node.position;
     const nodeId = node.id;
+    if (!nodeId.startsWith("scene-") && !nodeId.startsWith("stack-")) return;
     let sceneIds: number[];
     if (nodeId.startsWith("stack-")) {
       const sg = nodeId.replace("stack-", "");
       sceneIds = localScenesRef.current.filter((s) => s.stack_group === sg).map((s) => s.id);
     } else {
       const sid = parseInt(nodeId.replace("scene-", ""), 10);
-      sceneIds = [sid];
+      sceneIds = isNaN(sid) ? [] : [sid];
     }
+    if (sceneIds.length === 0) return;
     setLocalScenes((prev) =>
       prev.map((s) => sceneIds.includes(s.id) ? { ...s, node_x: x, node_y: y } : s)
     );
     sceneIds.forEach((sid) => mutateRef.current.move({ sceneId: sid, data: { node_x: x, node_y: y } }));
-  }, []); // stable
+  }, []); // stable — reads all values via refs
 
   // ── Subplot management ────────────────────────────────────────────────────
 
@@ -656,6 +861,8 @@ export default function CorkboardPage() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
         fitView
@@ -720,16 +927,40 @@ export default function CorkboardPage() {
             Tree
           </button>
 
-          {/* Cascade / re-layout — only in free-form mode */}
+          {/* Cascade / Frames / Chain — only in free-form mode */}
           {!showHierarchy && (
-            <button
-              onClick={handleCascade}
-              title="Stack all scenes in cascading piles (versetzt)"
-              className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border border-transparent text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              Cascade
-            </button>
+            <>
+              <button
+                onClick={handleCascade}
+                title="Stack all scenes in cascading piles"
+                className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border border-transparent text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Cascade
+              </button>
+              <button
+                onClick={() => setShowFrames((v) => !v)}
+                title={showFrames ? "Hide chapter frames" : "Show chapter frames — drag a frame to move all its scenes"}
+                className={[
+                  "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
+                  showFrames ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
+                ].join(" ")}
+              >
+                <Group className="h-3.5 w-3.5" />
+                Frames
+              </button>
+              <button
+                onClick={() => setScratchMode((v) => !v)}
+                title={scratchMode ? "Switch to normal drag" : "Chain drag — grab a scene to pull all later scenes with it"}
+                className={[
+                  "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
+                  scratchMode ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
+                ].join(" ")}
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                Chain
+              </button>
+            </>
           )}
 
           <div className="w-px h-4 bg-border" />
@@ -794,6 +1025,8 @@ export default function CorkboardPage() {
             <Layers2 className="h-3 w-3" />
             {showHierarchy
               ? "Tree view — acts & chapters as containers · drag scenes freely · cables follow sidebar order"
+              : scratchMode ? "Chain mode — drag a scene to pull all later scenes with it · drop in a frame to reassign chapter"
+              : showFrames ? "Frames on — drag a frame to move its whole chapter · drop scenes into another frame to reassign"
               : "Drag to reposition · subplot via card footer · Cascade to pile scenes · scroll to zoom"}
           </div>
         </Panel>

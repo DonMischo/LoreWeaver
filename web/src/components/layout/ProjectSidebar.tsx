@@ -410,7 +410,7 @@ export function ProjectSidebar({ projectId }: Props) {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-1 pb-2">
+      <div className="flex-1 min-h-0 overflow-y-auto px-1 pb-2">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleActDragEnd}>
           <SortableContext items={acts.map((a) => a.id)} strategy={verticalListSortingStrategy}>
             {acts.map((act) => (
