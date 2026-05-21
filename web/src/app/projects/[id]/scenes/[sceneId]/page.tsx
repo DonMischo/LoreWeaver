@@ -583,6 +583,7 @@ export default function ScenePage() {
             selectedWord={selectedWord}
             onReplaceWord={(word) => replaceWordRef.current?.(word)}
             onClose={() => setThesaurusOpen(false)}
+            language={project?.book_meta?.language ?? "en"}
           />
         )}
 

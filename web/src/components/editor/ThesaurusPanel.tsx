@@ -5,6 +5,7 @@ import { X, Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DatasmuseWord { word: string; score: number }
+interface OpenThesaurusResult { synsets: { terms: { term: string }[] }[] }
 
 type Tab = "synonyms" | "antonyms" | "related";
 
@@ -12,24 +13,66 @@ interface Props {
   selectedWord: string;
   onReplaceWord: (word: string) => void;
   onClose: () => void;
+  /** BCP-47 language code from project settings, e.g. "en", "de", "es". Default: "en". */
+  language?: string;
 }
 
-const TABS: { id: Tab; label: string; param: string }[] = [
-  { id: "synonyms", label: "Synonyms", param: "rel_syn" },
-  { id: "antonyms", label: "Antonyms", param: "rel_ant" },
-  { id: "related",  label: "Related",  param: "ml" },
+const TABS: { id: Tab; label: string }[] = [
+  { id: "synonyms", label: "Synonyms" },
+  { id: "antonyms", label: "Antonyms" },
+  { id: "related",  label: "Related"  },
 ];
 
-async function fetchWords(param: string, word: string): Promise<string[]> {
+// ── Language-aware fetchers ───────────────────────────────────────────────────
+
+async function fetchDatamuse(param: string, word: string, lang: string): Promise<string[]> {
   if (!word.trim()) return [];
-  const url = `https://api.datamuse.com/words?${param}=${encodeURIComponent(word.trim())}&max=24`;
+  let url = `https://api.datamuse.com/words?${param}=${encodeURIComponent(word.trim())}&max=24`;
+  if (lang === "es") url += "&v=es";   // Datamuse has a Spanish vocabulary
   const res = await fetch(url);
   if (!res.ok) return [];
   const data: DatasmuseWord[] = await res.json();
   return data.map((d) => d.word);
 }
 
-export function ThesaurusPanel({ selectedWord, onReplaceWord, onClose }: Props) {
+async function fetchOpenThesaurus(word: string): Promise<string[]> {
+  if (!word.trim()) return [];
+  const url = `https://www.openthesaurus.de/synonyme/search?q=${encodeURIComponent(word.trim())}&format=application/json`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data: OpenThesaurusResult = await res.json();
+  const q = word.toLowerCase();
+  // Flatten all synset terms, dedup, drop the query word itself
+  return [...new Set(
+    data.synsets.flatMap((s) => s.terms.map((t) => t.term)).filter((t) => t.toLowerCase() !== q)
+  )];
+}
+
+async function fetchAllTabs(word: string, lang: string): Promise<Record<Tab, string[]>> {
+  const empty: Record<Tab, string[]> = { synonyms: [], antonyms: [], related: [] };
+  if (!word.trim()) return empty;
+
+  // German → OpenThesaurus (no antonyms available)
+  if (lang === "de") {
+    const synonyms = await fetchOpenThesaurus(word);
+    return { synonyms, antonyms: [], related: synonyms };
+  }
+
+  // All other languages → Datamuse (v=es for Spanish, default for rest)
+  const [synonyms, antonyms, related] = await Promise.all([
+    fetchDatamuse("rel_syn", word, lang),
+    fetchDatamuse("rel_ant", word, lang),
+    fetchDatamuse("ml",      word, lang),
+  ]);
+  return { synonyms, antonyms, related };
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  de: "via OpenThesaurus",
+};
+
+export function ThesaurusPanel({ selectedWord, onReplaceWord, onClose, language = "en" }: Props) {
+  const lang = language.split("-")[0].toLowerCase(); // "de-DE" → "de"
   const [query, setQuery]   = useState(selectedWord);
   const [tab, setTab]       = useState<Tab>("synonyms");
   const [results, setResults] = useState<Record<Tab, string[]>>({ synonyms: [], antonyms: [], related: [] });
@@ -44,16 +87,11 @@ export function ThesaurusPanel({ selectedWord, onReplaceWord, onClose }: Props) 
     if (!word.trim()) { setResults({ synonyms: [], antonyms: [], related: [] }); return; }
     setLoading(true);
     try {
-      const [synonyms, antonyms, related] = await Promise.all([
-        fetchWords("rel_syn", word),
-        fetchWords("rel_ant", word),
-        fetchWords("ml", word),
-      ]);
-      setResults({ synonyms, antonyms, related });
+      setResults(await fetchAllTabs(word, lang));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [lang]);
 
   // Auto-search when query changes (debounced)
   useEffect(() => {
@@ -114,6 +152,10 @@ export function ThesaurusPanel({ selectedWord, onReplaceWord, onClose }: Props) 
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Looking up…
           </div>
+        ) : tab === "antonyms" && lang === "de" ? (
+          <p className="text-xs text-muted-foreground text-center py-4">
+            Antonyms not available for German.
+          </p>
         ) : currentResults.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">
             {query.trim() ? "No results found." : "Select a word in the editor or type above."}
@@ -134,7 +176,7 @@ export function ThesaurusPanel({ selectedWord, onReplaceWord, onClose }: Props) 
       </div>
 
       <p className="text-[9px] text-muted-foreground/40 text-center pb-2">
-        via Datamuse API
+        {SOURCE_LABEL[lang] ?? "via Datamuse API"}
       </p>
     </div>
   );
