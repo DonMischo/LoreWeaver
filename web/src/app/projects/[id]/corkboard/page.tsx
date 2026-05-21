@@ -465,7 +465,7 @@ export default function CorkboardPage() {
   const [compact, setCompact]               = useState(false);
   const [showHierarchy, setShowHierarchy]   = useState(false);
   const [generatingId, setGeneratingId]     = useState<number | null>(null);
-  const [showFrames, setShowFrames]         = useState(false);
+  const [showFrames, setShowFrames]         = useState(true);
   const [scratchMode, setScratchMode]       = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -749,19 +749,22 @@ export default function CorkboardPage() {
       const dy = node.position.y - drag.startPos.y;
       const droppedSceneId = parseInt(node.id.replace("scene-", ""), 10);
 
-      // Hit-test: find which chapter frame the dragged scene was dropped into
+      // Hit-test: find which chapter box/frame the dragged scene was dropped into.
+      // Tree view → chapterNode boxes; free-form → groupFrameNode boxes (when visible).
       let targetChapterId: number | null = null;
-      if (showFramesRef.current) {
+      const inTree = showHierarchyRef.current;
+      const framePrefix = inTree ? "chapter-" : "frame-chapter-";
+      if (inTree || showFramesRef.current) {
         for (const frame of nodesRef.current) {
-          if (!frame.id.startsWith("frame-chapter-")) continue;
-          const s = frame.style as { width?: number; height?: number } | undefined;
-          const fw = s?.width ?? 0;
-          const fh = s?.height ?? 0;
+          if (!frame.id.startsWith(framePrefix)) continue;
+          const fs = frame.style as { width?: number; height?: number } | undefined;
+          const fw = fs?.width ?? 0;
+          const fh = fs?.height ?? 0;
           if (
             node.position.x >= frame.position.x && node.position.x <= frame.position.x + fw &&
             node.position.y >= frame.position.y && node.position.y <= frame.position.y + fh
           ) {
-            targetChapterId = parseInt(frame.id.replace("frame-chapter-", ""), 10);
+            targetChapterId = parseInt(frame.id.replace(framePrefix, ""), 10);
             break;
           }
         }
@@ -805,17 +808,22 @@ export default function CorkboardPage() {
     }
     if (sceneIds.length === 0) return;
 
-    // Tree view: detect chapter the scene was dropped into for cross-chapter moves
-    let treeChapterId: number | null = null;
-    if (showHierarchyRef.current && sceneIds.length === 1) {
-      for (const n of nodesRef.current) {
-        if (!n.id.startsWith("chapter-")) continue;
-        const cs = n.style as { width?: number; height?: number } | undefined;
-        const cw = cs?.width ?? 0;
-        const ch = cs?.height ?? 0;
-        if (x >= n.position.x && x <= n.position.x + cw && y >= n.position.y && y <= n.position.y + ch) {
-          treeChapterId = parseInt(n.id.replace("chapter-", ""), 10);
-          break;
+    // Detect cross-chapter drop via bounding-box hit-test.
+    // Tree view → chapterNode boxes; free-form with frames → groupFrameNode boxes.
+    let droppedChapterId: number | null = null;
+    if (sceneIds.length === 1) {
+      const inTree2  = showHierarchyRef.current;
+      const prefix2  = inTree2 ? "chapter-" : "frame-chapter-";
+      if (inTree2 || showFramesRef.current) {
+        for (const n of nodesRef.current) {
+          if (!n.id.startsWith(prefix2)) continue;
+          const ns = n.style as { width?: number; height?: number } | undefined;
+          const nw = ns?.width ?? 0;
+          const nh = ns?.height ?? 0;
+          if (x >= n.position.x && x <= n.position.x + nw && y >= n.position.y && y <= n.position.y + nh) {
+            droppedChapterId = parseInt(n.id.replace(prefix2, ""), 10);
+            break;
+          }
         }
       }
     }
@@ -825,9 +833,9 @@ export default function CorkboardPage() {
     );
     sceneIds.forEach((sid) => {
       const data: Record<string, unknown> = { node_x: x, node_y: y };
-      if (treeChapterId !== null) {
+      if (droppedChapterId !== null) {
         const currentChapterId = localScenesRef.current.find((s) => s.id === sid)?.chapter_id;
-        if (currentChapterId !== treeChapterId) data.chapter_id = treeChapterId;
+        if (currentChapterId !== droppedChapterId) data.chapter_id = droppedChapterId;
       }
       mutateRef.current.move({ sceneId: sid, data });
     });
@@ -952,7 +960,7 @@ export default function CorkboardPage() {
             Tree
           </button>
 
-          {/* Cascade / Frames / Chain — only in free-form mode */}
+          {/* Cascade / Frames — free-form only */}
           {!showHierarchy && (
             <>
               <button
@@ -974,19 +982,21 @@ export default function CorkboardPage() {
                 <Group className="h-3.5 w-3.5" />
                 Frames
               </button>
-              <button
-                onClick={() => setScratchMode((v) => !v)}
-                title={scratchMode ? "Switch to normal drag" : "Chain drag — grab a scene to pull all later scenes with it"}
-                className={[
-                  "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
-                  scratchMode ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
-                ].join(" ")}
-              >
-                <Link2 className="h-3.5 w-3.5" />
-                Chain
-              </button>
             </>
           )}
+
+          {/* Chain — available in all modes */}
+          <button
+            onClick={() => setScratchMode((v) => !v)}
+            title={scratchMode ? "Switch to normal drag" : "Chain drag — grab a scene to pull all later scenes with it"}
+            className={[
+              "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
+              scratchMode ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
+            ].join(" ")}
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            Chain
+          </button>
 
           <div className="w-px h-4 bg-border" />
 
@@ -1049,9 +1059,11 @@ export default function CorkboardPage() {
           <div className="text-[10px] text-muted-foreground/40 flex items-center gap-1 bg-card/70 px-2 py-1 rounded-md border border-border/30">
             <Layers2 className="h-3 w-3" />
             {showHierarchy
-              ? "Tree view — acts & chapters as containers · drag scenes freely · cables follow sidebar order"
-              : scratchMode ? "Chain mode — drag a scene to pull all later scenes with it · drop in a frame to reassign chapter"
-              : showFrames ? "Frames on — drag a frame to move its whole chapter · drop scenes into another frame to reassign"
+              ? scratchMode
+                  ? "Tree · Chain mode — drag a scene to pull all later scenes · drop in another chapter box to reassign"
+                  : "Tree view — drag scenes into chapter boxes to reassign · cables follow sidebar order"
+              : scratchMode ? "Chain mode — drag a scene to pull all later scenes · drop in a frame to reassign chapter"
+              : showFrames ? "Frames on — drag a frame to move its chapter · drop a scene into another frame to reassign"
               : "Drag to reposition · subplot via card footer · Cascade to pile scenes · scroll to zoom"}
           </div>
         </Panel>
