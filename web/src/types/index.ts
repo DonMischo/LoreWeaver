@@ -165,6 +165,7 @@ export interface CodexEntry {
   is_main_char: boolean;
   inventory: CharacterInventory | null;
   image_path: string | null;
+  name_type: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -15,6 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import type { CodexEntry, CodexRelationResolved, EntryType } from "@/types";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { NameGeneratorWidget } from "./NameGeneratorWidget";
+import type { NameType } from "@/lib/nameGenerator";
 
 const ENTRY_TYPES: EntryType[] = ["character", "location", "item", "lore", "custom"];
 
@@ -241,6 +243,9 @@ export function CodexEntryDialog({
   // Main character
   const [isMainChar, setIsMainChar]   = useState(initial?.is_main_char ?? false);
 
+  // Name generator
+  const [nameType, setNameType]       = useState<NameType | "">((initial?.name_type ?? "") as NameType | "");
+
   // Native inventory (manually set base quantities)
   const [nativePossessions, setNativePossessions] = useState<{ entry_id: number; quantity: number }[]>(
     initial?.inventory?.possessions?.map(p => ({ entry_id: p.entry_id, quantity: p.quantity })) ?? []
@@ -300,6 +305,7 @@ export function CodexEntryDialog({
       setSubtype(initial?.subtype ?? "");
       setTags(initial?.tags ?? []);
       setIsMainChar(initial?.is_main_char ?? false);
+      setNameType((initial?.name_type ?? "") as NameType | "");
       setNativePossessions(
         initial?.inventory?.possessions?.map(p => ({ entry_id: p.entry_id, quantity: p.quantity })) ?? []
       );
@@ -383,12 +389,19 @@ export function CodexEntryDialog({
       inventory: entryType === "character"
         ? { possessions: nativePossessions, currencies: nativeCurrencies }
         : null,
+      name_type: nameType || null,
     });
     onClose();
   };
 
   // Other entries that are not this one, for relation target dropdown
   const otherEntries = allEntries.filter((e) => e.id !== entryId);
+
+  // Name generator: fall back to species entry's name_type if user hasn't picked one
+  const speciesEntry = entryType === "character" && species.trim()
+    ? allEntries.find(e => e.name.toLowerCase() === species.trim().toLowerCase())
+    : null;
+  const effectiveNameType: NameType | "" = nameType || ((speciesEntry?.name_type ?? "") as NameType | "");
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -507,6 +520,16 @@ export function CodexEntryDialog({
                     />
                   </>
                 )}
+              </div>
+
+              {/* Name generator */}
+              <div className="space-y-1.5">
+                <Label>Name Generator</Label>
+                <NameGeneratorWidget
+                  nameType={effectiveNameType}
+                  onNameTypeChange={(t) => setNameType(t)}
+                  onApply={(n) => setName(n)}
+                />
               </div>
 
               {/* Aliases */}
