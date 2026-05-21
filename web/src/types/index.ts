@@ -52,11 +52,47 @@ export interface Scene {
   chapter_id: number;
   title: string | null;
   content: string | null;
+  synopsis: string | null;
   order_index: number;
   word_count: number;
   scene_time: SceneTime | null;
   created_at: string;
   updated_at: string;
+}
+
+// ── Corkboard ─────────────────────────────────────────────────────────────────
+
+export interface CorkboardScene {
+  id: number;
+  title: string | null;
+  synopsis: string | null;
+  word_count: number;
+  subplot: string | null;      // null = main plot column
+  global_order: number;        // chronological position shared across columns
+  stack_group: string | null;  // scenes sharing this value move as one stack
+  chapter_id: number;
+  node_x: number | null;       // React Flow canvas x position
+  node_y: number | null;       // React Flow canvas y position
+}
+
+export interface CorkboardData {
+  scenes: CorkboardScene[];
+  subplots: string[];          // names of extra subplot columns (main is implicit)
+}
+
+// Legacy structure types (used by old structure endpoint, kept for other uses)
+export interface CorkboardChapter {
+  id: number;
+  title: string;
+  order_index: number;
+  scenes: CorkboardScene[];
+}
+
+export interface CorkboardAct {
+  id: number;
+  title: string;
+  order_index: number;
+  chapters: CorkboardChapter[];
 }
 
 // ── Time Config ───────────────────────────────────────────────────────────────

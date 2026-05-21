@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi, writingLogApi } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi, writingLogApi, synopsisApi } from "@/lib/api";
 import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry, OpenRouterModel } from "@/lib/api";
-import type { AIPrompt, ProjectSceneItem, SceneVersion, SceneVersionDetail } from "@/types";
+import type { AIPrompt, ProjectSceneItem, SceneVersion, SceneVersionDetail, CorkboardAct, CorkboardData } from "@/types";
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -605,6 +605,71 @@ export const useRestoreSceneVersion = (sceneId: number) => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scene-versions", sceneId] });
       qc.invalidateQueries({ queryKey: ["scene", sceneId] });
+    },
+  });
+};
+
+// ── Corkboard ─────────────────────────────────────────────────────────────────
+
+/** Reorder scenes without a specific chapter binding — used in corkboard. */
+export const useReorderScenesGlobal = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: scenesApi.reorder,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["corkboard", projectId] });
+      qc.invalidateQueries({ queryKey: ["structure", projectId] });
+      qc.invalidateQueries({ queryKey: ["scenes"] });
+    },
+  });
+};
+
+/** Move/update a scene with a dynamic ID — used in corkboard DnD. */
+export const useMoveScene = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sceneId, data }: { sceneId: number; data: Parameters<typeof scenesApi.update>[1] }) =>
+      scenesApi.update(sceneId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["corkboard", projectId] });
+      qc.invalidateQueries({ queryKey: ["scenes"] });
+    },
+  });
+};
+
+export const useProjectStructure = (projectId: number) =>
+  useQuery<CorkboardAct[]>({
+    queryKey: ["structure", projectId],
+    queryFn: () => projectsApi.structure(projectId),
+    enabled: !!projectId,
+  });
+
+export const useCorkboard = (projectId: number) =>
+  useQuery<CorkboardData>({
+    queryKey: ["corkboard", projectId],
+    queryFn: () => projectsApi.corkboard(projectId),
+    enabled: !!projectId,
+  });
+
+export const useGenerateSynopsis = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sceneId: number) => synopsisApi.generate(sceneId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["corkboard", projectId] });
+      qc.invalidateQueries({ queryKey: ["structure", projectId] });
+    },
+  });
+};
+
+export const useUpdateSceneSynopsis = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sceneId, synopsis }: { sceneId: number; synopsis: string | null }) =>
+      scenesApi.update(sceneId, { synopsis }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["corkboard", projectId] });
+      qc.invalidateQueries({ queryKey: ["structure", projectId] });
     },
   });
 };

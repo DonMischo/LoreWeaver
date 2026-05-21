@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronDown, ChevronRight, Plus, Trash2, BookOpen,
-  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors, Info, ListChecks, MoreHorizontal,
+  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors, Info, ListChecks, MoreHorizontal, LayoutGrid,
 } from "lucide-react";
 import {
   DndContext, closestCenter, DragEndEvent,
@@ -83,6 +83,7 @@ function SceneItem({
       <Link
         href={`/projects/${projectId}/scenes/${scene.id}`}
         className="flex-1 truncate text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+        title={scene.synopsis ?? undefined}
       >
         <span className="text-muted-foreground/50 text-[10px] tabular-nums shrink-0 w-4 text-right">{index}.</span>
         <span className="truncate">{scene.title || t("nav_untitled_scene")}</span>
@@ -461,6 +462,14 @@ export function ProjectSidebar({ projectId }: Props) {
               <div className="absolute bottom-full right-0 mb-1 z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[190px]">
 
                 {/* Pages */}
+                <Link
+                  href={`/projects/${projectId}/corkboard`}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  Corkboard
+                </Link>
                 <Link
                   href={`/projects/${projectId}/plot`}
                   onClick={() => setMenuOpen(false)}

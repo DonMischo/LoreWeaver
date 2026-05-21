@@ -3,7 +3,7 @@ import type {
   Settings, ChapterReadData, ActReadData, TimeConfig, SceneTime,
   Fragment, FragmentTabs, BookMeta, AIPrompt, ProjectSceneItem,
   SceneVersion, SceneVersionDetail, MentionStat, SceneMentionStat,
-  WritingLogEntry, GhostTextScene,
+  WritingLogEntry, GhostTextScene, CorkboardAct, CorkboardData,
 } from "@/types";
 
 const BASE = "/api";
@@ -63,6 +63,8 @@ export const projectsApi = {
       body: JSON.stringify(opts),
     }),
   listScenes: (id: number) => req<ProjectSceneItem[]>(`/projects/${id}/scenes`),
+  structure: (id: number) => req<CorkboardAct[]>(`/projects/${id}/structure`),
+  corkboard: (id: number) => req<CorkboardData>(`/projects/${id}/corkboard`),
 };
 
 // ── Acts ──────────────────────────────────────────────────────────────────────
@@ -100,7 +102,13 @@ export const scenesApi = {
   get: (id: number) => req<Scene>(`/scenes/${id}`),
   create: (data: { chapter_id: number; title?: string; content?: string; order_index?: number }) =>
     req<Scene>("/scenes", { method: "POST", body: JSON.stringify(data) }),
-  update: (id: number, data: Partial<Pick<Scene, "title" | "content" | "order_index" | "word_count" | "scene_time">>) =>
+  update: (id: number, data: Partial<Pick<Scene, "title" | "content" | "synopsis" | "order_index" | "word_count" | "scene_time" | "chapter_id">> & {
+    subplot?: string | null;
+    stack_group?: string | null;
+    global_order?: number;
+    node_x?: number | null;
+    node_y?: number | null;
+  }) =>
     req<Scene>(`/scenes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: number) => req<void>(`/scenes/${id}`, { method: "DELETE" }),
   reorder: (items: { id: number; order_index: number }[]) =>
@@ -382,6 +390,13 @@ export const versionsApi = {
     req<SceneVersionDetail>(`/scenes/${sceneId}/versions/${versionId}`),
   restore: (sceneId: number, versionId: number) =>
     req<SceneVersionDetail>(`/scenes/${sceneId}/versions/${versionId}/restore`, { method: "POST" }),
+};
+
+// ── AI synopsis ───────────────────────────────────────────────────────────────
+
+export const synopsisApi = {
+  generate: (sceneId: number) =>
+    req<{ synopsis: string }>(`/ai/scenes/${sceneId}/synopsis`, { method: "POST" }),
 };
 
 // ── Ki (AI Generate) ──────────────────────────────────────────────────────────
