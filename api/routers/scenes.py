@@ -139,6 +139,9 @@ def update_scene(scene_id: int, body: SceneUpdate, db: Session = Depends(get_db)
     if "scene_time" in body.model_fields_set:
         st = body.scene_time
         data["scene_time"] = json.dumps(st) if st is not None else None
+    # Validate cross-chapter move
+    if "chapter_id" in data and not db.get(Chapter, data["chapter_id"]):
+        raise HTTPException(404, f"Chapter {data['chapter_id']} not found")
     for k, v in data.items():
         setattr(scene, k, v)
     if "content" in data:

@@ -143,6 +143,109 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
+@router.get("/{project_id}/corkboard")
+def get_corkboard(project_id: int, db: Session = Depends(get_db)):
+    """
+    Flat list of all project scenes with corkboard fields.
+    Auto-assigns global_order to scenes that don't have one yet,
+    using act/chapter/order_index to determine chronological sequence.
+    """
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    acts = (
+        db.query(Act)
+        .filter(Act.project_id == project_id)
+        .order_by(Act.order_index)
+        .all()
+    )
+
+    # Collect all scenes in chronological order
+    all_scenes: list[Scene] = []
+    for act in sorted(acts, key=lambda a: a.order_index):
+        for ch in sorted(act.chapters, key=lambda c: c.order_index):
+            for s in sorted(ch.scenes, key=lambda sc: sc.order_index):
+                all_scenes.append(s)
+
+    # Auto-assign global_order if not yet set (first load)
+    needs_commit = False
+    for i, s in enumerate(all_scenes):
+        if s.global_order is None:
+            s.global_order = i * 100
+            needs_commit = True
+    if needs_commit:
+        db.commit()
+
+    # Collect unique subplots (preserving insertion order)
+    seen: dict[str, None] = {}
+    for s in sorted(all_scenes, key=lambda sc: sc.global_order or 0):
+        if s.subplot:
+            seen[s.subplot] = None
+    subplots = list(seen.keys())
+
+    return {
+        "scenes": [
+            {
+                "id": s.id,
+                "title": s.title,
+                "synopsis": s.synopsis,
+                "word_count": s.word_count,
+                "subplot": s.subplot,
+                "global_order": s.global_order,
+                "stack_group": s.stack_group,
+                "chapter_id": s.chapter_id,
+                "node_x": s.node_x,
+                "node_y": s.node_y,
+            }
+            for s in sorted(all_scenes, key=lambda sc: sc.global_order or 0)
+        ],
+        "subplots": subplots,
+    }
+
+
+@router.get("/{project_id}/structure")
+def get_project_structure(project_id: int, db: Session = Depends(get_db)):
+    """Acts → chapters → scenes hierarchy with synopsis, for the corkboard."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    acts = (
+        db.query(Act)
+        .filter(Act.project_id == project_id)
+        .order_by(Act.order_index)
+        .all()
+    )
+    result = []
+    for act in acts:
+        chapters = sorted(act.chapters, key=lambda c: c.order_index)
+        act_data = {
+            "id": act.id,
+            "title": act.title,
+            "order_index": act.order_index,
+            "chapters": [],
+        }
+        for ch in chapters:
+            scenes = sorted(ch.scenes, key=lambda s: s.order_index)
+            act_data["chapters"].append({
+                "id": ch.id,
+                "title": ch.title,
+                "order_index": ch.order_index,
+                "scenes": [
+                    {
+                        "id": s.id,
+                        "title": s.title,
+                        "synopsis": s.synopsis,
+                        "word_count": s.word_count,
+                        "order_index": s.order_index,
+                    }
+                    for s in scenes
+                ],
+            })
+        result.append(act_data)
+    return result
+
+
 @router.get("/{project_id}/scenes")
 def list_project_scenes(project_id: int, db: Session = Depends(get_db)):
     """Flat list of all scenes in a project, ordered by act/chapter/scene position."""

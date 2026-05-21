@@ -273,6 +273,58 @@ async def ki_generate(body: KiGenerateRequest, db: Session = Depends(get_db)):
     return {"text": resp.json()["choices"][0]["message"]["content"]}
 
 
+@router.post("/scenes/{scene_id}/synopsis")
+async def generate_synopsis(scene_id: int, db: Session = Depends(get_db)):
+    """Generate a short synopsis for a scene using AI. Returns {synopsis: str}."""
+    scene = db.get(Scene, scene_id)
+    if not scene:
+        raise HTTPException(404, "Scene not found")
+
+    settings = db.query(UserSettings).first()
+    if not settings or not settings.openrouter_api_key:
+        raise HTTPException(400, "OpenRouter API key not configured")
+
+    content = re.sub(r"<[^>]+>", "", scene.content or "").strip()
+    if not content:
+        raise HTTPException(400, "Scene has no content to summarize")
+
+    api_key = decrypt(settings.openrouter_api_key)
+    model = settings.default_model
+    lang = _project_language(scene, db)
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "http://localhost:3000",
+                "X-Title": "LoreWeaver",
+            },
+            json={
+                "model": model,
+                "stream": False,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            f"You are a writing assistant. Write a concise 1–3 sentence synopsis of the scene. "
+                            f"Focus on what happens — the key action, conflict, or revelation. "
+                            f"Write in {lang}. Return only the synopsis, no preamble."
+                        ),
+                    },
+                    {"role": "user", "content": content[:4000]},
+                ],
+            },
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(502, f"OpenRouter error: {resp.text}")
+
+    synopsis = resp.json()["choices"][0]["message"]["content"].strip()
+    return {"synopsis": synopsis}
+
+
 @router.post("/chat")
 async def chat(body: ChatRequest, db: Session = Depends(get_db)):
     """Multi-turn chat about the current scene."""
