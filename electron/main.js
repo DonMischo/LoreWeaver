@@ -116,6 +116,9 @@ function createSplash() {
 function createMain(webPort) {
   const savedWin = config.window || {};
 
+  const winIcon = path.join(__dirname, "assets",
+    process.platform === "win32" ? "icon.ico" : "icon.png");
+
   mainWin = new BrowserWindow({
     width:  savedWin.width  || 1400,
     height: savedWin.height || 900,
@@ -124,6 +127,7 @@ function createMain(webPort) {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    icon: winIcon,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
       nodeIntegration: false,
@@ -164,16 +168,11 @@ function createMain(webPort) {
 }
 
 function createTray(webPort) {
-  const iconFile = process.platform === "win32"
-    ? "icon.ico"
-    : process.platform === "darwin"
-      ? "icon.png"
-      : "icon.png";
-
+  const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
   const iconPath = path.join(__dirname, "assets", iconFile);
   let icon;
   try {
-    icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+    icon = nativeImage.createFromPath(iconPath);
   } catch {
     icon = nativeImage.createEmpty();
   }

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ChevronDown, ChevronRight, Plus, Trash2, BookOpen,
+  ChevronDown, ChevronRight, Plus, Trash2,
   GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors, Info, ListChecks, MoreHorizontal, LayoutGrid,
 } from "lucide-react";
 import {
@@ -424,7 +424,7 @@ export function ProjectSidebar({ projectId }: Props) {
     <aside className="flex flex-col h-full w-64 border-r border-border bg-card">
       <div className="flex items-center justify-between px-3 py-3 border-b border-border">
         <Link href="/" className="flex items-center gap-2 font-semibold text-sm hover:text-primary transition-colors">
-          <BookOpen className="h-4 w-4 text-primary" />
+          <img src="/icon.svg" alt="" className="h-4 w-4" />
           Foliantica
         </Link>
       </div>

@@ -295,7 +295,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <BookOpen className="h-6 w-6 text-primary" />
+          <img src="/icon.svg" alt="" className="h-6 w-6" />
           <h1 className="text-xl font-bold">Foliantica</h1>
         </div>
         <div className="flex items-center gap-2">
