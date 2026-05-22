@@ -1,6 +1,6 @@
 /**
  * Converts electron/assets/icon.svg → icon.png, icon.ico, icon.icns
- * Run once from the project root:  npm run generate-icons
+ * Run once from the project root:  node scripts/generate-icons.mjs
  */
 import { writeFileSync } from "fs";
 import { join, dirname } from "path";
