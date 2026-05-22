@@ -211,6 +211,32 @@ function TrackVisualization({
   const [width, setWidth] = useState(800);
   const [zoom, setZoom] = useState(1);
 
+  // Drag-to-scroll state
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartScroll = useRef(0);
+
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    dragStartScroll.current = containerRef.current?.scrollLeft ?? 0;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.currentTarget.style.cursor = "grabbing";
+  }, []);
+
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging.current) return;
+    const dx = e.clientX - dragStartX.current;
+    if (containerRef.current) containerRef.current.scrollLeft = dragStartScroll.current - dx;
+  }, []);
+
+  const onPointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    e.currentTarget.style.cursor = "grab";
+  }, []);
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -316,48 +342,57 @@ function TrackVisualization({
   return (
     <div
       ref={containerRef}
-      className="w-full overflow-x-auto [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border/50 [&::-webkit-scrollbar-thumb]:rounded-full"
+      className="w-full overflow-x-auto select-none [&::-webkit-scrollbar]:hidden"
+      style={{ scrollbarWidth: "none", cursor: "grab" } as React.CSSProperties}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerEnd}
+      onPointerLeave={onPointerEnd}
       onDoubleClick={() => setZoom(1)}
       title={zoom !== 1 ? `Zoom ${Math.round(zoom * 100)}% — double-click to reset` : undefined}
     >
       <div style={{ position: "relative", height: vizH, width: Math.max(300, trackW + LEFT_MARGIN + RIGHT_MARGIN) }}>
-        {/* Axis line */}
+        {/* Axis line — explicit width so it matches trackW exactly */}
         <div
           style={{
             position: "absolute",
             left: LEFT_MARGIN,
-            right: RIGHT_MARGIN,
             top: axisY,
+            width: trackW,
             height: 2,
             background: "hsl(var(--border))",
           }}
         />
 
-        {/* Ruler ticks */}
-        {tRuler.map((tick, i) => (
-          <div
-            key={i}
-            style={{
-              position: "absolute",
-              left: LEFT_MARGIN + tick.x,
-              top: axisY + 6,
-              transform: "translateX(-50%)",
-            }}
-          >
-            <div style={{ width: 1, height: 6, background: "hsl(var(--border))", margin: "0 auto" }} />
-            <span
+        {/* Ruler ticks — label translateX scales with position so edge labels don't overflow */}
+        {tRuler.map((tick, i) => {
+          // pct 0→1 across trackW; label shifts from translateX(0%) → (-50%) → (-100%)
+          const pct = trackW > 0 ? tick.x / trackW : 0.5;
+          const labelShift = `${Math.round(pct * -100)}%`;
+          return (
+            <div
+              key={i}
               style={{
-                fontSize: 10,
-                color: "hsl(var(--muted-foreground))",
-                whiteSpace: "nowrap",
-                display: "block",
-                textAlign: "center",
+                position: "absolute",
+                left: LEFT_MARGIN + tick.x,
+                top: axisY + 6,
               }}
             >
-              {tick.label}
-            </span>
-          </div>
-        ))}
+              <div style={{ width: 1, height: 6, background: "hsl(var(--border))", marginLeft: -0.5 }} />
+              <span
+                style={{
+                  fontSize: 10,
+                  color: "hsl(var(--muted-foreground))",
+                  whiteSpace: "nowrap",
+                  display: "block",
+                  transform: `translateX(${labelShift})`,
+                }}
+              >
+                {tick.label}
+              </span>
+            </div>
+          );
+        })}
 
         {/* Nodes */}
         {nodes.map((node, i) => {
