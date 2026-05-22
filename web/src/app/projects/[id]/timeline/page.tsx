@@ -56,6 +56,12 @@ function laneToY(lane: number, laneH: number): number {
   return above ? -(level * laneH + AXIS_OFFSET) : (level * laneH + AXIS_OFFSET);
 }
 
+// "Nice" multipliers used to scale up the base tick interval so we never
+// produce more than MAX_TICKS labels regardless of the time range.
+const RULER_NICE = [1, 2, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000,
+                    10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000];
+const MAX_TICKS = 10;
+
 function rulerTicks(
   startTick: number,
   endTick: number,
@@ -67,19 +73,32 @@ function rulerTicks(
   if (endTick <= startTick || trackWidthPx <= 0 || n === 0) return [];
   const mults = new Array(n).fill(1);
   for (let i = n - 2; i >= 0; i--) mults[i] = mults[i + 1] * (enabled[i + 1].count_per_parent ?? 1000);
-  const targetInterval = (endTick - startTick) / 9;
+
+  const range = endTick - startTick;
+  const targetInterval = range / MAX_TICKS;
+
+  // Pick the finest unit whose base interval fits within targetInterval
   let chosenIdx = 0;
   for (let i = n - 1; i >= 0; i--) {
     if (mults[i] <= targetInterval) { chosenIdx = i; break; }
   }
-  const interval = mults[chosenIdx];
+
+  const baseInterval = mults[chosenIdx];
   const unit = enabled[chosenIdx];
-  if (interval <= 0) return [];
+  if (baseInterval <= 0) return [];
+
+  // Scale up with a "nice" multiplier so we always get ≤ MAX_TICKS ticks
+  const rawCount = range / baseInterval;
+  const niceMult = rawCount <= MAX_TICKS
+    ? 1
+    : (RULER_NICE.find(m => rawCount / m <= MAX_TICKS) ?? Math.ceil(rawCount / MAX_TICKS));
+  const step = baseInterval * niceMult;
+
   const ticks: { x: number; label: string }[] = [];
-  const first = Math.ceil(startTick / interval) * interval;
-  for (let t = first; t <= endTick; t += interval) {
-    const x = ((t - startTick) / (endTick - startTick)) * trackWidthPx;
-    const unitVal = Math.floor(t / interval);
+  const first = Math.ceil(startTick / step) * step;
+  for (let t = first; t <= endTick && ticks.length < MAX_TICKS; t += step) {
+    const x = ((t - startTick) / range) * trackWidthPx;
+    const unitVal = Math.round(t / baseInterval);
     const label =
       unit.value_names && unit.value_names[unitVal - 1]
         ? unit.value_names[unitVal - 1]
