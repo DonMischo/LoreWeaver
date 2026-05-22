@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Calendar, Settings2, Plus, Pencil, Trash2, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ const NODE_W = 110;
 const LANE_HEIGHT = 64;
 const AXIS_OFFSET = 8;
 const RULER_H = 36;
+const CARD_H = 44; // height of a node card — used to ensure cards above axis aren't clipped
 
 // ── Helper functions ──────────────────────────────────────────────────────────
 
@@ -208,6 +209,7 @@ function TrackVisualization({
 }: TrackVizProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -219,6 +221,31 @@ function TrackVisualization({
     ro.observe(el);
     setWidth(el.getBoundingClientRect().width || 800);
     return () => ro.disconnect();
+  }, []);
+
+  // Mousewheel zoom, centered on cursor position
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // let horizontal trackpad scroll through
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      const rect = el.getBoundingClientRect();
+      const cursorX = e.clientX - rect.left;
+      setZoom(prev => {
+        const next = Math.max(0.5, Math.min(20, prev * factor));
+        requestAnimationFrame(() => {
+          const baseW = rect.width - LEFT_MARGIN - RIGHT_MARGIN;
+          const oldContentX = el.scrollLeft + cursorX;
+          const fraction = (oldContentX - LEFT_MARGIN) / Math.max(1, baseW * prev);
+          el.scrollLeft = Math.max(0, LEFT_MARGIN + fraction * baseW * next - cursorX);
+        });
+        return next;
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
   const enabled = units.filter(u => u.enabled);
@@ -250,7 +277,7 @@ function TrackVisualization({
     };
   }, [ticks, trackStartTime, trackEndTime, units]);
 
-  const trackW = width - LEFT_MARGIN - RIGHT_MARGIN;
+  const trackW = (width - LEFT_MARGIN - RIGHT_MARGIN) * zoom;
 
   const nodeXs = useMemo(() => {
     const range = endTick - startTick || 1;
@@ -269,8 +296,9 @@ function TrackVisualization({
   const maxLane = laneValues.length > 0 ? Math.max(0, ...laneValues) : 0;
   const lanesAbove = Math.floor(maxLane / 2) + 1;
   const lanesBelow = Math.ceil((maxLane + 1) / 2);
-  const axisY = lanesAbove * LANE_HEIGHT + 16;
-  const vizH = (lanesAbove + lanesBelow) * LANE_HEIGHT + RULER_H + 48;
+  // axisY must leave room for cards sitting above it (CARD_H) + axis offset
+  const axisY = lanesAbove * LANE_HEIGHT + CARD_H;
+  const vizH = axisY + lanesBelow * LANE_HEIGHT + RULER_H + 32;
 
   const tRuler = useMemo(
     () => rulerTicks(startTick, endTick, units, trackW),
@@ -286,8 +314,13 @@ function TrackVisualization({
   }
 
   return (
-    <div ref={containerRef} className="w-full overflow-x-auto">
-      <div style={{ position: "relative", height: vizH, minWidth: 300 }}>
+    <div
+      ref={containerRef}
+      className="w-full overflow-x-auto [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border/50 [&::-webkit-scrollbar-thumb]:rounded-full"
+      onDoubleClick={() => setZoom(1)}
+      title={zoom !== 1 ? `Zoom ${Math.round(zoom * 100)}% — double-click to reset` : undefined}
+    >
+      <div style={{ position: "relative", height: vizH, width: Math.max(300, trackW + LEFT_MARGIN + RIGHT_MARGIN) }}>
         {/* Axis line */}
         <div
           style={{
