@@ -31,6 +31,7 @@ class Project(Base):
     book_meta: Mapped[Optional[str]] = mapped_column(Text, nullable=True)      # JSON: BookMeta dict
     shared_codex_project_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # FK to projects.id (no cascade)
     cover_image: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    subplot_names: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: ["name", ...]
 
     acts: Mapped[list["Act"]] = relationship(
         "Act", back_populates="project", cascade="all, delete-orphan",

@@ -15,6 +15,7 @@ import {
   useCorkboard, useUpdateSceneSynopsis, useGenerateSynopsis,
   useMoveScene, useCodexEntries, useProjectStructure,
 } from "@/store/queries";
+import { projectsApi } from "@/lib/api";
 import { SceneNode } from "@/components/corkboard/SceneNode";
 import type { SceneNodeType, SceneNodeData } from "@/components/corkboard/SceneNode";
 import { ActNode, ChapterNode, GroupFrameNode } from "@/components/corkboard/HierarchyNodes";
@@ -846,16 +847,15 @@ export default function CorkboardPage() {
   const handleAddSubplot = () => {
     const name = newSubplotName.trim();
     if (!name || extraSubplots.includes(name)) return;
-    setExtraSubplots((prev) => {
-      const next = [...prev, name];
-      saveStoredSubplots(projectId, next);
-      return next;
-    });
+    const next = [...extraSubplots, name];
+    setExtraSubplots(next);
+    saveStoredSubplots(projectId, next);
+    projectsApi.setSubplotNames(projectId, next).catch(() => {});
     setColColors((prev) => {
       const allC = [MAIN_COL, ...extraSubplots, name];
-      const next = { ...prev, [name]: resolveColColor(name, allC, getColColors(projectId), codexColorByName) };
-      saveColColors(projectId, next);
-      return next;
+      const nextColors = { ...prev, [name]: resolveColColor(name, allC, getColColors(projectId), codexColorByName) };
+      saveColColors(projectId, nextColors);
+      return nextColors;
     });
     setNewSubplotName("");
     setAddingSubplot(false);
@@ -865,11 +865,10 @@ export default function CorkboardPage() {
     const affected = localScenes.filter((s) => s.subplot === subplot);
     affected.forEach((s) => moveScene.mutate({ sceneId: s.id, data: { subplot: null } }));
     setLocalScenes((prev) => prev.map((s) => s.subplot === subplot ? { ...s, subplot: null } : s));
-    setExtraSubplots((prev) => {
-      const next = prev.filter((x) => x !== subplot);
-      saveStoredSubplots(projectId, next);
-      return next;
-    });
+    const next = extraSubplots.filter((x) => x !== subplot);
+    setExtraSubplots(next);
+    saveStoredSubplots(projectId, next);
+    projectsApi.setSubplotNames(projectId, next).catch(() => {});
     setColColors((prev) => {
       const { [subplot]: _, ...rest } = prev;
       saveColColors(projectId, rest);

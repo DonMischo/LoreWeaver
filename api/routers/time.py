@@ -310,8 +310,12 @@ def get_timeline_v2(project_id: int, db: Session = Depends(get_db)):
             "color": e.color,
         })
 
-    # Collect all subplot names across all scenes (not just timed ones)
+    # Collect all subplot names: project-defined list + any scene-assigned values
     subplot_names: set[str] = set()
+    try:
+        subplot_names.update(_json.loads(project.subplot_names or "[]"))
+    except Exception:
+        pass
     for pid in sibling_ids:
         p = db.get(Project, pid)
         if not p: continue

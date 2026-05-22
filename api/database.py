@@ -104,6 +104,7 @@ def migrate_new_columns():
         ("user_settings", "typewriter_mode",         "INTEGER DEFAULT 0"),
         ("user_settings", "typewriter_offset",       "INTEGER DEFAULT 50"),
         ("user_settings", "session_timer_enabled",   "INTEGER DEFAULT 1"),
+        ("projects",      "subplot_names",            "TEXT DEFAULT '[]'"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in new_columns:

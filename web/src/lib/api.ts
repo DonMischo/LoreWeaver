@@ -66,6 +66,8 @@ export const projectsApi = {
   listScenes: (id: number) => req<ProjectSceneItem[]>(`/projects/${id}/scenes`),
   structure: (id: number) => req<CorkboardAct[]>(`/projects/${id}/structure`),
   corkboard: (id: number) => req<CorkboardData>(`/projects/${id}/corkboard`),
+  setSubplotNames: (id: number, names: string[]) =>
+    req<string[]>(`/projects/${id}/subplot-names`, { method: "PATCH", body: JSON.stringify({ names }) }),
 };
 
 // ── Acts ──────────────────────────────────────────────────────────────────────

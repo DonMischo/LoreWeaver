@@ -177,8 +177,14 @@ def get_corkboard(project_id: int, db: Session = Depends(get_db)):
     if needs_commit:
         db.commit()
 
-    # Collect unique subplots (preserving insertion order)
+    # Collect unique subplots: project-defined names first, then any scene-assigned ones
     seen: dict[str, None] = {}
+    try:
+        for name in json.loads(project.subplot_names or "[]"):
+            if name:
+                seen[name] = None
+    except Exception:
+        pass
     for s in sorted(all_scenes, key=lambda sc: sc.global_order or 0):
         if s.subplot:
             seen[s.subplot] = None
@@ -202,6 +208,18 @@ def get_corkboard(project_id: int, db: Session = Depends(get_db)):
         ],
         "subplots": subplots,
     }
+
+
+@router.patch("/{project_id}/subplot-names", response_model=list[str])
+def set_subplot_names(project_id: int, body: dict, db: Session = Depends(get_db)):
+    """Persist the ordered list of subplot column names for this project."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    names = [str(n) for n in body.get("names", []) if n]
+    project.subplot_names = json.dumps(names)
+    db.commit()
+    return names
 
 
 @router.get("/{project_id}/structure")
