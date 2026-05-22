@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
-import { StickyNote, Coins, Package, ImageIcon, Sparkles, MessageSquare, Braces } from "lucide-react";
+import { StickyNote, Coins, Package, ImageIcon, Sparkles, MessageSquare, Braces, GitBranch } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface CommandItem {
@@ -76,6 +76,15 @@ export const COMMANDS: CommandItem[] = [
     icon: Braces,
     color: "#f59e0b",
     keywords: ["placeholder", "ghost", "todo", "fill", "bracket"],
+    content: null,
+  },
+  {
+    id: "timeline",
+    label: "Timeline",
+    description: "Pin this scene to a timeline track with a time",
+    icon: GitBranch,
+    color: "#10b981",
+    keywords: ["timeline", "time", "track", "event", "when", "date"],
     content: null,
   },
 ];

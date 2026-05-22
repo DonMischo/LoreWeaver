@@ -15,6 +15,7 @@ import { VersionHistoryPanel } from "@/components/editor/VersionHistoryPanel";
 import { ChatPanel } from "@/components/editor/ChatPanel";
 import { SceneTimePanel } from "@/components/time/SceneTimePanel";
 import { TimeConfigDialog } from "@/components/time/TimeConfigDialog";
+import { TimelineCommandDialog } from "@/components/timeline/TimelineCommandDialog";
 import { useUIStore } from "@/store/ui";
 import { useAutosave } from "@/hooks/useAutosave";
 import { useQueryClient } from "@tanstack/react-query";
@@ -82,6 +83,7 @@ export default function ScenePage() {
   const [newEntryInitial, setNewEntryInitial] = useState<{ name?: string }>({});
   const [timePanelOpen, setTimePanelOpen] = useState(false);
   const [timeConfigOpen, setTimeConfigOpen] = useState(false);
+  const [timelineCommandOpen, setTimelineCommandOpen] = useState(false);
   const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
   const [chatPanelOpen, setChatPanelOpen] = useState(false);
 
@@ -531,6 +533,7 @@ export default function ScenePage() {
             onCodexEntryClick={handleCodexEntryClick}
             sceneId={sceneIdNum}
             onOpenChat={() => setChatPanelOpen(true)}
+            onOpenTimeline={() => setTimelineCommandOpen(true)}
             onWordSelect={(w) => { if (w) setSelectedWord(w); }}
             onFlagsChange={setFlags}
             replaceWordRef={replaceWordRef}
@@ -604,6 +607,13 @@ export default function ScenePage() {
         onClose={() => setTimeConfigOpen(false)}
         initial={timeConfig}
         onSave={(cfg) => updateTimeConfig.mutate(cfg)}
+      />
+      <TimelineCommandDialog
+        open={timelineCommandOpen}
+        onClose={() => setTimelineCommandOpen(false)}
+        projectId={projectId}
+        sceneTitle={scene?.title ?? undefined}
+        timeConfig={timeConfig}
       />
     </div>
   );

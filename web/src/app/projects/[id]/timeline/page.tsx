@@ -93,6 +93,98 @@ function sortKeyFromTimeData(td: SceneTime, units: TimeUnit[]): number[] {
   return enabled.map(u => td[u.id] ?? 0);
 }
 
+// ── Shared reusable components (module-level to avoid remount on re-render) ────
+
+function TimeGrid({ label, units, vals, onChange }: {
+  label: string;
+  units: TimeUnit[];
+  vals: SceneTime;
+  onChange: (unitId: string, raw: string) => void;
+}) {
+  if (units.length === 0) return null;
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <div className="grid grid-cols-2 gap-1.5">
+        {units.map(unit => (
+          <div key={unit.id} className="space-y-0.5">
+            <span className="text-[10px] text-muted-foreground">{unit.singular}</span>
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={vals[unit.id] ?? ""}
+              placeholder="—"
+              onChange={e => onChange(unit.id, e.target.value.replace(/[^0-9]/g, ""))}
+              className="h-7 text-xs"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SubplotFilter({ filter, onChange, availableSubplots, colColors }: {
+  filter: string;
+  onChange: (v: string) => void;
+  availableSubplots: string[];
+  colColors: Record<string, string>;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  const options = [
+    { value: "all", label: "All", color: null as string | null },
+    { value: "main", label: "Main plot", color: colColors["__main__"] ?? null },
+    ...availableSubplots.map(s => ({ value: s, label: s, color: colColors[s] ?? null })),
+  ];
+  const current = options.find(o => o.value === filter) ?? options[0];
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 h-7 rounded-md border border-input bg-background px-2 text-xs hover:bg-secondary/50 focus:outline-none"
+      >
+        {current.color && <span style={{ width: 7, height: 7, borderRadius: "50%", background: current.color, flexShrink: 0 }} />}
+        {current.label}
+        <span className="opacity-40 ml-0.5">▾</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-30 min-w-[140px] rounded-md border border-border bg-popover shadow-md py-1">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              className={cn(
+                "w-full text-left flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-secondary",
+                opt.value === filter && "bg-secondary/80",
+              )}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+            >
+              <span style={{
+                width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+                background: opt.color ?? "transparent",
+                border: opt.color ? "none" : "1px solid currentColor",
+                opacity: opt.color ? 1 : 0.3,
+              }} />
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── TrackVisualization ────────────────────────────────────────────────────────
 
 interface TrackVizProps {
@@ -349,7 +441,7 @@ function TrackDialog({ open, initial, units, onClose, onSave }: TrackDialogProps
     }
   }, [open, initial]);
 
-  const setTimeVal = (setter: React.Dispatch<React.SetStateAction<SceneTime>>, unitId: string, raw: string) => {
+  const applyTimeVal = (setter: React.Dispatch<React.SetStateAction<SceneTime>>, unitId: string, raw: string) => {
     const n = raw === "" ? undefined : Number(raw);
     setter(prev => {
       const next = { ...prev };
@@ -358,28 +450,6 @@ function TrackDialog({ open, initial, units, onClose, onSave }: TrackDialogProps
       return next;
     });
   };
-
-  const TimeInputs = ({ vals, setter, label }: { vals: SceneTime; setter: React.Dispatch<React.SetStateAction<SceneTime>>; label: string }) => (
-    <div className="space-y-1">
-      <Label className="text-xs">{label}</Label>
-      <div className="grid grid-cols-2 gap-1.5">
-        {enabledUnits.map(unit => (
-          <div key={unit.id} className="space-y-0.5">
-            <span className="text-[10px] text-muted-foreground">{unit.singular}</span>
-            <Input
-              type="number"
-              min={1}
-              max={unit.count_per_parent ?? undefined}
-              value={vals[unit.id] ?? ""}
-              placeholder="—"
-              onChange={e => setTimeVal(setter, unit.id, e.target.value)}
-              className="h-7 text-xs"
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -418,8 +488,18 @@ function TrackDialog({ open, initial, units, onClose, onSave }: TrackDialogProps
           </div>
           {enabledUnits.length > 0 && (
             <>
-              <TimeInputs vals={startTime} setter={setStartTime} label="Start time (optional)" />
-              <TimeInputs vals={endTime} setter={setEndTime} label="End time (optional)" />
+              <TimeGrid
+                label="Start time (optional)"
+                units={enabledUnits}
+                vals={startTime}
+                onChange={(id, raw) => applyTimeVal(setStartTime, id, raw)}
+              />
+              <TimeGrid
+                label="End time (optional)"
+                units={enabledUnits}
+                vals={endTime}
+                onChange={(id, raw) => applyTimeVal(setEndTime, id, raw)}
+              />
             </>
           )}
         </div>
@@ -555,12 +635,11 @@ function EventDialog({ open, initial, tracks, units, defaultTrackId, onClose, on
                         </select>
                       ) : (
                         <Input
-                          type="number"
-                          min={1}
-                          max={maxVal}
+                          type="text"
+                          inputMode="numeric"
                           value={timeVals[unit.id] ?? ""}
                           placeholder="—"
-                          onChange={e => setVal(unit.id, e.target.value)}
+                          onChange={e => setVal(unit.id, e.target.value.replace(/[^0-9]/g, ""))}
                           className="h-7 text-xs"
                         />
                       )}
@@ -621,11 +700,17 @@ export default function TimelinePage() {
   };
 
   const [storedSubplots, setStoredSubplots] = useState<string[]>([]);
+  const [colColors, setColColors] = useState<Record<string, string>>({});
   useEffect(() => {
     try {
       const raw = localStorage.getItem(`lw_subplots_${projectId}`);
       const parsed = JSON.parse(raw ?? "[]");
       if (Array.isArray(parsed)) setStoredSubplots(parsed);
+    } catch {}
+    try {
+      const raw = localStorage.getItem(`lw_col_colors_${projectId}`);
+      const parsed = JSON.parse(raw ?? "{}");
+      if (parsed && typeof parsed === "object") setColColors(parsed);
     } catch {}
   }, [projectId]);
 
@@ -751,17 +836,12 @@ export default function TimelinePage() {
               <span className="text-sm font-medium">Story</span>
               <span className="text-xs text-muted-foreground">· {filteredStoryNodes.length} scenes</span>
             </div>
-            <select
-              value={filter}
-              onChange={e => setFilter(e.target.value)}
-              className="h-7 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="all">All</option>
-              <option value="main">Main plot</option>
-              {availableSubplots.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+            <SubplotFilter
+              filter={filter}
+              onChange={setFilter}
+              availableSubplots={availableSubplots}
+              colColors={colColors}
+            />
           </div>
           {filteredStoryNodes.length === 0 ? (
             <div className="px-4 py-8 text-center text-muted-foreground text-xs">

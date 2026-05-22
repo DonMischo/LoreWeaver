@@ -30,6 +30,7 @@ interface Props {
   onCodexEntryClick: (id: number) => void;
   sceneId: number;
   onOpenChat?: () => void;
+  onOpenTimeline?: () => void;
   onWordSelect?: (word: string | null) => void;
   onFlagsChange?: (flags: FlagItem[]) => void;
   replaceWordRef?: React.MutableRefObject<((word: string) => void) | null>;
@@ -61,7 +62,7 @@ function applyTypewriterScroll(
   } catch { /* view not mounted */ }
 }
 
-export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId, onOpenChat, onWordSelect, onFlagsChange, replaceWordRef, applyFlagRef }: Props) {
+export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId, onOpenChat, onOpenTimeline, onWordSelect, onFlagsChange, replaceWordRef, applyFlagRef }: Props) {
   const showLineNumbers  = useUIStore((s) => s.showParagraphNumbers);
   const typewriterMode   = useUIStore((s) => s.typewriterMode);
   const typewriterOffset = useUIStore((s) => s.typewriterOffset);
@@ -87,6 +88,8 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
   const menuHandleRef = useRef<SlashMenuHandle | null>(null);
   const onOpenChatRef = useRef(onOpenChat);
   onOpenChatRef.current = onOpenChat;
+  const onOpenTimelineRef = useRef(onOpenTimeline);
+  onOpenTimelineRef.current = onOpenTimeline;
   const onWordSelectRef  = useRef(onWordSelect);
   onWordSelectRef.current  = onWordSelect;
   const onFlagsChangeRef = useRef(onFlagsChange);
@@ -143,6 +146,9 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
             if (props.id === "chat") {
               editor.chain().focus().deleteRange(range).run();
               onOpenChatRef.current?.();
+            } else if (props.id === "timeline") {
+              editor.chain().focus().deleteRange(range).run();
+              onOpenTimelineRef.current?.();
             } else if (props.id === "placeholder") {
               editor.chain()
                 .focus()
