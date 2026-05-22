@@ -262,6 +262,7 @@ export default function RelationsPage() {
   const [hoveredEdge, setHoveredEdge] = useState<GraphEdge | null>(null);
   const [dialogEntry, setDialogEntry] = useState<CodexEntry | null>(null);
   const [depth, setDepth] = useState(1);
+  const [stretch, setStretch] = useState(1);
   const [menu, setMenu] = useState<MenuState>(null);
 
   const openEntryDialog = (node: GraphNode) => {
@@ -329,8 +330,11 @@ export default function RelationsPage() {
         }
       }
       const arr = [...nextFrontier];
+      const baseR = RADII[d] * stretch;
       arr.forEach((name, i) => {
-        positions[name] = radialPos(i, arr.length, RADII[d], Math.PI / arr.length);
+        // Stagger every 2nd node outward when ring has >6 nodes
+        const r = arr.length > 6 && i % 2 === 1 ? baseR * 1.35 : baseR;
+        positions[name] = radialPos(i, arr.length, r, Math.PI / arr.length);
       });
       frontier = nextFrontier;
     }
@@ -340,7 +344,7 @@ export default function RelationsPage() {
     );
 
     return { positions, visibleEdges };
-  }, [data, centerNode, depth]);
+  }, [data, centerNode, depth, stretch]);
 
   if (isLoading) return <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Loading graph…</div>;
   if (error || !data) return <div className="flex items-center justify-center h-full text-destructive text-sm">Failed to load graph</div>;
@@ -376,12 +380,24 @@ export default function RelationsPage() {
             />
             <span className="text-xs font-medium w-3 text-center">{depth}</span>
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Stretch</span>
+            <input
+              type="range" min={0.5} max={3} step={0.1} value={stretch}
+              onChange={e => setStretch(Number(e.target.value))}
+              className="w-20 accent-primary"
+            />
+            <span className="text-xs font-medium w-6 text-center">{stretch.toFixed(1)}×</span>
+          </div>
         </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
         <aside className="w-48 border-r border-border overflow-y-auto py-2 shrink-0">
-          {data.nodes.map(n => {
+          {[...data.nodes].sort((a, b) => {
+            const order: Record<string, number> = { character: 0, location: 1, item: 2, lore: 3, custom: 4 };
+            return (order[a.entry_type] ?? 5) - (order[b.entry_type] ?? 5);
+          }).map(n => {
             const Icon = TYPE_ICONS[n.entry_type] ?? Tag;
             const hasCodexEntry = !!n.codex_id && codexEntries.some(e => e.id === n.codex_id);
             return (
@@ -402,8 +418,8 @@ export default function RelationsPage() {
           })}
         </aside>
 
-        <div className="flex-1 overflow-auto bg-background/50">
-          <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="min-w-full">
+        <div className="flex-1 overflow-hidden bg-background/50 relative">
+          <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
             <defs>
               <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
                 <path d="M0,0 L0,6 L6,3 z" fill="#6b7280" fillOpacity={0.6} />
@@ -482,6 +498,10 @@ export default function RelationsPage() {
           initial={dialogEntry}
           title="Edit Entry"
           allEntries={codexEntries}
+          onOpenRelation={(id) => {
+            const entry = codexEntries.find(e => e.id === id);
+            if (entry) setDialogEntry(entry);
+          }}
         />
       )}
 

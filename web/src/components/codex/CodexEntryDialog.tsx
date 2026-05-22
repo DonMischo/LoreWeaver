@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { CodexEntry, CodexRelationResolved, EntryType } from "@/types";
@@ -25,20 +25,22 @@ const PRESET_COLORS = [
   "#a855f7", "#f97316", "#ec4899", "#14b8a6",
 ];
 
-const PRESET_RELATIONS = [
-  "friend", "enemy", "ally", "rival",
-  "mentor", "student",
-  "home", "origin",
-  "member of", "leads",
-  "parent", "child",
-  "mother", "father",
-  "grandmother", "grandfather",
-  "aunt", "uncle",
-  "sister", "brother",
-  "spouse", "partner",
-  "cousin",
-  "custom…",
+const RELATION_GROUPS: { label: string; items: string[] }[] = [
+  { label: "General",      items: ["friend", "enemy", "ally", "rival"] },
+  { label: "Mentorship",   items: ["mentor", "student"] },
+  { label: "Place",        items: ["home", "origin"] },
+  { label: "Organization", items: ["member of", "leads"] },
+  { label: "Family",       items: ["parent", "child", "mother", "father", "grandmother", "grandfather", "aunt", "uncle", "sister", "brother", "cousin"] },
+  { label: "Romantic",     items: ["spouse", "partner", "lover"] },
+  { label: "Ownership",    items: ["owner", "owned by"] },
+  { label: "Other",        items: ["custom…"] },
 ];
+const PRESET_RELATIONS = RELATION_GROUPS.flatMap(g => g.items);
+
+const ENTRY_TYPE_ORDER = ["character", "location", "item", "lore", "custom"] as const;
+const ENTRY_TYPE_LABELS: Record<string, string> = {
+  character: "Characters", location: "Locations", item: "Items", lore: "Lore", custom: "Custom",
+};
 
 // ── Inventory sub-components ──────────────────────────────────────────────────
 
@@ -217,10 +219,12 @@ interface Props {
   allEntries?: CodexEntry[];
   /** Called when the user clicks an inventory item name to jump to its entry */
   onOpenEntry?: (id: number) => void;
+  /** Called when the user clicks a relation's target name to open that entry */
+  onOpenRelation?: (id: number) => void;
 }
 
 export function CodexEntryDialog({
-  open, onClose, onSave, initial, title, allEntries = [], onOpenEntry,
+  open, onClose, onSave, initial, title, allEntries = [], onOpenEntry, onOpenRelation,
 }: Props) {
   const [name, setName]               = useState(initial?.name ?? "");
   const [aliasInput, setAliasInput]   = useState("");
@@ -394,8 +398,11 @@ export function CodexEntryDialog({
     onClose();
   };
 
-  // Other entries that are not this one, for relation target dropdown
+  // Other entries that are not this one, for relation target dropdown — grouped by type
   const otherEntries = allEntries.filter((e) => e.id !== entryId);
+  const otherEntriesByType = ENTRY_TYPE_ORDER
+    .map(type => ({ type, label: ENTRY_TYPE_LABELS[type], entries: otherEntries.filter(e => e.entry_type === type) }))
+    .filter(g => g.entries.length > 0);
 
   // Name generator: fall back to species entry's name_type if user hasn't picked one
   const speciesEntry = entryType === "character" && species.trim()
@@ -832,7 +839,17 @@ export function CodexEntryDialog({
                               className="w-2 h-2 rounded-full flex-shrink-0"
                               style={{ backgroundColor: r.other_color }}
                             />
-                            <span className="font-medium truncate">{r.other_name}</span>
+                            {onOpenRelation ? (
+                              <button
+                                type="button"
+                                onClick={() => onOpenRelation(r.other_id)}
+                                className="font-medium truncate hover:underline hover:text-primary transition-colors text-left"
+                              >
+                                {r.other_name}
+                              </button>
+                            ) : (
+                              <span className="font-medium truncate">{r.other_name}</span>
+                            )}
                             {r.relation_type && (
                               <span className="text-xs text-muted-foreground">— {r.relation_type}</span>
                             )}
@@ -856,16 +873,18 @@ export function CodexEntryDialog({
                           <SelectValue placeholder={t("bulk_select_entry")} />
                         </SelectTrigger>
                         <SelectContent>
-                          {otherEntries.map((e) => (
-                            <SelectItem key={e.id} value={String(e.id)}>
-                              <span className="flex items-center gap-1.5">
-                                <span
-                                  className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                                  style={{ backgroundColor: e.color }}
-                                />
-                                {e.name}{e.is_main_char ? " ★" : ""}
-                              </span>
-                            </SelectItem>
+                          {otherEntriesByType.map(({ type, label, entries }) => (
+                            <SelectGroup key={type}>
+                              <SelectLabel>{label}</SelectLabel>
+                              {entries.map((e) => (
+                                <SelectItem key={e.id} value={String(e.id)}>
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: e.color }} />
+                                    {e.name}{e.is_main_char ? " ★" : ""}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
                           ))}
                         </SelectContent>
                       </Select>
@@ -875,8 +894,13 @@ export function CodexEntryDialog({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {PRESET_RELATIONS.map((r) => (
-                            <SelectItem key={r} value={r}>{r}</SelectItem>
+                          {RELATION_GROUPS.map(({ label, items }) => (
+                            <SelectGroup key={label}>
+                              <SelectLabel>{label}</SelectLabel>
+                              {items.map((r) => (
+                                <SelectItem key={r} value={r}>{r}</SelectItem>
+                              ))}
+                            </SelectGroup>
                           ))}
                         </SelectContent>
                       </Select>

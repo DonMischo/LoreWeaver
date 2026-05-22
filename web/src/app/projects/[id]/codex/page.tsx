@@ -803,6 +803,10 @@ export default function CodexPage() {
           const entry = entries.find(e => e.id === id);
           if (entry) setEditing(entry);
         }}
+        onOpenRelation={(id) => {
+          const entry = entries.find(e => e.id === id);
+          if (entry) setEditing(entry);
+        }}
       />
 
       <BulkEditDialog

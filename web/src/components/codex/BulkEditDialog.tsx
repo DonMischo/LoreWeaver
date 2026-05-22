@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { CodexEntry, EntryType } from "@/types";
@@ -16,20 +16,22 @@ import { useLanguage } from "@/contexts/LanguageContext";
 
 const ENTRY_TYPES: EntryType[] = ["character", "location", "item", "lore", "custom"];
 
-const PRESET_RELATIONS = [
-  "friend", "enemy", "ally", "rival",
-  "mentor", "student",
-  "home", "origin",
-  "member of", "leads",
-  "parent", "child",
-  "mother", "father",
-  "grandmother", "grandfather",
-  "aunt", "uncle",
-  "sister", "brother",
-  "spouse", "partner",
-  "cousin",
-  "custom…",
+const RELATION_GROUPS: { label: string; items: string[] }[] = [
+  { label: "General",      items: ["friend", "enemy", "ally", "rival"] },
+  { label: "Mentorship",   items: ["mentor", "student"] },
+  { label: "Place",        items: ["home", "origin"] },
+  { label: "Organization", items: ["member of", "leads"] },
+  { label: "Family",       items: ["parent", "child", "mother", "father", "grandmother", "grandfather", "aunt", "uncle", "sister", "brother", "cousin"] },
+  { label: "Romantic",     items: ["spouse", "partner", "lover"] },
+  { label: "Ownership",    items: ["owner", "owned by"] },
+  { label: "Other",        items: ["custom…"] },
 ];
+const PRESET_RELATIONS = RELATION_GROUPS.flatMap(g => g.items);
+
+const ENTRY_TYPE_ORDER = ["character", "location", "item", "lore", "custom"] as const;
+const ENTRY_TYPE_LABELS: Record<string, string> = {
+  character: "Characters", location: "Locations", item: "Items", lore: "Lore", custom: "Custom",
+};
 
 interface Props {
   open: boolean;
@@ -46,6 +48,8 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
   const [subtype, setSubtype]       = useState("");
   const [tagInput, setTagInput]     = useState("");
   const [tagsToAdd, setTagsToAdd]   = useState<string[]>([]);
+  const [groupInput, setGroupInput] = useState("");
+  const [groupsToAdd, setGroupsToAdd] = useState<string[]>([]);
   const [relTarget, setRelTarget]   = useState("");
   const [relPreset, setRelPreset]   = useState(PRESET_RELATIONS[0]);
   const [relCustom, setRelCustom]   = useState("");
@@ -57,6 +61,8 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
     setSubtype("");
     setTagInput("");
     setTagsToAdd([]);
+    setGroupInput("");
+    setGroupsToAdd([]);
     setRelTarget("");
     setRelPreset(PRESET_RELATIONS[0]);
     setRelCustom("");
@@ -85,7 +91,13 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
     setRelCustom("");
   };
 
-  const hasChanges = entryType !== "__none__" || subtype.trim() || tagsToAdd.length > 0 || relationsToAdd.length > 0;
+  const addGroup = () => {
+    const g = groupInput.trim();
+    if (g && !groupsToAdd.includes(g)) { setGroupsToAdd([...groupsToAdd, g]); setGroupInput(""); }
+  };
+  const groupSuggestions = [...new Set(allEntries.flatMap(e => e.groups ?? []))].filter(g => !groupsToAdd.includes(g)).sort();
+
+  const hasChanges = entryType !== "__none__" || subtype.trim() || tagsToAdd.length > 0 || groupsToAdd.length > 0 || relationsToAdd.length > 0;
 
   const handleApply = async () => {
     if (!hasChanges) return;
@@ -107,6 +119,10 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
           const merged = [...new Set([...entry.tags, ...tagsToAdd])];
           update.tags = merged;
         }
+        if (groupsToAdd.length > 0) {
+          const merged = [...new Set([...(entry.groups ?? []), ...groupsToAdd])];
+          update.groups = merged;
+        }
         if (Object.keys(update).length > 0) {
           await codexApi.update(entry.id, update as any);
         }
@@ -127,10 +143,11 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
     }
   };
 
-  // Entries that are not in the selection (for relation target)
-  const targetOptions = allEntries.filter(
-    e => !selectedEntries.some(s => s.id === e.id)
-  );
+  // Entries that are not in the selection (for relation target) — grouped by type
+  const targetOptions = allEntries.filter(e => !selectedEntries.some(s => s.id === e.id));
+  const targetOptionsByType = ENTRY_TYPE_ORDER
+    .map(type => ({ type, label: ENTRY_TYPE_LABELS[type], entries: targetOptions.filter(e => e.entry_type === type) }))
+    .filter(g => g.entries.length > 0);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -198,6 +215,38 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
             )}
           </div>
 
+          {/* Add Groups */}
+          <div className="space-y-1.5">
+            <Label>Add to groups</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  value={groupInput}
+                  onChange={e => setGroupInput(e.target.value)}
+                  placeholder="Group name…"
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addGroup(); } }}
+                  list="bulk-group-suggestions"
+                />
+                <datalist id="bulk-group-suggestions">
+                  {groupSuggestions.map(g => <option key={g} value={g} />)}
+                </datalist>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={addGroup}>{t("common_add")}</Button>
+            </div>
+            {groupsToAdd.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {groupsToAdd.map(g => (
+                  <span key={g} className="flex items-center gap-1 text-xs bg-secondary px-2 py-0.5 rounded">
+                    {g}
+                    <button onClick={() => setGroupsToAdd(groupsToAdd.filter(x => x !== g))}>
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Add Relations */}
           {targetOptions.length > 0 && (
             <div className="space-y-1.5">
@@ -208,13 +257,18 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
                     <SelectValue placeholder={t("bulk_select_entry")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {targetOptions.map(e => (
-                      <SelectItem key={e.id} value={String(e.id)}>
-                        <span className="flex items-center gap-1.5">
-                          <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: e.color }} />
-                          {e.name}
-                        </span>
-                      </SelectItem>
+                    {targetOptionsByType.map(({ type, label, entries }) => (
+                      <SelectGroup key={type}>
+                        <SelectLabel>{label}</SelectLabel>
+                        {entries.map(e => (
+                          <SelectItem key={e.id} value={String(e.id)}>
+                            <span className="flex items-center gap-1.5">
+                              <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: e.color }} />
+                              {e.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     ))}
                   </SelectContent>
                 </Select>
@@ -223,8 +277,13 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PRESET_RELATIONS.map(r => (
-                      <SelectItem key={r} value={r}>{r}</SelectItem>
+                    {RELATION_GROUPS.map(({ label, items }) => (
+                      <SelectGroup key={label}>
+                        <SelectLabel>{label}</SelectLabel>
+                        {items.map(r => (
+                          <SelectItem key={r} value={r}>{r}</SelectItem>
+                        ))}
+                      </SelectGroup>
                     ))}
                   </SelectContent>
                 </Select>
