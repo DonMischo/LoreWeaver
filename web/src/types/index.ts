@@ -223,6 +223,10 @@ export interface Settings {
   typewriter_mode: boolean;
   typewriter_offset: number;
   session_timer_enabled: boolean;
+  grammar_check_enabled: boolean;
+  grammar_check_url: string;
+  pandoc_enabled: boolean;
+  pandoc_url: string;
 }
 
 // ── Fragments ─────────────────────────────────────────────────────────────────

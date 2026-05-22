@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Key, Cpu, Globe, Loader2, RefreshCw, Sparkles, Plus, Trash2, RotateCcw, HelpCircle, Palette, FolderOpen, RotateCw, Hash, AlignCenter, Timer } from "lucide-react";
+import { ArrowLeft, Key, Cpu, Globe, Loader2, RefreshCw, Sparkles, Plus, Trash2, RotateCcw, HelpCircle, Palette, FolderOpen, RotateCw, Hash, AlignCenter, Timer, Container, CheckCircle2, XCircle, AlertCircle, Play, ExternalLink, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useSettings, useUpdateSettings, useOpenRouterModels, usePrompts, useCreatePrompt, useUpdatePrompt, useDeletePrompt, useRevertPrompt } from "@/store/queries";
-import { dataDirApi } from "@/lib/api";
+import { useSettings, useUpdateSettings, useOpenRouterModels, usePrompts, useCreatePrompt, useUpdatePrompt, useDeletePrompt, useRevertPrompt, useServiceStatus } from "@/store/queries";
+import { dataDirApi, settingsApi } from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useUIStore } from "@/store/ui";
 import { useTheme, THEMES, THEME_LABELS, THEME_PREVIEW } from "@/contexts/ThemeContext";
@@ -28,6 +28,23 @@ const PLACEHOLDER_HELP = [
   { token: "{{LANGUAGE}}", desc: "Project language from Project Info (e.g. English, German)" },
   { token: "{{WORD_COUNT}}", desc: "Target word count configured on this prompt (default 400)" },
 ];
+
+function ServiceStatusBadge({ label, status }: { label: string; status: "ok" | "error" | "offline" }) {
+  const icon = status === "ok"
+    ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+    : status === "error"
+    ? <AlertCircle className="h-3.5 w-3.5 text-yellow-500" />
+    : <XCircle className="h-3.5 w-3.5 text-destructive" />;
+  const text = status === "ok" ? "Running" : status === "error" ? "Error" : "Offline";
+  const color = status === "ok" ? "text-green-600 dark:text-green-400" : status === "error" ? "text-yellow-600 dark:text-yellow-400" : "text-destructive";
+  return (
+    <div className="flex items-center gap-1.5">
+      {icon}
+      <span className="font-medium">{label}</span>
+      <span className={color}>— {text}</span>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { data: settings } = useSettings();
@@ -55,6 +72,18 @@ export default function SettingsPage() {
   const [enabledModels, setEnabledModels]       = useState<string[]>([]);
   const [modelSearch, setModelSearch]     = useState("");
   const [saved, setSaved]                 = useState(false);
+
+  // ── Services ──────────────────────────────────────────────────────────────
+  const [grammarEnabled, setGrammarEnabled] = useState(false);
+  const [grammarUrl, setGrammarUrl]         = useState("http://localhost:8081");
+  const [pandocEnabled, setPandocEnabled]   = useState(false);
+  const [pandocUrl, setPandocUrl]           = useState("http://localhost:8082");
+  const [showServiceStatus, setShowServiceStatus] = useState(false);
+  const { data: serviceStatus, isLoading: statusLoading, refetch: refetchStatus } =
+    useServiceStatus(showServiceStatus);
+  const [dockerUpState, setDockerUpState] = useState<"idle" | "busy" | "ok" | "error">("idle");
+  const [dockerUpMsg, setDockerUpMsg]     = useState("");
+  const [helpOpen, setHelpOpen]           = useState(false);
 
   // ── Data directory ────────────────────────────────────────────────────────
   const isElectron = typeof window !== "undefined" && !!(window as any).electron;
@@ -136,6 +165,10 @@ export default function SettingsPage() {
       setDefaultModel(settings.default_model);
       setDefaultChatModel(settings.default_chat_model ?? "");
       setEnabledModels(settings.enabled_models ?? []);
+      setGrammarEnabled(settings.grammar_check_enabled ?? false);
+      setGrammarUrl(settings.grammar_check_url ?? "http://localhost:8081");
+      setPandocEnabled(settings.pandoc_enabled ?? false);
+      setPandocUrl(settings.pandoc_url ?? "http://localhost:8082");
     }
   }, [settings]);
 
@@ -151,6 +184,10 @@ export default function SettingsPage() {
       default_chat_model: defaultChatModel || null,
       enabled_models: enabledModels,
       theme,
+      grammar_check_enabled: grammarEnabled,
+      grammar_check_url: grammarUrl,
+      pandoc_enabled: pandocEnabled,
+      pandoc_url: pandocUrl,
     };
     // Only include the key when the user has explicitly typed in the field.
     // Guards against browser autofill silently populating a password field on load.
@@ -730,6 +767,305 @@ export default function SettingsPage() {
             )}
           </div>
         </section>
+
+        <div className="border-t border-border" />
+
+        {/* External Services */}
+        <section className="space-y-4">
+          {/* Header */}
+          <div className="flex items-center gap-2 mb-1">
+            <Container className="h-4 w-4 text-primary" />
+            <h2 className="text-base font-semibold">External Services</h2>
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              className="text-muted-foreground hover:text-foreground transition-colors ml-0.5"
+              title="How to set up these services"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Optional Docker-based services for grammar checking and PDF/EPUB export.
+            Enable the ones you want, then click <strong className="text-foreground font-medium">Start Services</strong>.
+          </p>
+
+          {/* Grammar check */}
+          <div className="rounded-lg border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Grammar Check (LanguageTool)</p>
+                <p className="text-xs text-muted-foreground">On-demand grammar and style suggestions in the scene editor</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={grammarEnabled}
+                onClick={() => setGrammarEnabled(v => !v)}
+                className={cn(
+                  "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                  grammarEnabled ? "bg-primary" : "bg-input"
+                )}
+              >
+                <span className={cn(
+                  "pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
+                  grammarEnabled ? "translate-x-4" : "translate-x-0"
+                )} />
+              </button>
+            </div>
+            {grammarEnabled && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Service URL</Label>
+                <Input
+                  value={grammarUrl}
+                  onChange={e => setGrammarUrl(e.target.value)}
+                  placeholder="http://localhost:8081"
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Pandoc / PDF+EPUB */}
+          <div className="rounded-lg border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">PDF & EPUB Export (Pandoc)</p>
+                <p className="text-xs text-muted-foreground">Export projects to PDF (via LaTeX) or EPUB format</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={pandocEnabled}
+                onClick={() => setPandocEnabled(v => !v)}
+                className={cn(
+                  "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                  pandocEnabled ? "bg-primary" : "bg-input"
+                )}
+              >
+                <span className={cn(
+                  "pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
+                  pandocEnabled ? "translate-x-4" : "translate-x-0"
+                )} />
+              </button>
+            </div>
+            {pandocEnabled && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Service URL</Label>
+                <Input
+                  value={pandocUrl}
+                  onChange={e => setPandocUrl(e.target.value)}
+                  placeholder="http://localhost:8082"
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Start + status row */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Start Services button */}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={dockerUpState === "busy"}
+              onClick={async () => {
+                setDockerUpState("busy");
+                setDockerUpMsg("");
+                try {
+                  const res = await settingsApi.dockerComposeUp();
+                  setDockerUpState("ok");
+                  setDockerUpMsg(res.output || "Services started.");
+                  // auto-refresh status after startup
+                  setTimeout(() => { setShowServiceStatus(true); refetchStatus(); }, 1500);
+                } catch (e: any) {
+                  setDockerUpState("error");
+                  const detail = e.message?.includes(": ") ? e.message.split(": ").slice(1).join(": ") : e.message;
+                  setDockerUpMsg(detail ?? "Failed to start services.");
+                }
+              }}
+              className="gap-1.5"
+            >
+              {dockerUpState === "busy"
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <Play className="h-3.5 w-3.5" />}
+              {dockerUpState === "busy" ? "Starting…" : "Start Services"}
+            </Button>
+
+            {/* Check status button */}
+            <button
+              type="button"
+              onClick={() => { setShowServiceStatus(true); refetchStatus(); }}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", statusLoading && "animate-spin")} />
+              Check status
+            </button>
+          </div>
+
+          {/* Docker output / error */}
+          {dockerUpState === "ok" && dockerUpMsg && (
+            <pre className="text-[11px] text-green-600 dark:text-green-400 bg-green-500/10 border border-green-500/20 rounded-md px-3 py-2 whitespace-pre-wrap leading-relaxed max-h-28 overflow-y-auto">
+              {dockerUpMsg}
+            </pre>
+          )}
+          {dockerUpState === "error" && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 space-y-1">
+              <p className="text-xs font-medium text-destructive">Could not start services</p>
+              <p className="text-[11px] text-destructive/80 whitespace-pre-wrap">{dockerUpMsg}</p>
+              <button
+                type="button"
+                onClick={() => setHelpOpen(true)}
+                className="text-[11px] text-primary hover:underline flex items-center gap-1"
+              >
+                <HelpCircle className="h-3 w-3" /> Setup guide
+              </button>
+            </div>
+          )}
+
+          {/* Service status badges */}
+          {showServiceStatus && serviceStatus && (
+            <div className="flex flex-wrap gap-3 text-xs">
+              {grammarEnabled && (
+                <ServiceStatusBadge label="LanguageTool" status={serviceStatus.languagetool} />
+              )}
+              {pandocEnabled && (
+                <ServiceStatusBadge label="Pandoc" status={serviceStatus.pandoc} />
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* ── Docker Setup Help Modal ───────────────────────────────────────── */}
+        {helpOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+            onClick={() => setHelpOpen(false)}
+          >
+            <div
+              className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+                <div className="flex items-center gap-2">
+                  <Container className="h-4 w-4 text-primary" />
+                  <h2 className="text-base font-semibold">Setting Up External Services</h2>
+                </div>
+                <button onClick={() => setHelpOpen(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Modal body */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5 text-sm">
+
+                {/* What is Docker */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">What is Docker?</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Docker is a free tool that runs programs in isolated containers — think of it like a
+                    self-contained mini-computer for each service. You don&apos;t need to install
+                    LanguageTool or Pandoc yourself; Docker downloads and runs everything automatically.
+                  </p>
+                </div>
+
+                {/* Step 1 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground shrink-0">1</span>
+                    <h3 className="font-semibold text-sm">Install Docker Desktop</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed pl-7">
+                    Download and install Docker Desktop for your operating system. It&apos;s free for personal use.
+                    After installing, open it and wait for the whale icon to appear in your taskbar/menu bar
+                    (that means Docker is running).
+                  </p>
+                  <div className="pl-7">
+                    <a
+                      href="https://www.docker.com/products/docker-desktop/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Download Docker Desktop →
+                    </a>
+                  </div>
+                </div>
+
+                {/* Step 2 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground shrink-0">2</span>
+                    <h3 className="font-semibold text-sm">Enable the services you want</h3>
+                  </div>
+                  <div className="pl-7 space-y-2">
+                    <div className="rounded-md border border-border bg-secondary/30 px-3 py-2 space-y-1.5">
+                      <p className="text-xs font-medium">Grammar Check (LanguageTool)</p>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Checks your writing for grammar mistakes, style issues, and typos in 30+ languages.
+                        Works like the grammar checker in Word, but privately — your text never leaves your computer.
+                        <br /><span className="text-foreground/60">First download: ~500 MB. Runs on port 8081.</span>
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-border bg-secondary/30 px-3 py-2 space-y-1.5">
+                      <p className="text-xs font-medium">PDF & EPUB Export (Pandoc)</p>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Converts your project into a professional PDF or an e-book file (EPUB) that works
+                        on Kindle, Kobo, and Apple Books. Uses LaTeX for high-quality PDF typesetting.
+                        <br /><span className="text-foreground/60">First download: ~600 MB. Runs on port 8082.</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 3 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground shrink-0">3</span>
+                    <h3 className="font-semibold text-sm">Click "Start Services"</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed pl-7">
+                    Hit the <strong className="text-foreground">Start Services</strong> button. Foliantica will
+                    download the container images (this only happens once — later starts are instant) and
+                    launch them in the background. The first time may take a few minutes depending on your
+                    internet connection.
+                  </p>
+                </div>
+
+                {/* Step 4 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground shrink-0">4</span>
+                    <h3 className="font-semibold text-sm">Save settings and check status</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed pl-7">
+                    Click <strong className="text-foreground">Save settings</strong> at the bottom of the page,
+                    then use <strong className="text-foreground">Check status</strong> to confirm the services
+                    are running. A green "Running" badge means everything is ready.
+                  </p>
+                </div>
+
+                {/* Troubleshooting */}
+                <div className="rounded-md border border-border bg-secondary/20 px-3 py-3 space-y-1.5">
+                  <p className="text-xs font-semibold">Troubleshooting</p>
+                  <ul className="text-[11px] text-muted-foreground space-y-1 leading-relaxed list-disc list-inside">
+                    <li><strong className="text-foreground">Docker not found</strong> — Docker Desktop isn&apos;t installed or not running. Open Docker Desktop first.</li>
+                    <li><strong className="text-foreground">Port already in use</strong> — Another app is using port 8081 or 8082. Change the URL field above to a different port (e.g. <code className="text-primary">http://localhost:8083</code>).</li>
+                    <li><strong className="text-foreground">Services stay "Offline"</strong> — LanguageTool can take 30–60 seconds to fully start. Wait a moment, then click Check status again.</li>
+                    <li><strong className="text-foreground">Services stop when you restart your computer</strong> — Open Docker Desktop, or click Start Services again. You can also set Docker Desktop to start automatically on login.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Modal footer */}
+              <div className="px-5 py-3 border-t border-border shrink-0">
+                <Button size="sm" onClick={() => setHelpOpen(false)} className="w-full">Got it</Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="border-t border-border" />
 

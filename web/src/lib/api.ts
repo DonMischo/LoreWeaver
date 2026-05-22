@@ -12,7 +12,7 @@ const BASE = "/api";
 // ── Export types ──────────────────────────────────────────────────────────────
 
 export interface ExportOptions {
-  format: "md" | "tex" | "epub-style";
+  format: "md" | "tex" | "epub-style" | "pdf" | "epub";
   scene_ids?: number[] | null;
   include_act_headings: boolean;
   include_chapter_headings: boolean;
@@ -389,8 +389,14 @@ export const settingsApi = {
     typewriter_mode?: boolean;
     typewriter_offset?: number;
     session_timer_enabled?: boolean;
+    grammar_check_enabled?: boolean;
+    grammar_check_url?: string;
+    pandoc_enabled?: boolean;
+    pandoc_url?: string;
   }) => req<Settings>("/settings", { method: "POST", body: JSON.stringify(data) }),
   getModels: () => req<OpenRouterModel[]>("/settings/models"),
+  serviceStatus: () => req<{ languagetool: "ok" | "error" | "offline"; pandoc: "ok" | "error" | "offline" }>("/settings/service-status"),
+  dockerComposeUp: () => req<{ status: string; output: string }>("/settings/docker/up", { method: "POST" }),
 };
 
 // ── AI Prompts ────────────────────────────────────────────────────────────────
@@ -505,4 +511,30 @@ export const chatApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scene_id: sceneId, messages, model }),
     }),
+};
+
+// ── Grammar check ─────────────────────────────────────────────────────────────
+
+export interface GrammarMatch {
+  message: string;
+  shortMessage: string;
+  offset: number;
+  length: number;
+  replacements: { value: string }[];
+  rule: { id: string; description: string; issueType: string };
+  context: { text: string; offset: number; length: number };
+}
+
+export interface GrammarCheckResult {
+  matches: GrammarMatch[];
+}
+
+export const grammarApi = {
+  check: (text: string, language = "auto") =>
+    req<GrammarCheckResult>("/grammar/check", {
+      method: "POST",
+      body: JSON.stringify({ text, language }),
+    }),
+  languages: () =>
+    req<{ name: string; code: string; longCode: string }[]>("/grammar/languages"),
 };

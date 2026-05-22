@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  languagetool:
+    image: meyay/languagetool:latest
+    container_name: languagetool
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:exec
+    cap_drop:
+      - ALL
+    cap_add:
+      - CAP_CHOWN
+      - CAP_DAC_OVERRIDE
+      - CAP_SETUID
+      - CAP_SETGID
+    security_opt:
+      - no-new-privileges
+    ports:
+      - "8081:8081"
+    environment:
+      download_ngrams_for_langs: en,de,fr,es
+      JAVA_XMS: 512m
+      JAVA_XMX: 2g
+    volumes:
+      - ./languagetool/ngrams:/ngrams
+      - ./languagetool/fasttext:/fasttext
+
+  pandoc:
+    build: ./docker/pandoc
+    container_name: loreweaver-pandoc
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    tmpfs:
+      - /tmp

@@ -105,6 +105,10 @@ def migrate_new_columns():
         ("user_settings", "typewriter_offset",       "INTEGER DEFAULT 50"),
         ("user_settings", "session_timer_enabled",   "INTEGER DEFAULT 1"),
         ("projects",      "subplot_names",            "TEXT DEFAULT '[]'"),
+        ("user_settings", "grammar_check_enabled",    "INTEGER DEFAULT 0"),
+        ("user_settings", "grammar_check_url",        "TEXT DEFAULT 'http://localhost:8081'"),
+        ("user_settings", "pandoc_enabled",           "INTEGER DEFAULT 0"),
+        ("user_settings", "pandoc_url",               "TEXT DEFAULT 'http://localhost:8082'"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in new_columns:

@@ -63,6 +63,10 @@ def _settings_out(s: UserSettings) -> SettingsOut:
         typewriter_mode=bool(s.typewriter_mode),
         typewriter_offset=s.typewriter_offset if s.typewriter_offset is not None else 50,
         session_timer_enabled=bool(s.session_timer_enabled) if s.session_timer_enabled is not None else True,
+        grammar_check_enabled=bool(s.grammar_check_enabled),
+        grammar_check_url=s.grammar_check_url or "http://localhost:8081",
+        pandoc_enabled=bool(s.pandoc_enabled),
+        pandoc_url=s.pandoc_url or "http://localhost:8082",
     )
 
 
@@ -94,9 +98,74 @@ def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
         s.typewriter_offset = body.typewriter_offset
     if body.session_timer_enabled is not None:
         s.session_timer_enabled = int(body.session_timer_enabled)
+    if body.grammar_check_enabled is not None:
+        s.grammar_check_enabled = int(body.grammar_check_enabled)
+    if body.grammar_check_url is not None:
+        s.grammar_check_url = body.grammar_check_url
+    if body.pandoc_enabled is not None:
+        s.pandoc_enabled = int(body.pandoc_enabled)
+    if body.pandoc_url is not None:
+        s.pandoc_url = body.pandoc_url
     db.commit()
     db.refresh(s)
     return _settings_out(s)
+
+
+@router.post("/docker/up")
+def docker_compose_up():
+    """Run `docker compose up -d` for the bundled services.
+
+    Looks for docker-compose.yml at the repo root (two levels above this file).
+    """
+    compose_dir = Path(__file__).resolve().parent.parent.parent
+    compose_file = compose_dir / "docker-compose.yml"
+    if not compose_file.exists():
+        raise HTTPException(
+            404,
+            "docker-compose.yml not found. Make sure the app was installed correctly.",
+        )
+    try:
+        result = subprocess.run(
+            ["docker", "compose", "up", "-d", "--pull", "missing"],
+            cwd=str(compose_dir),
+            capture_output=True,
+            text=True,
+            timeout=300,   # pulling images can take a while
+        )
+        combined = (result.stdout + result.stderr).strip()
+        if result.returncode != 0:
+            raise HTTPException(500, combined[:600] or "docker compose failed")
+        return {"status": "ok", "output": combined[:600]}
+    except FileNotFoundError:
+        raise HTTPException(
+            503,
+            "Docker not found. Please install Docker Desktop and make sure it is running.",
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "docker compose timed out after 5 minutes.")
+
+
+@router.get("/service-status")
+async def service_status(db: Session = Depends(get_db)):
+    """Ping both external services and return their reachability."""
+    s = _get_or_create_settings(db)
+    lt_url = (s.grammar_check_url or "http://localhost:8081").rstrip("/")
+    pandoc_url = (s.pandoc_url or "http://localhost:8082").rstrip("/")
+
+    async def ping(url: str, path: str) -> str:
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                r = await client.get(f"{url}{path}")
+                return "ok" if r.status_code < 400 else "error"
+        except Exception:
+            return "offline"
+
+    import asyncio
+    lt_status, pandoc_status = await asyncio.gather(
+        ping(lt_url, "/v2/languages"),
+        ping(pandoc_url, "/health"),
+    )
+    return {"languagetool": lt_status, "pandoc": pandoc_status}
 
 
 # ── Folder-picker: polling pattern ───────────────────────────────────────────

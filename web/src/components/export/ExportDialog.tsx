@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  FileText, FileCode2, BookOpen,
+  FileText, FileCode2, BookOpen, FileDown,
   FolderOpen, Upload, Check, Loader2, ChevronDown, ChevronRight, Download,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { projectsApi } from "@/lib/api";
 import type { ExportOptions, ExportAct } from "@/lib/api";
 import type { BookMeta } from "@/types";
+import { useSettings } from "@/store/queries";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -217,6 +219,9 @@ interface Props {
 const hasFolderPicker = typeof window !== "undefined" && "showDirectoryPicker" in window;
 
 export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose }: Props) {
+  const { data: appSettings } = useSettings();
+  const pandocEnabled = appSettings?.pandoc_enabled ?? false;
+
   const [opts, setOpts] = useState<ExportOptions>({ ...DEFAULT_OPTS });
   const [acts, setActs] = useState<ExportAct[]>([]);
   const [allContent, setAllContent] = useState(true);
@@ -292,11 +297,29 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
       const res = await projectsApi.export(projectId, payload);
       if (!res.ok) throw new Error(await res.text());
 
-      const ext = opts.format === "md" ? "md" : opts.format === "tex" ? "tex" : "css";
+      const isBinary = opts.format === "pdf" || opts.format === "epub";
+      const extMap: Record<string, string> = { md: "md", tex: "tex", "epub-style": "css", pdf: "pdf", epub: "epub" };
+      const mimeMap: Record<string, string> = {
+        md: "text/markdown", tex: "application/x-tex", "epub-style": "text/css",
+        pdf: "application/pdf", epub: "application/epub+zip",
+      };
+      const ext = extMap[opts.format] ?? opts.format;
       const suffix = opts.format === "epub-style" ? "-style" : "";
       const safeName = projectTitle.replace(/[^a-zA-Z0-9_\-]/g, "_");
       const filename = `${safeName}${suffix}.${ext}`;
-      const mimeType = opts.format === "md" ? "text/markdown" : opts.format === "tex" ? "application/x-tex" : "text/css";
+      const mimeType = mimeMap[opts.format] ?? "application/octet-stream";
+
+      if (isBinary) {
+        // PDF or EPUB — always trigger download (binary blob)
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+        setStatus("done");
+        setStatusMsg(`Downloaded ${filename}`);
+        return;
+      }
 
       const text = await res.text();
 
@@ -334,7 +357,10 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
     }
   };
 
-  const fmtLabel = opts.format === "md" ? "Markdown" : opts.format === "tex" ? "LaTeX" : "EPUB Style";
+  const fmtLabel: Record<string, string> = {
+    md: "Markdown", tex: "LaTeX", "epub-style": "EPUB Style", pdf: "PDF", epub: "EPUB",
+  };
+  const fmtLabelStr = fmtLabel[opts.format] ?? opts.format;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
@@ -357,25 +383,28 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
           {/* Format */}
           <SectionHeading>Format</SectionHeading>
           <div className="grid grid-cols-3 gap-2">
-            {(["md", "tex", "epub-style"] as const).map(fmt => {
-              const Icon = fmt === "md" ? FileText : fmt === "tex" ? FileCode2 : BookOpen;
-              const label = fmt === "md" ? "Markdown" : fmt === "tex" ? "LaTeX" : "EPUB Style";
-              const sub   = fmt === "md" ? ".md file"  : fmt === "tex" ? "LuaLaTeX / fontspec" : "CSS + cover";
-              return (
-                <button key={fmt} onClick={() => set("format", fmt)}
-                  className={cn(
-                    "flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 text-xs transition-colors",
-                    opts.format === fmt
-                      ? "border-primary bg-primary/10 text-foreground"
-                      : "border-border hover:border-border/80 text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="font-medium">{label}</span>
-                  <span className="text-[10px] opacity-70">{sub}</span>
-                </button>
-              );
-            })}
+            {([
+              { fmt: "md",         Icon: FileText,  label: "Markdown",   sub: ".md file" },
+              { fmt: "tex",        Icon: FileCode2, label: "LaTeX",      sub: "LuaLaTeX / fontspec" },
+              { fmt: "epub-style", Icon: BookOpen,  label: "EPUB Style", sub: "CSS + cover" },
+              ...(pandocEnabled ? [
+                { fmt: "pdf",  Icon: FileDown,  label: "PDF",  sub: "via Pandoc + LaTeX" },
+                { fmt: "epub", Icon: BookOpen,  label: "EPUB", sub: "via Pandoc" },
+              ] : []),
+            ] as { fmt: string; Icon: LucideIcon; label: string; sub: string }[]).map(({ fmt, Icon, label, sub }) => (
+              <button key={fmt} onClick={() => set("format", fmt as ExportOptions["format"])}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 text-xs transition-colors",
+                  opts.format === fmt
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-border hover:border-border/80 text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Icon className="h-5 w-5" />
+                <span className="font-medium">{label}</span>
+                <span className="text-[10px] opacity-70">{sub}</span>
+              </button>
+            ))}
           </div>
 
           {/* Content selection */}
@@ -509,33 +538,43 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
           )}
 
           {/* Output */}
-          <SectionHeading>Output</SectionHeading>
-          {hasFolderPicker ? (
-            <button onClick={pickFolder}
-              className={cn(
-                "flex items-center gap-2 px-3 py-2 text-sm rounded-md border transition-colors w-full",
-                dirHandle
-                  ? "border-primary/50 text-foreground bg-primary/5"
-                  : "border-dashed border-border hover:border-primary/50 hover:text-primary text-muted-foreground"
-              )}
-            >
-              <FolderOpen className="h-4 w-4 shrink-0" />
-              {dirHandle ? (
-                <span className="truncate">
-                  <span className="font-medium">{dirHandle.name}/</span>
-                  <span className="text-muted-foreground text-xs ml-1">— click to change</span>
-                </span>
+          {opts.format !== "pdf" && opts.format !== "epub" && (
+            <>
+              <SectionHeading>Output</SectionHeading>
+              {hasFolderPicker ? (
+                <button onClick={pickFolder}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 text-sm rounded-md border transition-colors w-full",
+                    dirHandle
+                      ? "border-primary/50 text-foreground bg-primary/5"
+                      : "border-dashed border-border hover:border-primary/50 hover:text-primary text-muted-foreground"
+                  )}
+                >
+                  <FolderOpen className="h-4 w-4 shrink-0" />
+                  {dirHandle ? (
+                    <span className="truncate">
+                      <span className="font-medium">{dirHandle.name}/</span>
+                      <span className="text-muted-foreground text-xs ml-1">— click to change</span>
+                    </span>
+                  ) : (
+                    <span>
+                      Choose output folder
+                      <span className="text-muted-foreground/70 ml-1">(or export will download to browser default)</span>
+                    </span>
+                  )}
+                </button>
               ) : (
-                <span>
-                  Choose output folder
-                  <span className="text-muted-foreground/70 ml-1">(or export will download to browser default)</span>
-                </span>
+                <div className="flex items-center gap-2 px-3 py-2 text-sm rounded-md border border-border text-muted-foreground">
+                  <Download className="h-4 w-4 shrink-0" />
+                  File will be downloaded to your browser&apos;s default download folder
+                </div>
               )}
-            </button>
-          ) : (
-            <div className="flex items-center gap-2 px-3 py-2 text-sm rounded-md border border-border text-muted-foreground">
+            </>
+          )}
+          {(opts.format === "pdf" || opts.format === "epub") && (
+            <div className="mt-4 flex items-center gap-2 px-3 py-2 text-xs rounded-md border border-border text-muted-foreground">
               <Download className="h-4 w-4 shrink-0" />
-              File will be downloaded to your browser&apos;s default download folder
+              File will be generated by the Pandoc container and downloaded automatically
             </div>
           )}
         </div>
@@ -551,7 +590,7 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
             {status === "busy"
               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
               : dirHandle ? <FolderOpen className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
-            Export {fmtLabel}
+            Export {fmtLabelStr}
           </Button>
         </div>
       </div>

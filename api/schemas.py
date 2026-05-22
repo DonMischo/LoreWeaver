@@ -376,6 +376,10 @@ class SettingsUpdate(BaseModel):
     typewriter_mode: Optional[bool] = None
     typewriter_offset: Optional[int] = None
     session_timer_enabled: Optional[bool] = None
+    grammar_check_enabled: Optional[bool] = None
+    grammar_check_url: Optional[str] = None
+    pandoc_enabled: Optional[bool] = None
+    pandoc_url: Optional[str] = None
 
 
 class SettingsOut(BaseModel):
@@ -390,6 +394,10 @@ class SettingsOut(BaseModel):
     typewriter_mode: bool
     typewriter_offset: int
     session_timer_enabled: bool
+    grammar_check_enabled: bool
+    grammar_check_url: str
+    pandoc_enabled: bool
+    pandoc_url: str
 
     model_config = {"from_attributes": True}
 
@@ -579,7 +587,7 @@ class TimelineEventOut(BaseModel):
 from typing import Literal
 
 class ExportOptions(BaseModel):
-    format: Literal["md", "tex", "epub-style"] = "md"
+    format: Literal["md", "tex", "epub-style", "pdf", "epub"] = "md"
     # Content selection — None means "all"
     scene_ids: Optional[list[int]] = None   # None = all scenes
     # Structural headings

@@ -247,6 +247,11 @@ class UserSettings(Base):
     typewriter_mode: Mapped[int] = mapped_column(Integer, default=0)
     typewriter_offset: Mapped[int] = mapped_column(Integer, default=50)
     session_timer_enabled: Mapped[int] = mapped_column(Integer, default=1)
+    # External service settings
+    grammar_check_enabled: Mapped[int] = mapped_column(Integer, default=0)
+    grammar_check_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pandoc_enabled: Mapped[int] = mapped_column(Integer, default=0)
+    pandoc_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class AIPrompt(Base):

@@ -1,12 +1,13 @@
 import re
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
-from models import Project, Act, Chapter
+from models import Project, Act, Chapter, UserSettings
 from schemas import ExportOptions
-from services.export import export_markdown, export_latex, export_epub_style
+from services.export import export_markdown, export_latex, export_epub_style, export_html
 
 router = APIRouter(prefix="/api/projects", tags=["export"])
 
@@ -32,7 +33,7 @@ def _load_project(project_id: int, db: Session) -> Project:
 
 
 @router.post("/{project_id}/export")
-def export_project(
+async def export_project(
     project_id: int,
     opts: ExportOptions,
     db: Session = Depends(get_db),
@@ -63,6 +64,47 @@ def export_project(
             media_type="text/css",
             headers={"Content-Disposition": f'attachment; filename="{safe_name}-style.css"'},
         )
+
+    if opts.format in ("pdf", "epub"):
+        s = db.query(UserSettings).first()
+        if not s or not s.pandoc_enabled:
+            raise HTTPException(503, "PDF/EPUB export is not enabled in settings")
+        pandoc_url = (s.pandoc_url or "http://localhost:8082").rstrip("/")
+
+        import json as _json
+        html = export_html(project, opts)
+        meta = _json.loads(project.book_meta) if project.book_meta else {}
+        payload = {
+            "html": html,
+            "format": opts.format,
+            "title": project.title or "",
+            "author": meta.get("author", ""),
+            "language": meta.get("language", "en"),
+        }
+        if project.cover_image:
+            payload["cover"] = project.cover_image
+
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                r = await client.post(f"{pandoc_url}/convert", json=payload)
+            r.raise_for_status()
+        except httpx.ConnectError:
+            raise HTTPException(503, "Pandoc service is not reachable. Is the container running?")
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(502, f"Pandoc error: {exc.response.text[:200]}")
+
+        if opts.format == "pdf":
+            return Response(
+                content=r.content,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="{safe_name}.pdf"'},
+            )
+        else:
+            return Response(
+                content=r.content,
+                media_type="application/epub+zip",
+                headers={"Content-Disposition": f'attachment; filename="{safe_name}.epub"'},
+            )
 
     raise HTTPException(400, "Unknown format")
 

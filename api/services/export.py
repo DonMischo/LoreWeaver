@@ -305,6 +305,60 @@ def export_latex(project: Project, opts) -> str:
     )
 
 
+# ── HTML export (used by pandoc service for PDF / EPUB) ──────────────────────
+
+def export_html(project: Project, opts) -> str:
+    """Build a minimal but well-structured HTML document for pandoc."""
+    meta = _get_meta(project)
+    allowed = _scene_ids_set(opts)
+
+    parts: list[str] = []
+
+    for act in sorted(project.acts, key=lambda a: a.order_index):
+        act_written = False
+        for chapter in sorted(act.chapters, key=lambda c: c.order_index):
+            chap_written = False
+            for scene in sorted(chapter.scenes, key=lambda s: s.order_index):
+                if allowed is not None and scene.id not in allowed:
+                    continue
+                content = (scene.content or "").strip()
+                if not content:
+                    continue
+
+                if opts.include_act_headings and not act_written:
+                    parts.append(f"<h1>{act.title}</h1>")
+                    act_written = True
+                if opts.include_chapter_headings and not chap_written:
+                    parts.append(f"<h2>{chapter.title}</h2>")
+                    chap_written = True
+                if opts.include_scene_headings and scene.title:
+                    parts.append(f"<h3>{scene.title}</h3>")
+                parts.append(content)
+
+    body = "\n".join(parts)
+    lang = meta.get("language", "en")
+    title = project.title or ""
+    author = meta.get("author", "")
+    subtitle = meta.get("subtitle", "")
+
+    subtitle_tag = f'<p class="subtitle">{subtitle}</p>' if subtitle else ""
+    author_tag = f'<p class="author">{author}</p>' if author else ""
+
+    return f"""<!DOCTYPE html>
+<html lang="{lang}">
+<head>
+<meta charset="utf-8">
+<title>{title}</title>
+</head>
+<body>
+<h1 class="title">{title}</h1>
+{subtitle_tag}
+{author_tag}
+{body}
+</body>
+</html>"""
+
+
 # ── EPUB style (CSS) export ───────────────────────────────────────────────────
 
 _EPUB_CSS_TEMPLATE = """\

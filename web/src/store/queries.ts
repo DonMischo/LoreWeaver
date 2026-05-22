@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
-import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi, writingLogApi, synopsisApi, timelineTracksApi, timelineEventsApi } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi, writingLogApi, synopsisApi, timelineTracksApi, timelineEventsApi, grammarApi } from "@/lib/api";
+import type { GrammarCheckResult } from "@/lib/api";
 import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry, OpenRouterModel } from "@/lib/api";
 import type { AIPrompt, ProjectSceneItem, SceneVersion, SceneVersionDetail, CorkboardAct, CorkboardData } from "@/types";
 
@@ -573,6 +574,21 @@ export const useOpenRouterModels = () =>
     queryFn: settingsApi.getModels,
     staleTime: 1000 * 60 * 5,  // cache for 5 min — list rarely changes
     retry: false,
+  });
+
+export const useServiceStatus = (enabled = true) =>
+  useQuery({
+    queryKey: ["service-status"],
+    queryFn: settingsApi.serviceStatus,
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+
+export const useGrammarCheck = () =>
+  useMutation<GrammarCheckResult, Error, { text: string; language?: string }>({
+    mutationFn: ({ text, language }) => grammarApi.check(text, language),
   });
 
 // ── AI Prompts ────────────────────────────────────────────────────────────────

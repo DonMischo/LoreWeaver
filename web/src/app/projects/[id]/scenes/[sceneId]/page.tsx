@@ -2,12 +2,13 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare, Focus, Braces, ChevronDown, AlignCenter, Timer, Flag, BookMarked, MoreHorizontal, Check } from "lucide-react";
+import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare, Focus, Braces, ChevronDown, AlignCenter, Timer, Flag, BookMarked, MoreHorizontal, Check, SpellCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
 import { StatusBar } from "@/components/editor/StatusBar";
 import { ThesaurusPanel } from "@/components/editor/ThesaurusPanel";
+import { GrammarPanel } from "@/components/grammar/GrammarPanel";
 import { SENSITIVITY_TYPES, type FlagItem, type SensitivityType } from "@/components/editor/SensitivityExtension";
 import { CodexSidebar } from "@/components/codex/CodexSidebar";
 import { CodexEntryDialog } from "@/components/codex/CodexEntryDialog";
@@ -25,7 +26,7 @@ import {
   useTimeConfig, useUpdateTimeConfig,
   useCreateFragment, useDeleteScene,
   useSyncSceneCommands, useCreateSceneVersion,
-  useUpdateSettings,
+  useUpdateSettings, useSettings,
 } from "@/store/queries";
 import type { SceneTime } from "@/types";
 import type { SceneCommandIn } from "@/lib/api";
@@ -60,6 +61,7 @@ export default function ScenePage() {
 
   const { data: scene } = useScene(sceneIdNum);
   const { data: project } = useProject(projectId);
+  const { data: appSettings } = useSettings();
   const { data: codexEntries = [] } = useCodexEntries(projectId);
   const { data: timeConfigData } = useTimeConfig(projectId);
   const updateScene = useUpdateScene(sceneIdNum);
@@ -103,6 +105,7 @@ export default function ScenePage() {
   const [flags, setFlags]                         = useState<FlagItem[]>([]);
   const [thesaurusOpen, setThesaurusOpen]         = useState(false);
   const [selectedWord, setSelectedWord]           = useState<string>("");
+  const [grammarPanelOpen, setGrammarPanelOpen]   = useState(false);
   const replaceWordRef = useRef<((word: string) => void) | null>(null);
   const applyFlagRef   = useRef<((type: string) => void) | null>(null);
 
@@ -431,6 +434,16 @@ export default function ScenePage() {
                 Thesaurus
                 {thesaurusOpen && <Check className="ml-auto h-3 w-3 text-primary" />}
               </button>
+              {appSettings?.grammar_check_enabled && (
+                <button
+                  onClick={() => { setGrammarPanelOpen((v) => !v); setMenuOpen(false); }}
+                  className={cn("w-full text-left text-xs px-3 py-2 hover:bg-secondary/50 flex items-center gap-2", grammarPanelOpen && "text-primary")}
+                >
+                  <SpellCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                  Grammar
+                  {grammarPanelOpen && <Check className="ml-auto h-3 w-3 text-primary" />}
+                </button>
+              )}
 
               <div className="border-t border-border my-1" />
 
@@ -589,6 +602,15 @@ export default function ScenePage() {
             onReplaceWord={(word) => replaceWordRef.current?.(word)}
             onClose={() => setThesaurusOpen(false)}
             language={project?.book_meta?.language ?? "en"}
+          />
+        )}
+
+        {/* Grammar check panel */}
+        {grammarPanelOpen && (
+          <GrammarPanel
+            text={content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()}
+            language={project?.book_meta?.language ?? "auto"}
+            onClose={() => setGrammarPanelOpen(false)}
           />
         )}
 
