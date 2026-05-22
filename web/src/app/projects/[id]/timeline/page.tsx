@@ -620,7 +620,19 @@ export default function TimelinePage() {
     qc.invalidateQueries({ queryKey: ["timeline-events", projectId] });
   };
 
-  const availableSubplots = data?.available_subplots ?? [];
+  const [storedSubplots, setStoredSubplots] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`lw_subplots_${projectId}`);
+      const parsed = JSON.parse(raw ?? "[]");
+      if (Array.isArray(parsed)) setStoredSubplots(parsed);
+    } catch {}
+  }, [projectId]);
+
+  const availableSubplots = useMemo(() => {
+    const fromApi = data?.available_subplots ?? [];
+    return [...new Set([...storedSubplots, ...fromApi])];
+  }, [storedSubplots, data]);
 
   const filteredStoryNodes = useMemo(() => {
     if (!data) return [];
