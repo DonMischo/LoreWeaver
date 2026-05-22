@@ -317,6 +317,7 @@ export interface TimelineV2Data {
   tracks: TimelineTrack[];
   story_nodes: TimelineNode[];
   event_nodes: TimelineNode[];
+  available_subplots: string[];
 }
 
 export const timelineTracksApi = {

@@ -620,14 +620,7 @@ export default function TimelinePage() {
     qc.invalidateQueries({ queryKey: ["timeline-events", projectId] });
   };
 
-  const availableSubplots = useMemo(() => {
-    if (!data) return [];
-    const seen = new Set<string>();
-    for (const n of data.story_nodes) {
-      if (n.subplot) seen.add(n.subplot);
-    }
-    return Array.from(seen).sort();
-  }, [data]);
+  const availableSubplots = data?.available_subplots ?? [];
 
   const filteredStoryNodes = useMemo(() => {
     if (!data) return [];

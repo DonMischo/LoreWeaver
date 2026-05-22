@@ -310,9 +310,21 @@ def get_timeline_v2(project_id: int, db: Session = Depends(get_db)):
             "color": e.color,
         })
 
+    # Collect all subplot names across all scenes (not just timed ones)
+    subplot_names: set[str] = set()
+    for pid in sibling_ids:
+        p = db.get(Project, pid)
+        if not p: continue
+        for act in p.acts:
+            for chapter in act.chapters:
+                for scene in chapter.scenes:
+                    if scene.subplot:
+                        subplot_names.add(scene.subplot)
+
     return {
-        "config":      config.model_dump(),
-        "tracks":      [_track_out(t) for t in tracks],
-        "story_nodes": story_nodes,
-        "event_nodes": event_nodes,
+        "config":             config.model_dump(),
+        "tracks":             [_track_out(t) for t in tracks],
+        "story_nodes":        story_nodes,
+        "event_nodes":        event_nodes,
+        "available_subplots": sorted(subplot_names),
     }
