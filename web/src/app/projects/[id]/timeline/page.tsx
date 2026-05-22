@@ -56,18 +56,45 @@ function laneToY(lane: number, laneH: number): number {
   return above ? -(level * laneH + AXIS_OFFSET) : (level * laneH + AXIS_OFFSET);
 }
 
-// "Nice" multipliers used to scale up the base tick interval so we never
-// produce more than MAX_TICKS labels regardless of the time range.
+// "Nice" multipliers — scale up the base tick interval to keep count ≤ MAX_TICKS.
 const RULER_NICE = [1, 2, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000,
                     10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000];
 const MAX_TICKS = 10;
+
+// Convert an absolute tick to a readable label by decomposing it into unit values.
+// e.g. tick=11553624 with Year/Month/Day/Hour → "Y1337 M3 D15 H12"
+// For 1-2 unit systems uses the full singular name ("Year 1337").
+function tickToLabel(tick: number, units: TimeUnit[], upToIdx: number): string {
+  const enabled = units.filter(u => u.enabled);
+  const n = enabled.length;
+  if (n === 0) return "";
+  const mults = new Array(n).fill(1);
+  for (let i = n - 2; i >= 0; i--)
+    mults[i] = mults[i + 1] * (enabled[i + 1].count_per_parent ?? 1000);
+  const target = Math.min(upToIdx, n - 1);
+  const parts: string[] = [];
+  let rem = Math.round(Math.max(0, tick));
+  for (let i = 0; i <= target; i++) {
+    const val = Math.floor(rem / mults[i]);
+    rem = Math.max(0, rem - val * mults[i]);
+    const u = enabled[i];
+    if (u.value_names && u.value_names[val - 1]) {
+      parts.push(u.value_names[val - 1]);
+    } else {
+      // 3+ unit systems: terse first-letter prefix ("Y1337"); 1-2 units: full name ("Year 1337")
+      const pfx = n > 2 ? u.singular[0].toUpperCase() : u.singular;
+      parts.push(`${pfx}${val}`);
+    }
+  }
+  return parts.join(" ");
+}
 
 function rulerTicks(
   startTick: number,
   endTick: number,
   units: TimeUnit[],
   trackWidthPx: number,
-): { x: number; label: string }[] {
+): { x: number; label: string; chosenIdx: number }[] {
   const enabled = units.filter(u => u.enabled);
   const n = enabled.length;
   if (endTick <= startTick || trackWidthPx <= 0 || n === 0) return [];
@@ -77,33 +104,25 @@ function rulerTicks(
   const range = endTick - startTick;
   const targetInterval = range / MAX_TICKS;
 
-  // Pick the finest unit whose base interval fits within targetInterval
   let chosenIdx = 0;
   for (let i = n - 1; i >= 0; i--) {
     if (mults[i] <= targetInterval) { chosenIdx = i; break; }
   }
 
   const baseInterval = mults[chosenIdx];
-  const unit = enabled[chosenIdx];
   if (baseInterval <= 0) return [];
 
-  // Scale up with a "nice" multiplier so we always get ≤ MAX_TICKS ticks
   const rawCount = range / baseInterval;
   const niceMult = rawCount <= MAX_TICKS
     ? 1
     : (RULER_NICE.find(m => rawCount / m <= MAX_TICKS) ?? Math.ceil(rawCount / MAX_TICKS));
   const step = baseInterval * niceMult;
 
-  const ticks: { x: number; label: string }[] = [];
+  const ticks: { x: number; label: string; chosenIdx: number }[] = [];
   const first = Math.ceil(startTick / step) * step;
   for (let t = first; t <= endTick && ticks.length < MAX_TICKS; t += step) {
     const x = ((t - startTick) / range) * trackWidthPx;
-    const unitVal = Math.round(t / baseInterval);
-    const label =
-      unit.value_names && unit.value_names[unitVal - 1]
-        ? unit.value_names[unitVal - 1]
-        : `${unit.singular} ${unitVal}`;
-    ticks.push({ x, label });
+    ticks.push({ x, label: tickToLabel(t, units, chosenIdx), chosenIdx });
   }
   return ticks;
 }
@@ -414,6 +433,16 @@ function TrackVisualization({
             />
           ))}
 
+          {/* Start / end caps — taller tick at axis endpoints when track has explicit bounds */}
+          {trackStartTime && Object.keys(trackStartTime).length > 0 && (
+            <line x1={LEFT_MARGIN} y1={axisY - 7} x2={LEFT_MARGIN} y2={axisY + 9}
+              stroke="hsl(var(--muted-foreground))" strokeWidth={2} opacity={0.7} />
+          )}
+          {trackEndTime && Object.keys(trackEndTime).length > 0 && (
+            <line x1={LEFT_MARGIN + trackW} y1={axisY - 7} x2={LEFT_MARGIN + trackW} y2={axisY + 9}
+              stroke="hsl(var(--muted-foreground))" strokeWidth={2} opacity={0.7} />
+          )}
+
           {/* Per-node: connector + dot */}
           {nodeData.map((nd, i) => (
             <g key={nodes[i].id}>
@@ -428,6 +457,27 @@ function TrackVisualization({
             </g>
           ))}
         </svg>
+
+        {/* ── Start / end time labels (above the axis) ────────────────────── */}
+        {trackStartTime && Object.keys(trackStartTime).length > 0 && (
+          <span style={{
+            position: "absolute", left: LEFT_MARGIN + 5, top: axisY - 18,
+            fontSize: 10, color: "hsl(var(--muted-foreground))", whiteSpace: "nowrap",
+            pointerEvents: "none", opacity: 0.85, fontWeight: 500,
+          }}>
+            {tickToLabel(startTick, units, enabled.length - 1)}
+          </span>
+        )}
+        {trackEndTime && Object.keys(trackEndTime).length > 0 && (
+          <span style={{
+            position: "absolute", left: LEFT_MARGIN + trackW - 5, top: axisY - 18,
+            fontSize: 10, color: "hsl(var(--muted-foreground))", whiteSpace: "nowrap",
+            transform: "translateX(-100%)",
+            pointerEvents: "none", opacity: 0.85, fontWeight: 500,
+          }}>
+            {tickToLabel(endTick, units, enabled.length - 1)}
+          </span>
+        )}
 
         {/* ── Ruler labels (HTML for crisp font rendering) ─────────────────── */}
         {tRuler.map((tick, i) => {
