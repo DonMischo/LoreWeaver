@@ -291,3 +291,28 @@ class SceneVersion(Base):
     content: Mapped[str] = mapped_column(Text, default="")
     content_hash: Mapped[str] = mapped_column(String(64))   # sha256 hex for dedup
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class TimelineTrack(Base):
+    __tablename__ = "timeline_tracks"
+    id:           Mapped[int]           = mapped_column(Integer, primary_key=True)
+    project_id:   Mapped[int]           = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    name:         Mapped[str]           = mapped_column(String(200), default="Timeline")
+    color:        Mapped[str]           = mapped_column(String(20),  default="#6b7280")
+    track_type:   Mapped[str]           = mapped_column(String(20),  default="parallel")   # "parallel" | anything
+    order_index:  Mapped[int]           = mapped_column(Integer, default=0)
+    start_time:   Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON scene_time dict or NULL
+    end_time:     Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON scene_time dict or NULL
+    created_at:   Mapped[datetime]      = mapped_column(DateTime, default=_now)
+
+
+class TimelineEvent(Base):
+    __tablename__ = "timeline_events"
+    id:           Mapped[int]           = mapped_column(Integer, primary_key=True)
+    project_id:   Mapped[int]           = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    track_id:     Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("timeline_tracks.id", ondelete="SET NULL"), nullable=True)
+    title:        Mapped[str]           = mapped_column(String(500), default="Untitled Event")
+    description:  Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    scene_time:   Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
+    color:        Mapped[str]           = mapped_column(String(20),  default="#6b7280")
+    created_at:   Mapped[datetime]      = mapped_column(DateTime, default=_now)

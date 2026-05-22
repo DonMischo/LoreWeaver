@@ -117,6 +117,27 @@ export interface TimeConfig {
   day_night: DayNightConfig;
 }
 
+export interface TimelineTrack {
+  id: number;
+  project_id: number;
+  name: string;
+  color: string;
+  track_type: string;
+  order_index: number;
+  start_time: SceneTime | null;
+  end_time: SceneTime | null;
+}
+
+export interface TimelineEventItem {
+  id: number;
+  project_id: number;
+  track_id: number | null;
+  title: string;
+  description: string | null;
+  scene_time: SceneTime | null;
+  color: string;
+}
+
 export const DEFAULT_TIME_CONFIG: TimeConfig = {
   units: [
     { id: "age",    singular: "Age",    plural: "Ages",    count_per_parent: null, value_names: [],                                        enabled: false },

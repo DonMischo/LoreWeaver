@@ -370,6 +370,37 @@ def migrate_scene_versions():
         """))
 
 
+def migrate_timeline_tables():
+    """Create timeline_tracks and timeline_events tables if they don't exist yet."""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS timeline_tracks (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                name         TEXT    NOT NULL DEFAULT 'Timeline',
+                color        TEXT    NOT NULL DEFAULT '#6b7280',
+                track_type   TEXT    NOT NULL DEFAULT 'parallel',
+                order_index  INTEGER NOT NULL DEFAULT 0,
+                start_time   TEXT,
+                end_time     TEXT,
+                created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS timeline_events (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                track_id     INTEGER REFERENCES timeline_tracks(id) ON DELETE SET NULL,
+                title        TEXT    NOT NULL DEFAULT 'Untitled Event',
+                description  TEXT,
+                scene_time   TEXT,
+                color        TEXT    NOT NULL DEFAULT '#6b7280',
+                created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.commit()
+
+
 def get_db():
     db = SessionLocal()
     try:

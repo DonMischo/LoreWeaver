@@ -4,6 +4,7 @@ import type {
   Fragment, FragmentTabs, BookMeta, AIPrompt, ProjectSceneItem,
   SceneVersion, SceneVersionDetail, MentionStat, SceneMentionStat,
   WritingLogEntry, GhostTextScene, CorkboardAct, CorkboardData,
+  TimelineTrack, TimelineEventItem,
 } from "@/types";
 
 const BASE = "/api";
@@ -275,6 +276,7 @@ export const timeApi = {
   updateConfig: (projectId: number, config: TimeConfig) =>
     req<TimeConfig>(`/projects/${projectId}/time-config`, { method: "PATCH", body: JSON.stringify(config) }),
   getTimeline: (projectId: number) => req<TimelineData>(`/projects/${projectId}/timeline`),
+  getTimelineV2: (projectId: number) => req<TimelineV2Data>(`/projects/${projectId}/timeline-v2`),
 };
 
 export interface TimelineEntry {
@@ -292,6 +294,50 @@ export interface TimelineData {
   config: TimeConfig;
   entries: TimelineEntry[];
 }
+
+export interface TimelineNode {
+  id: string;
+  type: "scene" | "event";
+  scene_id?: number;
+  event_id?: number;
+  track_id?: number | null;
+  title: string;
+  time_display: string;
+  sort_key: number[];
+  day_night: "Day" | "Night" | null;
+  act_title?: string;
+  chapter_title?: string;
+  subplot?: string | null;
+  color?: string;
+  description?: string | null;
+}
+
+export interface TimelineV2Data {
+  config: TimeConfig;
+  tracks: TimelineTrack[];
+  story_nodes: TimelineNode[];
+  event_nodes: TimelineNode[];
+}
+
+export const timelineTracksApi = {
+  list:   (pid: number) => req<TimelineTrack[]>(`/projects/${pid}/timeline-tracks`),
+  create: (pid: number, body: Partial<TimelineTrack>) =>
+    req<TimelineTrack>(`/projects/${pid}/timeline-tracks`, { method: "POST", body: JSON.stringify(body) }),
+  update: (pid: number, id: number, body: Partial<TimelineTrack>) =>
+    req<TimelineTrack>(`/projects/${pid}/timeline-tracks/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  delete: (pid: number, id: number) =>
+    req<void>(`/projects/${pid}/timeline-tracks/${id}`, { method: "DELETE" }),
+};
+
+export const timelineEventsApi = {
+  list:   (pid: number) => req<TimelineEventItem[]>(`/projects/${pid}/timeline-events`),
+  create: (pid: number, body: Partial<TimelineEventItem>) =>
+    req<TimelineEventItem>(`/projects/${pid}/timeline-events`, { method: "POST", body: JSON.stringify(body) }),
+  update: (pid: number, id: number, body: Partial<TimelineEventItem>) =>
+    req<TimelineEventItem>(`/projects/${pid}/timeline-events/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  delete: (pid: number, id: number) =>
+    req<void>(`/projects/${pid}/timeline-events/${id}`, { method: "DELETE" }),
+};
 
 // ── Fragments ─────────────────────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
-import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi, writingLogApi, synopsisApi } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi, writingLogApi, synopsisApi, timelineTracksApi, timelineEventsApi } from "@/lib/api";
 import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry, OpenRouterModel } from "@/lib/api";
 import type { AIPrompt, ProjectSceneItem, SceneVersion, SceneVersionDetail, CorkboardAct, CorkboardData } from "@/types";
 
@@ -288,6 +288,39 @@ export const useTimeline = (projectId: number) =>
     queryFn: () => timeApi.getTimeline(projectId),
     enabled: !!projectId,
   });
+
+export function useTimelineV2(projectId: number) {
+  return useQuery({
+    queryKey: ["timeline-v2", projectId],
+    queryFn: () => timeApi.getTimelineV2(projectId),
+    enabled: !!projectId,
+  });
+}
+
+export function useTimelineTracks(projectId: number) {
+  return useQuery({
+    queryKey: ["timeline-tracks", projectId],
+    queryFn: () => timelineTracksApi.list(projectId),
+    enabled: !!projectId,
+  });
+}
+
+export function useTimelineEvents(projectId: number) {
+  return useQuery({
+    queryKey: ["timeline-events", projectId],
+    queryFn: () => timelineEventsApi.list(projectId),
+    enabled: !!projectId,
+  });
+}
+
+export function useInvalidateTimeline(projectId: number) {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: ["timeline-v2", projectId] });
+    qc.invalidateQueries({ queryKey: ["timeline-tracks", projectId] });
+    qc.invalidateQueries({ queryKey: ["timeline-events", projectId] });
+  };
+}
 
 // ── Fragments ─────────────────────────────────────────────────────────────────
 

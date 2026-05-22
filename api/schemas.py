@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from typing import Optional, Any
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, ConfigDict
 from models import EntryType
 
 
@@ -519,6 +519,60 @@ class TimeConfig(BaseModel):
 
 class TimeConfigOut(TimeConfig):
     pass
+
+# ── Timeline Tracks & Events ──────────────────────────────────────────────────
+
+class TimelineTrackCreate(BaseModel):
+    name:        str            = "Timeline"
+    color:       str            = "#6b7280"
+    track_type:  str            = "parallel"
+    order_index: int            = 0
+    start_time:  Optional[dict] = None
+    end_time:    Optional[dict] = None
+
+class TimelineTrackUpdate(BaseModel):
+    name:        Optional[str]  = None
+    color:       Optional[str]  = None
+    track_type:  Optional[str]  = None
+    order_index: Optional[int]  = None
+    start_time:  Optional[dict] = None
+    end_time:    Optional[dict] = None
+
+class TimelineTrackOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id:          int
+    project_id:  int
+    name:        str
+    color:       str
+    track_type:  str
+    order_index: int
+    start_time:  Optional[dict] = None
+    end_time:    Optional[dict] = None
+
+class TimelineEventCreate(BaseModel):
+    track_id:    Optional[int]  = None
+    title:       str            = "Untitled Event"
+    description: Optional[str] = None
+    scene_time:  Optional[dict] = None
+    color:       str            = "#6b7280"
+
+class TimelineEventUpdate(BaseModel):
+    track_id:    Optional[int]  = None
+    title:       Optional[str]  = None
+    description: Optional[str] = None
+    scene_time:  Optional[dict] = None
+    color:       Optional[str]  = None
+
+class TimelineEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id:          int
+    project_id:  int
+    track_id:    Optional[int]  = None
+    title:       str
+    description: Optional[str] = None
+    scene_time:  Optional[dict] = None
+    color:       str
+
 
 # ── Export ────────────────────────────────────────────────────────────────────
 
