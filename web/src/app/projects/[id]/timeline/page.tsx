@@ -325,22 +325,61 @@ function TrackVisualization({
 interface TrackDialogProps {
   open: boolean;
   initial: Partial<TimelineTrack> | null;
+  units: TimeUnit[];
   onClose: () => void;
   onSave: (data: Partial<TimelineTrack>) => void;
 }
 
-function TrackDialog({ open, initial, onClose, onSave }: TrackDialogProps) {
+function TrackDialog({ open, initial, units, onClose, onSave }: TrackDialogProps) {
   const [name, setName] = useState("Timeline");
   const [color, setColor] = useState("#6b7280");
   const [trackType, setTrackType] = useState("parallel");
+  const [startTime, setStartTime] = useState<SceneTime>({});
+  const [endTime, setEndTime] = useState<SceneTime>({});
+
+  const enabledUnits = units.filter(u => u.enabled);
 
   useEffect(() => {
     if (open) {
       setName(initial?.name ?? "Timeline");
       setColor(initial?.color ?? "#6b7280");
       setTrackType(initial?.track_type ?? "parallel");
+      setStartTime((initial?.start_time as SceneTime) ?? {});
+      setEndTime((initial?.end_time as SceneTime) ?? {});
     }
   }, [open, initial]);
+
+  const setTimeVal = (setter: React.Dispatch<React.SetStateAction<SceneTime>>, unitId: string, raw: string) => {
+    const n = raw === "" ? undefined : Number(raw);
+    setter(prev => {
+      const next = { ...prev };
+      if (n == null || isNaN(n)) delete next[unitId];
+      else next[unitId] = n;
+      return next;
+    });
+  };
+
+  const TimeInputs = ({ vals, setter, label }: { vals: SceneTime; setter: React.Dispatch<React.SetStateAction<SceneTime>>; label: string }) => (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <div className="grid grid-cols-2 gap-1.5">
+        {enabledUnits.map(unit => (
+          <div key={unit.id} className="space-y-0.5">
+            <span className="text-[10px] text-muted-foreground">{unit.singular}</span>
+            <Input
+              type="number"
+              min={1}
+              max={unit.count_per_parent ?? undefined}
+              value={vals[unit.id] ?? ""}
+              placeholder="—"
+              onChange={e => setTimeVal(setter, unit.id, e.target.value)}
+              className="h-7 text-xs"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -377,12 +416,25 @@ function TrackDialog({ open, initial, onClose, onSave }: TrackDialogProps) {
               />
             </div>
           </div>
+          {enabledUnits.length > 0 && (
+            <>
+              <TimeInputs vals={startTime} setter={setStartTime} label="Start time (optional)" />
+              <TimeInputs vals={endTime} setter={setEndTime} label="End time (optional)" />
+            </>
+          )}
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
           <Button
             size="sm"
-            onClick={() => { onSave({ name, color, track_type: trackType }); onClose(); }}
+            onClick={() => {
+              onSave({
+                name, color, track_type: trackType,
+                start_time: Object.keys(startTime).length > 0 ? startTime : null,
+                end_time: Object.keys(endTime).length > 0 ? endTime : null,
+              });
+              onClose();
+            }}
             disabled={!name.trim()}
           >
             Save
@@ -552,7 +604,7 @@ export default function TimelinePage() {
 
   const [configOpen, setConfigOpen] = useState(false);
   const [spacing, setSpacing] = useState(90);
-  const [filter, setFilter] = useState<"all" | "main" | "subplot">("all");
+  const [filter, setFilter] = useState<string>("all");
   const [trackDialogOpen, setTrackDialogOpen] = useState(false);
   const [editingTrack, setEditingTrack] = useState<TimelineTrack | null>(null);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
@@ -568,11 +620,20 @@ export default function TimelinePage() {
     qc.invalidateQueries({ queryKey: ["timeline-events", projectId] });
   };
 
+  const availableSubplots = useMemo(() => {
+    if (!data) return [];
+    const seen = new Set<string>();
+    for (const n of data.story_nodes) {
+      if (n.subplot) seen.add(n.subplot);
+    }
+    return Array.from(seen).sort();
+  }, [data]);
+
   const filteredStoryNodes = useMemo(() => {
     if (!data) return [];
     const nodes = data.story_nodes;
     if (filter === "main") return nodes.filter(n => !n.subplot);
-    if (filter === "subplot") return nodes.filter(n => !!n.subplot);
+    if (filter !== "all") return nodes.filter(n => n.subplot === filter);
     return nodes;
   }, [data, filter]);
 
@@ -687,12 +748,14 @@ export default function TimelinePage() {
             </div>
             <select
               value={filter}
-              onChange={e => setFilter(e.target.value as "all" | "main" | "subplot")}
+              onChange={e => setFilter(e.target.value)}
               className="h-7 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
             >
               <option value="all">All</option>
               <option value="main">Main plot</option>
-              <option value="subplot">Subplot</option>
+              {availableSubplots.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
             </select>
           </div>
           {filteredStoryNodes.length === 0 ? (
@@ -798,6 +861,7 @@ export default function TimelinePage() {
       <TrackDialog
         open={trackDialogOpen}
         initial={editingTrack}
+        units={units}
         onClose={() => { setTrackDialogOpen(false); setEditingTrack(null); }}
         onSave={handleSaveTrack}
       />
