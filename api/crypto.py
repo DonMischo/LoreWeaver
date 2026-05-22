@@ -2,7 +2,7 @@ import os
 import base64
 from cryptography.fernet import Fernet
 
-_KEY_ENV = "LOREWEAVER_SECRET_KEY"
+_KEY_ENV = "FOLIANTICA_SECRET_KEY"
 _KEY_FILE = ".secret_key"
 
 

@@ -296,7 +296,7 @@ export default function Dashboard() {
       <header className="border-b border-border px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <BookOpen className="h-6 w-6 text-primary" />
-          <h1 className="text-xl font-bold">LoreWeaver</h1>
+          <h1 className="text-xl font-bold">Foliantica</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleOpenImport}>

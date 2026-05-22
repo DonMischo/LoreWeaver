@@ -10,7 +10,7 @@ build/
 .eggs/
 
 # Database & secrets
-api/loreweaver.db
+api/foliantica.db
 api/.secret_key
 *.db
 *.db-shm
@@ -55,7 +55,7 @@ coverage/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-api/loreweaver.db-wal
+api/foliantica.db-wal
 *.db
 api/uv.lock
 CLAUDE.md

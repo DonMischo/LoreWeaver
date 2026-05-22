@@ -1,4 +1,4 @@
-# Start LoreWeaver backend
+# Start Foliantica backend
 
 # Add uv's install location to PATH for this session (works for any user)
 $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"

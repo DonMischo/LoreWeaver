@@ -21,7 +21,7 @@ migrate_writing_log()
 
 os.makedirs("uploads", exist_ok=True)
 
-app = FastAPI(title="LoreWeaver API", version="0.1.0")
+app = FastAPI(title="Foliantica API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,

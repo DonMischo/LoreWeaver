@@ -16,7 +16,7 @@ set /a MAJOR_NEXT=%MAJOR%+1
 
 echo.
 echo ============================================================
-echo   LoreWeaver Release Script
+echo   Foliantica Release Script
 echo   Current version: v%CURRENT_VERSION%
 echo ============================================================
 echo.
@@ -101,6 +101,6 @@ git push origin --tags
 echo.
 echo ============================================================
 echo   Released v%NEW_VERSION%  -- GitHub Actions is now building the installers.
-echo   Check: https://github.com/DonMischo/loreweaver/actions
+echo   Check: https://github.com/DonMischo/foliantica/actions
 echo ============================================================
 echo.

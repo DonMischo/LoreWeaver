@@ -1,8 +1,8 @@
 afterPack: scripts/after-pack.cjs
 
-appId: com.loreweaver.studio
-productName: LoreWeaver
-copyright: "© 2024 LoreWeaver"
+appId: com.foliantica.studio
+productName: Foliantica
+copyright: "© 2024 Foliantica"
 
 # Only the tiny Electron main + splash go into the ASAR.
 # The large Next.js standalone and the API binary are extraResources
@@ -47,7 +47,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: LoreWeaver
+  shortcutName: Foliantica
 
 mac:
   icon: electron/assets/icon.icns
@@ -59,7 +59,7 @@ mac:
       arch: [x64, arm64]
 
 dmg:
-  title: LoreWeaver ${version}
+  title: Foliantica ${version}
 
 linux:
   icon: electron/assets/icon.png
@@ -72,4 +72,4 @@ linux:
 publish:
   provider: github
   owner: DonMischo
-  repo: loreweaver
+  repo: foliantica

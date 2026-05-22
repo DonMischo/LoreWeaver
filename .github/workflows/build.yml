@@ -67,7 +67,7 @@ jobs:
       # ── Upload artifacts ─────────────────────────────────────────────────────
       - uses: actions/upload-artifact@v4
         with:
-          name: LoreWeaver-${{ runner.os }}
+          name: Foliantica-${{ runner.os }}
           # Collect all installer formats
           path: |
             dist/*.exe

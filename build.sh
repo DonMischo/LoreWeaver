@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# LoreWeaver — single build script  (macOS / Linux)
+# Foliantica — single build script  (macOS / Linux)
 # Run from the project root:  ./build.sh
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -65,14 +65,14 @@ cd "$ROOT/api"
 if command -v uv >/dev/null 2>&1; then
   uv sync
   uv pip install pyinstaller
-  uv run pyinstaller loreweaver.spec \
+  uv run pyinstaller foliantica.spec \
     --distpath "$ROOT/api-dist-tmp" \
     --workpath "$ROOT/.pyinstaller-work" \
     --clean --noconfirm
 else
   pip install .
   pip install pyinstaller
-  python -m PyInstaller loreweaver.spec \
+  python -m PyInstaller foliantica.spec \
     --distpath "$ROOT/api-dist-tmp" \
     --workpath "$ROOT/.pyinstaller-work" \
     --clean --noconfirm
@@ -83,7 +83,7 @@ ok "PyInstaller build done"
 # Stage the onedir output flat into api-dist/
 cd "$ROOT"
 rm -rf api-dist
-mv api-dist-tmp/loreweaver-api api-dist
+mv api-dist-tmp/foliantica-api api-dist
 rm -rf api-dist-tmp
 ok "API binary staged → api-dist/"
 

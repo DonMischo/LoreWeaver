@@ -17,11 +17,11 @@ from database import get_db, DEFAULT_AI_PROMPTS
 from models import UserSettings, AIPrompt
 from schemas import SettingsOut, SettingsUpdate, AIPromptOut, AIPromptCreate, AIPromptUpdate, DataDirUpdate
 
-# ── Shared LoreWeaver config (~/.loreweaver/config.json) ──────────────────────
+# ── Shared Foliantica config (~/.foliantica/config.json) ──────────────────────
 # Both this API and the Electron main process read/write this file so the
 # chosen data directory survives restarts in any run mode.
 
-LW_CONFIG_FILE = Path.home() / ".loreweaver" / "config.json"
+LW_CONFIG_FILE = Path.home() / ".foliantica" / "config.json"
 
 def _read_lw_config() -> dict:
     try:
@@ -117,7 +117,7 @@ def _open_folder_dialog() -> str | None:
         ps = (
             "Add-Type -AssemblyName System.Windows.Forms; "
             "$d = New-Object System.Windows.Forms.FolderBrowserDialog; "
-            "$d.Description = 'Choose LoreWeaver Data Folder'; "
+            "$d.Description = 'Choose Foliantica Data Folder'; "
             "$d.ShowNewFolderButton = $true; "
             "$d.UseDescriptionForTitle = $true; "
             "if ($d.ShowDialog() -eq 'OK') { Write-Output $d.SelectedPath }"
@@ -132,7 +132,7 @@ def _open_folder_dialog() -> str | None:
         # Native macOS Finder folder picker via AppleScript.
         r = subprocess.run(
             ["osascript", "-e",
-             'tell app "Finder" to POSIX path of (choose folder with prompt "Choose LoreWeaver Data Folder")'],
+             'tell app "Finder" to POSIX path of (choose folder with prompt "Choose Foliantica Data Folder")'],
             capture_output=True, text=True, timeout=300,
         )
         return r.stdout.strip().rstrip("/") or None
@@ -142,7 +142,7 @@ def _open_folder_dialog() -> str | None:
         try:
             r = subprocess.run(
                 ["zenity", "--file-selection", "--directory",
-                 "--title=Choose LoreWeaver Data Folder"],
+                 "--title=Choose Foliantica Data Folder"],
                 capture_output=True, text=True, timeout=300,
             )
             return r.stdout.strip() or None
@@ -151,7 +151,7 @@ def _open_folder_dialog() -> str | None:
                 [sys.executable, "-c",
                  "import tkinter as tk; from tkinter import filedialog; "
                  "root=tk.Tk(); root.withdraw(); root.attributes('-topmost',True); "
-                 "p=filedialog.askdirectory(title='Choose LoreWeaver Data Folder'); "
+                 "p=filedialog.askdirectory(title='Choose Foliantica Data Folder'); "
                  "root.destroy(); print(p or '')"],
                 capture_output=True, text=True, timeout=300,
             )
@@ -258,7 +258,7 @@ def get_data_dir():
 @router.get("/data-dir/check")
 def check_data_dir(path: str):
     try:
-        return {"has_db": (Path(path) / "loreweaver.db").exists()}
+        return {"has_db": (Path(path) / "foliantica.db").exists()}
     except Exception:
         return {"has_db": False}
 
@@ -275,10 +275,10 @@ def set_data_dir(body: DataDirUpdate):
             (dst / "uploads").mkdir(exist_ok=True)
 
             # Use SQLite's backup API so we can copy the live, open database safely.
-            db_src = src / "loreweaver.db"
+            db_src = src / "foliantica.db"
             if db_src.exists():
                 src_conn = sqlite3.connect(str(db_src))
-                dst_conn = sqlite3.connect(str(dst / "loreweaver.db"))
+                dst_conn = sqlite3.connect(str(dst / "foliantica.db"))
                 try:
                     src_conn.backup(dst_conn)
                 finally:

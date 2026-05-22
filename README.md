@@ -1,4 +1,4 @@
-# LoreWeaver Personal Novel Writer Studio
+# Foliantica Personal Novel Writer Studio
 
 A local-first novel writing studio — write, world-build, and track your story's timeline and relationships, all running on your own machine. No subscriptions, no cloud required.
 
@@ -8,15 +8,15 @@ Available as a **standalone desktop app** (Windows, macOS, Linux) or run directl
 
 ## Desktop App (recommended)
 
-Download the latest installer from [Releases](../../releases) and run it. LoreWeaver starts as a self-contained app — no Node.js or Python required.
+Download the latest installer from [Releases](../../releases) and run it. Foliantica starts as a self-contained app — no Node.js or Python required.
 
-**Cloud sync:** point LoreWeaver at a folder inside your Dropbox, Google Drive, or OneDrive and it syncs automatically across devices. *(Settings → Data folder — coming soon as a UI option; advanced users can set `dataDir` in `config.json` manually.)*
+**Cloud sync:** point Foliantica at a folder inside your Dropbox, Google Drive, or OneDrive and it syncs automatically across devices. *(Settings → Data folder — coming soon as a UI option; advanced users can set `dataDir` in `config.json` manually.)*
 
 ---
 
 ## Development / Run from Source
 
-Open two PowerShell terminals from the `loreweaver/` directory:
+Open two PowerShell terminals from the `foliantica/` directory:
 
 **Terminal 1 — Backend (Python/FastAPI):**
 ```powershell
@@ -207,7 +207,7 @@ Open `/settings` or click **Settings** in the sidebar to:
 ## Project Structure
 
 ```
-loreweaver/
+foliantica/
 ├── electron/             # Electron main process + splash screen
 │   └── assets/           # App icons (ico, icns, png)
 ├── scripts/              # electron-builder hooks (afterPack)

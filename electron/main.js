@@ -64,8 +64,8 @@ function saveConfig(patch) {
 const isProd   = app.isPackaged;
 const config   = loadConfig();
 
-// Shared config (~/.loreweaver/config.json) — written by the settings UI.
-const LW_CONFIG_PATH = path.join(require("os").homedir(), ".loreweaver", "config.json");
+// Shared config (~/.foliantica/config.json) — written by the settings UI.
+const LW_CONFIG_PATH = path.join(require("os").homedir(), ".foliantica", "config.json");
 function loadLwConfig() {
   try { return JSON.parse(fs.readFileSync(LW_CONFIG_PATH, "utf8")); } catch { return {}; }
 }
@@ -179,9 +179,9 @@ function createTray(webPort) {
   }
 
   tray = new Tray(icon);
-  tray.setToolTip("LoreWeaver");
+  tray.setToolTip("Foliantica");
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "Open LoreWeaver", click: () => { mainWin?.show(); mainWin?.focus(); } },
+    { label: "Open Foliantica", click: () => { mainWin?.show(); mainWin?.focus(); } },
     { type: "separator" },
     { label: "Quit", click: () => { app.isQuiting = true; app.quit(); } },
   ]));
@@ -198,7 +198,7 @@ async function startServers() {
     // ── FastAPI sidecar ───────────────────────────────────────────────────────
     const apiExe = path.join(
       process.resourcesPath, "api",
-      process.platform === "win32" ? "loreweaver-api.exe" : "loreweaver-api"
+      process.platform === "win32" ? "foliantica-api.exe" : "foliantica-api"
     );
     log(`[api] exe path: ${apiExe}`);
     log(`[api] dataDir: ${dataDir}`);
@@ -271,7 +271,7 @@ ipcMain.handle("lw:get-data-dir", () => {
 ipcMain.handle("lw:pick-data-dir", async () => {
   const result = await dialog.showOpenDialog(mainWin, {
     properties: ["openDirectory", "createDirectory"],
-    title: "Choose LoreWeaver Data Folder",
+    title: "Choose Foliantica Data Folder",
     buttonLabel: "Select Folder",
   });
   return result.canceled ? null : result.filePaths[0];
@@ -315,7 +315,7 @@ ipcMain.on("lw:set-spellcheck-language", (_, lang) => {
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  log(`LoreWeaver starting — isProd=${isProd} dataDir=${dataDir}`);
+  log(`Foliantica starting — isProd=${isProd} dataDir=${dataDir}`);
   createSplash();
 
   try {
@@ -332,7 +332,7 @@ app.whenReady().then(async () => {
     if (splashWin) { splashWin.close(); splashWin = null; }
     log(`Startup failed: ${err}`);
     dialog.showErrorBox(
-      "LoreWeaver — Startup Error",
+      "Foliantica — Startup Error",
       `${err}\n\nDiagnostics log:\n${logFile}`
     );
     app.quit();

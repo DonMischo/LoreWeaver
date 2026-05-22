@@ -1,8 +1,13 @@
 import json
+import os
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 
-DATABASE_URL = "sqlite:///./loreweaver.db"
+DATABASE_URL = "sqlite:///./foliantica.db"
+
+# One-time migration: rename loreweaver.db → foliantica.db for existing users
+if os.path.exists("loreweaver.db") and not os.path.exists("foliantica.db"):
+    os.rename("loreweaver.db", "foliantica.db")
 
 engine = create_engine(
     DATABASE_URL,

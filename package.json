@@ -1,8 +1,8 @@
 {
-  "name": "loreweaver",
+  "name": "foliantica",
   "version": "2.1.0",
-  "description": "LoreWeaver Personal Studio — local-first novel writing app",
-  "author": "LoreWeaver",
+  "description": "Foliantica Personal Studio — local-first novel writing app",
+  "author": "Foliantica",
   "main": "electron/main.js",
   "scripts": {
     "generate-icons": "cd scripts && npm install && node generate-icons.mjs",

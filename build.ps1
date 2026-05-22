@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# LoreWeaver — single build script  (Windows PowerShell)
+# Foliantica — single build script  (Windows PowerShell)
 # Run from the project root:  .\build.ps1
 # ─────────────────────────────────────────────────────────────────────────────
 $ErrorActionPreference = "Stop"
@@ -72,7 +72,7 @@ if ($uvAvailable) {
   Run uv @("sync")
   Run uv @("pip", "install", "pyinstaller")
   Run uv @("run", "pyinstaller",
-    "loreweaver.spec",
+    "foliantica.spec",
     "--distpath", "$Root\api-dist-tmp",
     "--workpath", "$Root\.pyinstaller-work",
     "--clean", "--noconfirm")
@@ -80,7 +80,7 @@ if ($uvAvailable) {
   Run pip @("install", ".")
   Run pip @("install", "pyinstaller")
   Run python @("-m", "PyInstaller",
-    "loreweaver.spec",
+    "foliantica.spec",
     "--distpath", "$Root\api-dist-tmp",
     "--workpath", "$Root\.pyinstaller-work",
     "--clean", "--noconfirm")
@@ -90,7 +90,7 @@ Ok "PyInstaller build done"
 # Stage flat into api-dist\
 Set-Location $Root
 if (Test-Path "api-dist") { Remove-Item -Recurse -Force "api-dist" }
-Move-Item "api-dist-tmp\loreweaver-api" "api-dist"
+Move-Item "api-dist-tmp\foliantica-api" "api-dist"
 Remove-Item -Recurse -Force "api-dist-tmp"
 Ok "API binary staged -> api-dist\"
 

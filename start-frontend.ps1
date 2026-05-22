@@ -1,4 +1,4 @@
-# Start LoreWeaver frontend
+# Start Foliantica frontend
 
 $ErrorActionPreference = "Stop"
 

@@ -6,7 +6,7 @@ module is imported, so SQLite and uploads end up in the right place.
 
 Priority:
   1. LW_DATA_DIR env var  (set by Electron in production)
-  2. dataDir in ~/.loreweaver/config.json  (set via the settings UI)
+  2. dataDir in ~/.foliantica/config.json  (set via the settings UI)
   3. Current working directory  (dev default)
 
 Usage:
@@ -22,7 +22,7 @@ from pathlib import Path
 # after os.chdir() moves the working directory elsewhere.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-LW_CONFIG_FILE = Path.home() / ".loreweaver" / "config.json"
+LW_CONFIG_FILE = Path.home() / ".foliantica" / "config.json"
 
 def _read_config() -> dict:
     try:

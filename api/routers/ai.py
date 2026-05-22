@@ -116,7 +116,7 @@ async def _stream_openrouter(api_key: str, model: str, messages: list[dict]):
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
                 "HTTP-Referer": "http://localhost:3000",
-                "X-Title": "LoreWeaver",
+                "X-Title": "Foliantica",
             },
             json={"model": model, "messages": messages, "stream": True},
         ) as response:
@@ -259,7 +259,7 @@ async def ki_generate(body: KiGenerateRequest, db: Session = Depends(get_db)):
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
                 "HTTP-Referer": "http://localhost:3000",
-                "X-Title": "LoreWeaver",
+                "X-Title": "Foliantica",
             },
             json={"model": model, "messages": [
                 {"role": "system", "content": system},
@@ -299,7 +299,7 @@ async def generate_synopsis(scene_id: int, db: Session = Depends(get_db)):
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
                 "HTTP-Referer": "http://localhost:3000",
-                "X-Title": "LoreWeaver",
+                "X-Title": "Foliantica",
             },
             json={
                 "model": model,

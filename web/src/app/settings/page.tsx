@@ -602,7 +602,7 @@ export default function SettingsPage() {
             <h2 className="text-base font-semibold">Data Folder</h2>
           </div>
           <p className="text-xs text-muted-foreground">
-            Where LoreWeaver stores its database and uploads. Point this to a
+            Where Foliantica stores its database and uploads. Point this to a
             Dropbox, Google Drive, or OneDrive folder to sync across devices.
             Restart the app after applying a change.
           </p>

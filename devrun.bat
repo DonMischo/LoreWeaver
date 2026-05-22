@@ -7,8 +7,8 @@ if /i "%1"=="backend"  goto :backend
 rem ── Main: open two terminals ───────────────────────────────────────────────
 set "SELF=%~f0"
 set "LW_API_PORT=8765"
-start "LoreWeaver Backend"  cmd /k ""%SELF%" backend"
-start "LoreWeaver Frontend" cmd /k ""%SELF%" frontend"
+start "Foliantica Backend"  cmd /k ""%SELF%" backend"
+start "Foliantica Frontend" cmd /k ""%SELF%" frontend"
 timeout /t 4 /nobreak >nul
 start http://localhost:3000
 exit /b 0

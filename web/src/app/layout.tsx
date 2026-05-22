@@ -6,7 +6,7 @@ import { Providers } from "./providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "LoreWeaver",
+  title: "Foliantica",
   description: "Your personal novel writing studio",
   icons: { icon: "/icon.svg", shortcut: "/icon.svg" },
 };

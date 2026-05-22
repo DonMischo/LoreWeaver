@@ -425,7 +425,7 @@ export function ProjectSidebar({ projectId }: Props) {
       <div className="flex items-center justify-between px-3 py-3 border-b border-border">
         <Link href="/" className="flex items-center gap-2 font-semibold text-sm hover:text-primary transition-colors">
           <BookOpen className="h-4 w-4 text-primary" />
-          LoreWeaver
+          Foliantica
         </Link>
       </div>
 

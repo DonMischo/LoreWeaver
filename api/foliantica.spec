@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec for the LoreWeaver FastAPI backend.
+PyInstaller spec for the Foliantica FastAPI backend.
 Run from the api/ directory:
-    pyinstaller loreweaver.spec
+    pyinstaller foliantica.spec
 """
 
 import sys
@@ -57,7 +57,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="loreweaver-api",
+    name="foliantica-api",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -78,5 +78,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="loreweaver-api",
+    name="foliantica-api",
 )

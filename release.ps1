@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# LoreWeaver — release helper  (Windows PowerShell)
+# Foliantica — release helper  (Windows PowerShell)
 #
 # Usage:
 #   .\release.ps1           # bump patch  (1.2.3 → 1.2.4)
@@ -109,4 +109,4 @@ Ok "Pushed branch '$branch' and tag '$tag' to origin"
 Write-Host ""
 Write-Host "  Released $tag" -ForegroundColor Green
 Write-Host "  GitHub Actions will now build all platforms and create the release." -ForegroundColor White
-Write-Host "  Track progress at: https://github.com/DonMischo/loreweaver/actions" -ForegroundColor White
+Write-Host "  Track progress at: https://github.com/DonMischo/foliantica/actions" -ForegroundColor White
