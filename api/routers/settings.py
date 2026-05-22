@@ -115,9 +115,13 @@ def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
 def docker_compose_up():
     """Run `docker compose up -d` for the bundled services.
 
-    Looks for docker-compose.yml at the repo root (two levels above this file).
+    Location strategy:
+    - Packaged Electron app: LW_RESOURCES_DIR env var points to the Electron
+      resources/ folder where electron-builder copies docker-compose.yml.
+    - Development: fall back to the repo root (three levels up from this file).
     """
-    compose_dir = Path(__file__).resolve().parent.parent.parent
+    resources_env = os.environ.get("LW_RESOURCES_DIR")
+    compose_dir = Path(resources_env) if resources_env else Path(__file__).resolve().parent.parent.parent
     compose_file = compose_dir / "docker-compose.yml"
     if not compose_file.exists():
         raise HTTPException(

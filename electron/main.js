@@ -207,6 +207,7 @@ async function startServers() {
         LW_API_PORT: String(apiPort),
         LW_API_HOST: "127.0.0.1",
         LW_DATA_DIR: dataDir,
+        LW_RESOURCES_DIR: process.resourcesPath,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

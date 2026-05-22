@@ -33,6 +33,14 @@ extraResources:
     to: api
     filter:
       - "**/*"
+  # Docker Compose config for optional grammar-check / PDF-export services
+  # → resources/docker-compose.yml and resources/docker/
+  - from: docker-compose.yml
+    to: docker-compose.yml
+  - from: docker/
+    to: docker
+    filter:
+      - "**/*"
 
 # ── Platform targets ──────────────────────────────────────────────────────────
 
