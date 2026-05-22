@@ -171,6 +171,35 @@ export default function SettingsPage() {
   // Default model dropdown: available models or just stored enabled ones
   const defaultModelChoices = availableModels.length > 0 ? availableModels : listModels;
 
+  // Restart the Python API then reload the UI.
+  // In Electron: restart the API process first so the new data-dir is live,
+  // then relaunch the Electron shell (which will re-spawn the API in prod mode).
+  // In browser: poll /api/health until the server is back, then hard-navigate.
+  const restartAndReload = async () => {
+    if (isElectron) {
+      // Restart the API process so it picks up the new dataDir from config.
+      // Ignore errors — in production the binary may not support self-restart,
+      // and in that case the Electron relaunch will spawn a fresh API anyway.
+      try { await dataDirApi.restart(); } catch { /* expected */ }
+      // Short pause so the API process starts dying before Electron exits.
+      await new Promise(r => setTimeout(r, 400));
+      (window as any).electron.restart();
+      return;
+    }
+    // Browser mode: show overlay, restart backend, poll until healthy, reload.
+    setDataDirRestarting(true);
+    try { await dataDirApi.restart(); } catch { /* process exits — expected */ }
+    await new Promise(r => setTimeout(r, 2000));
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 1500));
+      try {
+        const res = await fetch("/api/health");
+        if (res.ok) break;
+      } catch { /* still starting */ }
+    }
+    window.location.href = "/";
+  };
+
   // Full-screen restart overlay — rendered while backend is cycling.
   // Covering the whole page prevents React Query hooks from firing more
   // requests into the dead server and flooding the console with ECONNRESET.
@@ -671,28 +700,7 @@ export default function SettingsPage() {
                 try {
                   const shouldMigrate = dataDirMigrate && !!dataDir && dataDir !== dataDirConfigured;
                   await dataDirApi.set(dataDir || null, shouldMigrate);
-                  if (isElectron) {
-                    (window as any).electron.restart();
-                    return;
-                  }
-                  // Browser mode: restart backend then reload the whole page.
-                  // Show the overlay immediately so no further requests are made
-                  // while the server is cycling (prevents ECONNRESET spam).
-                  setDataDirRestarting(true);
-                  try { await dataDirApi.restart(); } catch { /* process exits — expected */ }
-                  // Give the old process time to die and the new one to bind.
-                  await new Promise(r => setTimeout(r, 2500));
-                  // Poll /api/health — simpler than /settings/data-dir and
-                  // guaranteed to return 200 once the server is fully up.
-                  // Use raw fetch so we break on any 200, not just parsed JSON.
-                  for (let i = 0; i < 60; i++) {
-                    await new Promise(r => setTimeout(r, 1500));
-                    try {
-                      const res = await fetch("/api/health");
-                      if (res.ok) break;
-                    } catch { /* still starting */ }
-                  }
-                  window.location.href = "/";
+                  await restartAndReload();
                 } finally {
                   setDataDirPending(false);
                 }
@@ -711,9 +719,7 @@ export default function SettingsPage() {
                   setDataDirPending(true);
                   try {
                     await dataDirApi.set(null);
-                    setDataDir("");
-                    setDataDirConfigured(null);
-                    if (isElectron) (window as any).electron.restart();
+                    await restartAndReload();
                   } finally {
                     setDataDirPending(false);
                   }
