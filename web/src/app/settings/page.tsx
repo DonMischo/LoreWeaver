@@ -17,6 +17,24 @@ import { LOCALE_NAMES, type Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { AIPrompt } from "@/types";
 
+const GRAMMAR_LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "de", label: "German" },
+  { code: "fr", label: "French" },
+  { code: "es", label: "Spanish" },
+  { code: "pt", label: "Portuguese" },
+  { code: "it", label: "Italian" },
+  { code: "nl", label: "Dutch" },
+  { code: "pl", label: "Polish" },
+  { code: "ru", label: "Russian" },
+  { code: "ca", label: "Catalan" },
+  { code: "sv", label: "Swedish" },
+  { code: "da", label: "Danish" },
+  { code: "nb", label: "Norwegian" },
+  { code: "cs", label: "Czech" },
+  { code: "uk", label: "Ukrainian" },
+];
+
 const PLACEHOLDER_HELP = [
   { token: "{{SCENE_CONTENT}}", desc: "Full text of the current scene" },
   { token: "{{SCENE_TITLE}}", desc: "Title of the current scene" },
@@ -74,9 +92,10 @@ export default function SettingsPage() {
   const [saved, setSaved]                 = useState(false);
 
   // ── Services ──────────────────────────────────────────────────────────────
-  const [grammarEnabled, setGrammarEnabled] = useState(false);
-  const [grammarUrl, setGrammarUrl]         = useState("http://localhost:8081");
-  const [pandocEnabled, setPandocEnabled]   = useState(false);
+  const [grammarEnabled, setGrammarEnabled]   = useState(false);
+  const [grammarUrl, setGrammarUrl]           = useState("http://localhost:8081");
+  const [grammarLanguages, setGrammarLanguages] = useState<string[]>(["en"]);
+  const [pandocEnabled, setPandocEnabled]     = useState(false);
   const [pandocUrl, setPandocUrl]           = useState("http://localhost:8082");
   const [showServiceStatus, setShowServiceStatus] = useState(false);
   const { data: serviceStatus, isLoading: statusLoading, refetch: refetchStatus } =
@@ -167,6 +186,7 @@ export default function SettingsPage() {
       setEnabledModels(settings.enabled_models ?? []);
       setGrammarEnabled(settings.grammar_check_enabled ?? false);
       setGrammarUrl(settings.grammar_check_url ?? "http://localhost:8081");
+      setGrammarLanguages(settings.grammar_languages ?? ["en"]);
       setPandocEnabled(settings.pandoc_enabled ?? false);
       setPandocUrl(settings.pandoc_url ?? "http://localhost:8082");
     }
@@ -186,6 +206,7 @@ export default function SettingsPage() {
       theme,
       grammar_check_enabled: grammarEnabled,
       grammar_check_url: grammarUrl,
+      grammar_languages: grammarLanguages,
       pandoc_enabled: pandocEnabled,
       pandoc_url: pandocUrl,
     };
@@ -814,14 +835,39 @@ export default function SettingsPage() {
               </button>
             </div>
             {grammarEnabled && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Service URL</Label>
-                <Input
-                  value={grammarUrl}
-                  onChange={e => setGrammarUrl(e.target.value)}
-                  placeholder="http://localhost:8081"
-                  className="h-8 text-xs font-mono"
-                />
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Service URL</Label>
+                  <Input
+                    value={grammarUrl}
+                    onChange={e => setGrammarUrl(e.target.value)}
+                    placeholder="http://localhost:8081"
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Languages to download</Label>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Ngram models improve detection of confused words and style issues (~1–2 GB each). Only select the ones you need — they are downloaded when you click <strong className="text-foreground">Start Services</strong>.
+                  </p>
+                  <div className="grid grid-cols-3 gap-x-3 gap-y-1 pt-0.5">
+                    {GRAMMAR_LANGUAGES.map(lang => (
+                      <label key={lang.code} className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={grammarLanguages.includes(lang.code)}
+                          onChange={() => setGrammarLanguages(prev =>
+                            prev.includes(lang.code)
+                              ? prev.filter(c => c !== lang.code)
+                              : [...prev, lang.code]
+                          )}
+                          className="accent-primary shrink-0"
+                        />
+                        <span className="text-xs">{lang.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </div>

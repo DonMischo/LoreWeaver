@@ -391,6 +391,7 @@ export const settingsApi = {
     session_timer_enabled?: boolean;
     grammar_check_enabled?: boolean;
     grammar_check_url?: string;
+    grammar_languages?: string[];
     pandoc_enabled?: boolean;
     pandoc_url?: string;
   }) => req<Settings>("/settings", { method: "POST", body: JSON.stringify(data) }),

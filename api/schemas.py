@@ -378,6 +378,7 @@ class SettingsUpdate(BaseModel):
     session_timer_enabled: Optional[bool] = None
     grammar_check_enabled: Optional[bool] = None
     grammar_check_url: Optional[str] = None
+    grammar_languages: Optional[list[str]] = None
     pandoc_enabled: Optional[bool] = None
     pandoc_url: Optional[str] = None
 
@@ -396,6 +397,7 @@ class SettingsOut(BaseModel):
     session_timer_enabled: bool
     grammar_check_enabled: bool
     grammar_check_url: str
+    grammar_languages: list[str]
     pandoc_enabled: bool
     pandoc_url: str
 

@@ -20,18 +20,19 @@ services:
     ports:
       - "8081:8081"
     environment:
-      download_ngrams_for_langs: en,de,fr,es
+      # Download n-gram data for better suggestions (optional, large)
+      # Remove or comment out if you want a lightweight start
+      download_ngrams_for_langs: ${LT_LANGS:-en}
+      
+      # Java heap size — tune to your system
       JAVA_XMS: 512m
       JAVA_XMX: 2g
+      
+      # Optional: skip if you don't need the web UI
+      # langtool_https_server: "false"
     volumes:
+      # N-gram data cache (~2–3 GB per language, downloaded once)
       - ./languagetool/ngrams:/ngrams
+      
+      # FastText model cache (~150 MB, downloaded once)
       - ./languagetool/fasttext:/fasttext
-
-  pandoc:
-    build: ./docker/pandoc
-    container_name: loreweaver-pandoc
-    restart: unless-stopped
-    ports:
-      - "8082:8082"
-    tmpfs:
-      - /tmp

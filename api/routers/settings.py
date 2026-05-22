@@ -51,6 +51,10 @@ def _settings_out(s: UserSettings) -> SettingsOut:
         enabled = json.loads(s.enabled_models or "[]")
     except (json.JSONDecodeError, TypeError):
         enabled = []
+    try:
+        grammar_langs = json.loads(s.grammar_languages or '["en"]')
+    except (json.JSONDecodeError, TypeError):
+        grammar_langs = ["en"]
     return SettingsOut(
         id=s.id,
         has_api_key=bool(s.openrouter_api_key),
@@ -65,6 +69,7 @@ def _settings_out(s: UserSettings) -> SettingsOut:
         session_timer_enabled=bool(s.session_timer_enabled) if s.session_timer_enabled is not None else True,
         grammar_check_enabled=bool(s.grammar_check_enabled),
         grammar_check_url=s.grammar_check_url or "http://localhost:8081",
+        grammar_languages=grammar_langs,
         pandoc_enabled=bool(s.pandoc_enabled),
         pandoc_url=s.pandoc_url or "http://localhost:8082",
     )
@@ -102,6 +107,8 @@ def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
         s.grammar_check_enabled = int(body.grammar_check_enabled)
     if body.grammar_check_url is not None:
         s.grammar_check_url = body.grammar_check_url
+    if body.grammar_languages is not None:
+        s.grammar_languages = json.dumps(body.grammar_languages)
     if body.pandoc_enabled is not None:
         s.pandoc_enabled = int(body.pandoc_enabled)
     if body.pandoc_url is not None:
@@ -112,13 +119,16 @@ def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
 
 
 @router.post("/docker/up")
-def docker_compose_up():
+def docker_compose_up(db: Session = Depends(get_db)):
     """Run `docker compose up -d` for the bundled services.
 
     Location strategy:
     - Packaged Electron app: LW_RESOURCES_DIR env var points to the Electron
       resources/ folder where electron-builder copies docker-compose.yml.
     - Development: fall back to the repo root (three levels up from this file).
+
+    Writes a .env file alongside docker-compose.yml so the compose file can
+    read LT_LANGS (which languages LanguageTool should download n-gram data for).
     """
     resources_env = os.environ.get("LW_RESOURCES_DIR")
     compose_dir = Path(resources_env) if resources_env else Path(__file__).resolve().parent.parent.parent
@@ -128,6 +138,17 @@ def docker_compose_up():
             404,
             "docker-compose.yml not found. Make sure the app was installed correctly.",
         )
+
+    # Write .env so docker compose picks up the selected languages
+    s = _get_or_create_settings(db)
+    try:
+        langs = json.loads(s.grammar_languages or '["en"]')
+    except (json.JSONDecodeError, TypeError):
+        langs = ["en"]
+    lt_langs = ",".join(langs) if langs else "en"
+    env_file = compose_dir / ".env"
+    env_file.write_text(f"LT_LANGS={lt_langs}\n", encoding="utf-8")
+
     try:
         result = subprocess.run(
             ["docker", "compose", "up", "-d", "--pull", "missing"],

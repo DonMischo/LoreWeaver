@@ -250,6 +250,7 @@ class UserSettings(Base):
     # External service settings
     grammar_check_enabled: Mapped[int] = mapped_column(Integer, default=0)
     grammar_check_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    grammar_languages: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: ["en"]
     pandoc_enabled: Mapped[int] = mapped_column(Integer, default=0)
     pandoc_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

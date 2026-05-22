@@ -382,6 +382,20 @@ export default function ScenePage() {
           Codex
         </Button>
 
+        {/* Grammar — only when service is enabled */}
+        {appSettings?.grammar_check_enabled && (
+          <Button
+            size="sm"
+            variant={grammarPanelOpen ? "secondary" : "ghost"}
+            onClick={() => setGrammarPanelOpen(v => !v)}
+            className="gap-1.5 text-xs"
+            title="Grammar check"
+          >
+            <SpellCheck className="h-3.5 w-3.5" />
+            Grammar
+          </Button>
+        )}
+
         {/* ── Sandwich menu ──────────────────────────────────────────────── */}
         <div className="relative">
           <Button

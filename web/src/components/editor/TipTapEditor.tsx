@@ -20,6 +20,7 @@ import { ItemNode } from "./nodes/ItemNode";
 import { SceneImageNode } from "./nodes/SceneImageNode";
 import { KiNode } from "./nodes/KiNode";
 import { SlashCommandMenu, COMMANDS, type CommandItem, type SlashMenuHandle } from "./SlashCommandMenu";
+import { FormattingToolbar } from "./FormattingToolbar";
 import { EditorContext } from "@/contexts/EditorContext";
 import { useUIStore } from "@/store/ui";
 
@@ -319,6 +320,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
     <EditorContext.Provider value={{ characters, items, allEntries: codexEntries, sceneId, projectId: codexEntries[0]?.project_id ?? 0 }}>
       <div ref={scrollRef} className={wrapperClass}>
         <EditorContent editor={editor} className="h-full" />
+        {editor && <FormattingToolbar editor={editor} />}
         {slashMenu && (
           <SlashCommandMenu
             ref={menuHandleRef}

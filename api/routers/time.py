@@ -137,7 +137,7 @@ def get_timeline(project_id: int, db: Session = Depends(get_db)):
 
 @router.get("/api/projects/{project_id}/timeline-tracks", response_model=list[TimelineTrackOut])
 def list_tracks(project_id: int, db: Session = Depends(get_db)):
-    return db.query(TimelineTrack).filter_by(project_id=project_id).order_by(TimelineTrack.order_index).all()
+    return [_track_out(t) for t in db.query(TimelineTrack).filter_by(project_id=project_id).order_by(TimelineTrack.order_index).all()]
 
 @router.post("/api/projects/{project_id}/timeline-tracks", response_model=TimelineTrackOut)
 def create_track(project_id: int, body: TimelineTrackCreate, db: Session = Depends(get_db)):
