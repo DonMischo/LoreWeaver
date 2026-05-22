@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { User, MapPin, Package, Scroll, Tag, Info, Edit2, Crosshair, Copy, Unlink, ChevronRight } from "lucide-react";
@@ -185,6 +185,7 @@ function NodeCircle({
   const Icon = TYPE_ICONS[node.entry_type] ?? Tag;
   return (
     <g
+      data-node="true"
       transform={`translate(${x},${y})`}
       onClick={onClick}
       onContextMenu={e => { e.preventDefault(); onRightClick?.(e); }}
@@ -264,6 +265,42 @@ export default function RelationsPage() {
   const [depth, setDepth] = useState(1);
   const [stretch, setStretch] = useState(1);
   const [menu, setMenu] = useState<MenuState>(null);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const dragStart = useRef<{ clientX: number; clientY: number; panX: number; panY: number } | null>(null);
+
+  // Reset pan when center or depth changes so the graph stays in frame
+  useEffect(() => { setPan({ x: 0, y: 0 }); }, [centerId, depth]);
+
+  const screenDeltaToSvg = (dx: number, dy: number) => {
+    const ctm = svgRef.current?.getScreenCTM();
+    if (!ctm) return { dx: 0, dy: 0 };
+    return { dx: dx / ctm.a, dy: dy / ctm.d };
+  };
+
+  const onSvgMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    if ((e.target as Element).closest("[data-node]")) return;
+    dragStart.current = { clientX: e.clientX, clientY: e.clientY, panX: pan.x, panY: pan.y };
+    setIsDragging(true);
+    e.preventDefault();
+  };
+
+  const onSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!dragStart.current) return;
+    const { dx, dy } = screenDeltaToSvg(
+      e.clientX - dragStart.current.clientX,
+      e.clientY - dragStart.current.clientY,
+    );
+    setPan({ x: dragStart.current.panX + dx, y: dragStart.current.panY + dy });
+  };
+
+  const onSvgMouseUp = () => { dragStart.current = null; setIsDragging(false); };
+
+  const onSvgDoubleClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if ((e.target as Element).closest("[data-node]")) return;
+    setPan({ x: 0, y: 0 });
+  };
 
   const openEntryDialog = (node: GraphNode) => {
     if (!node.codex_id) return;
@@ -360,7 +397,7 @@ export default function RelationsPage() {
       <header className="flex items-center justify-between px-6 py-3 border-b border-border">
         <div>
           <h1 className="text-base font-semibold">Relations</h1>
-          <p className="text-xs text-muted-foreground">{data.nodes.length} nodes · {data.edges.length} edges · left-click to re-centre · right-click for options</p>
+          <p className="text-xs text-muted-foreground">{data.nodes.length} nodes · {data.edges.length} edges · left-click to re-centre · drag to pan · double-click to reset · right-click for options</p>
         </div>
         <div className="flex items-center gap-4">
           {hoveredEdge && (
@@ -419,7 +456,18 @@ export default function RelationsPage() {
         </aside>
 
         <div className="flex-1 overflow-hidden bg-background/50 relative">
-          <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${W} ${H}`}
+            className="absolute inset-0 w-full h-full"
+            preserveAspectRatio="xMidYMid meet"
+            style={{ cursor: isDragging ? "grabbing" : "grab" }}
+            onMouseDown={onSvgMouseDown}
+            onMouseMove={onSvgMouseMove}
+            onMouseUp={onSvgMouseUp}
+            onMouseLeave={onSvgMouseUp}
+            onDoubleClick={onSvgDoubleClick}
+          >
             <defs>
               <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
                 <path d="M0,0 L0,6 L6,3 z" fill="#6b7280" fillOpacity={0.6} />
@@ -433,47 +481,52 @@ export default function RelationsPage() {
               ))}
             </defs>
 
-            {/* Edges */}
-            {layout.visibleEdges.map((edge, i) => {
-              const src = edge.source ?? centerNode?.id ?? "";
-              const sp = layout.positions[src];
-              const tp = layout.positions[edge.target];
-              if (!sp || !tp) return null;
-              const nodeColor = data.nodes.find(n => n.id === src)?.color ?? "#6b7280";
-              return (
-                <g
-                  key={i}
-                  onMouseEnter={() => setHoveredEdge(edge)}
-                  onMouseLeave={() => setHoveredEdge(null)}
-                  onContextMenu={e => { e.preventDefault(); openEdgeMenu(edge, e); }}
-                  className="cursor-context-menu"
-                >
-                  {/* Wider invisible hit area */}
-                  <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="transparent" strokeWidth={12} />
-                  <EdgePath
-                    x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y}
-                    label={edge.type} color={nodeColor} dashed={edge.via === "inline"}
-                  />
-                </g>
-              );
-            })}
+            {/* Transparent background — catches drags on empty space */}
+            <rect x={0} y={0} width={W} height={H} fill="transparent" />
 
-            {/* Nodes */}
-            {Object.entries(layout.positions).map(([name, pos]) => {
-              const node = data.nodes.find(n => n.id === name);
-              if (!node) return null;
-              return (
-                <NodeCircle
-                  key={name}
-                  node={node}
-                  x={pos.x}
-                  y={pos.y}
-                  selected={centerNode?.id === name}
-                  onClick={() => setCenterId(name)}
-                  onRightClick={e => openNodeMenu(node, e)}
-                />
-              );
-            })}
+            <g transform={`translate(${pan.x},${pan.y})`}>
+              {/* Edges */}
+              {layout.visibleEdges.map((edge, i) => {
+                const src = edge.source ?? centerNode?.id ?? "";
+                const sp = layout.positions[src];
+                const tp = layout.positions[edge.target];
+                if (!sp || !tp) return null;
+                const nodeColor = data.nodes.find(n => n.id === src)?.color ?? "#6b7280";
+                return (
+                  <g
+                    key={i}
+                    onMouseEnter={() => setHoveredEdge(edge)}
+                    onMouseLeave={() => setHoveredEdge(null)}
+                    onContextMenu={e => { e.preventDefault(); openEdgeMenu(edge, e); }}
+                    className="cursor-context-menu"
+                  >
+                    {/* Wider invisible hit area */}
+                    <line x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y} stroke="transparent" strokeWidth={12} />
+                    <EdgePath
+                      x1={sp.x} y1={sp.y} x2={tp.x} y2={tp.y}
+                      label={edge.type} color={nodeColor} dashed={edge.via === "inline"}
+                    />
+                  </g>
+                );
+              })}
+
+              {/* Nodes */}
+              {Object.entries(layout.positions).map(([name, pos]) => {
+                const node = data.nodes.find(n => n.id === name);
+                if (!node) return null;
+                return (
+                  <NodeCircle
+                    key={name}
+                    node={node}
+                    x={pos.x}
+                    y={pos.y}
+                    selected={centerNode?.id === name}
+                    onClick={() => setCenterId(name)}
+                    onRightClick={e => openNodeMenu(node, e)}
+                  />
+                );
+              })}
+            </g>
           </svg>
         </div>
       </div>
