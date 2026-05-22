@@ -339,11 +339,29 @@ function TrackVisualization({
     );
   }
 
+  const totalWidth = Math.max(300, trackW + LEFT_MARGIN + RIGHT_MARGIN);
+
+  // Per-node data used by both the SVG layer and the card layer
+  const nodeData = nodes.map((node, i) => {
+    const x = nodeXs[i];
+    const lane = lanes.get(node.id) ?? 0;
+    const yOffset = laneToY(lane, LANE_HEIGHT);
+    const cardTop = axisY + yOffset;
+    const connTop = yOffset < 0 ? cardTop + 32 : axisY;
+    const connHeight = Math.abs(yOffset) - AXIS_OFFSET;
+    const isScene = node.type === "scene";
+    const dotColor = isScene
+      ? `hsl(${((node.scene_id ?? 0) * 53 + 180) % 360} 55% 60%)`
+      : (node.color ?? "#6b7280");
+    return { x, lane, yOffset, cardTop, connTop, connHeight, isScene, dotColor };
+  });
+
   return (
+    // overflow-hidden: no scrollbar track rendered at all — drag handles panning
     <div
       ref={containerRef}
-      className="w-full overflow-x-auto select-none [&::-webkit-scrollbar]:hidden"
-      style={{ scrollbarWidth: "none", cursor: "grab" } as React.CSSProperties}
+      className="w-full overflow-hidden select-none"
+      style={{ cursor: "grab" }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}
@@ -351,128 +369,108 @@ function TrackVisualization({
       onDoubleClick={() => setZoom(1)}
       title={zoom !== 1 ? `Zoom ${Math.round(zoom * 100)}% — double-click to reset` : undefined}
     >
-      <div style={{ position: "relative", height: vizH, width: Math.max(300, trackW + LEFT_MARGIN + RIGHT_MARGIN) }}>
-        {/* Axis line — explicit width so it matches trackW exactly */}
-        <div
-          style={{
-            position: "absolute",
-            left: LEFT_MARGIN,
-            top: axisY,
-            width: trackW,
-            height: 2,
-            background: "hsl(var(--border))",
-          }}
-        />
+      <div style={{ position: "relative", height: vizH, width: totalWidth }}>
 
-        {/* Ruler ticks — label translateX scales with position so edge labels don't overflow */}
+        {/* ── SVG layer: axis, connectors, dots, ruler ticks ───────────────── */}
+        <svg
+          style={{ position: "absolute", inset: 0, width: totalWidth, height: vizH, pointerEvents: "none", overflow: "visible" }}
+          aria-hidden
+        >
+          {/* Axis line */}
+          <line
+            x1={LEFT_MARGIN} y1={axisY}
+            x2={LEFT_MARGIN + trackW} y2={axisY}
+            stroke="hsl(var(--border))"
+            strokeWidth={2}
+          />
+
+          {/* Ruler tick marks */}
+          {tRuler.map((tick, i) => (
+            <line
+              key={i}
+              x1={LEFT_MARGIN + tick.x} y1={axisY + 2}
+              x2={LEFT_MARGIN + tick.x} y2={axisY + 8}
+              stroke="hsl(var(--border))"
+              strokeWidth={1}
+            />
+          ))}
+
+          {/* Per-node: connector + dot */}
+          {nodeData.map((nd, i) => (
+            <g key={nodes[i].id}>
+              <line
+                x1={nd.x} y1={nd.connTop}
+                x2={nd.x} y2={nd.connTop + nd.connHeight}
+                stroke="hsl(var(--border))"
+                strokeWidth={1}
+                opacity={0.6}
+              />
+              <circle cx={nd.x} cy={axisY} r={4} fill={nd.dotColor} />
+            </g>
+          ))}
+        </svg>
+
+        {/* ── Ruler labels (HTML for crisp font rendering) ─────────────────── */}
         {tRuler.map((tick, i) => {
-          // pct 0→1 across trackW; label shifts from translateX(0%) → (-50%) → (-100%)
           const pct = trackW > 0 ? tick.x / trackW : 0.5;
-          const labelShift = `${Math.round(pct * -100)}%`;
           return (
-            <div
+            <span
               key={i}
               style={{
                 position: "absolute",
                 left: LEFT_MARGIN + tick.x,
-                top: axisY + 6,
+                top: axisY + 12,
+                fontSize: 10,
+                color: "hsl(var(--muted-foreground))",
+                whiteSpace: "nowrap",
+                pointerEvents: "none",
+                transform: `translateX(${Math.round(pct * -100)}%)`,
               }}
             >
-              <div style={{ width: 1, height: 6, background: "hsl(var(--border))", marginLeft: -0.5 }} />
-              <span
-                style={{
-                  fontSize: 10,
-                  color: "hsl(var(--muted-foreground))",
-                  whiteSpace: "nowrap",
-                  display: "block",
-                  transform: `translateX(${labelShift})`,
-                }}
-              >
-                {tick.label}
-              </span>
-            </div>
+              {tick.label}
+            </span>
           );
         })}
 
-        {/* Nodes */}
+        {/* ── Node cards ────────────────────────────────────────────────────── */}
         {nodes.map((node, i) => {
-          const x = nodeXs[i];
-          const lane = lanes.get(node.id) ?? 0;
-          const yOffset = laneToY(lane, LANE_HEIGHT);
-          const cardTop = axisY + yOffset;
-          const connTop = yOffset < 0 ? cardTop + 32 : axisY;
-          const connHeight = Math.abs(yOffset) - AXIS_OFFSET;
-          const isScene = node.type === "scene";
-          const dotColor = isScene
-            ? `hsl(${((node.scene_id ?? 0) * 53 + 180) % 360} 55% 60%)`
-            : (node.color ?? "#6b7280");
-
+          const { x, yOffset, cardTop, isScene, dotColor } = nodeData[i];
           return (
-            <div key={node.id}>
-              {/* Connector line */}
-              <div
-                style={{
-                  position: "absolute",
-                  left: x - 0.5,
-                  top: connTop,
-                  width: 1,
-                  height: connHeight,
-                  background: "hsl(var(--border))",
-                  opacity: 0.6,
-                }}
-              />
-              {/* Dot on axis */}
-              <div
-                style={{
-                  position: "absolute",
-                  left: x - 4,
-                  top: axisY - 4,
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: dotColor,
-                  zIndex: 2,
-                }}
-              />
-              {/* Card */}
-              <button
-                onClick={() => {
-                  if (isScene && node.scene_id) onSceneClick(node.scene_id);
-                  else onEventClick(node);
-                }}
-                style={{
-                  position: "absolute",
-                  left: x,
-                  top: cardTop - (yOffset < 0 ? 32 : 0),
-                  transform: "translateX(-50%)",
-                  width: NODE_W,
-                  textAlign: "left",
-                  cursor: "pointer",
-                }}
-                className={cn(
-                  "rounded-md border border-border/60 bg-card px-2 py-1.5 hover:bg-secondary/60 transition-colors",
-                  "shadow-sm",
-                )}
-                title={node.title}
-              >
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <span
-                    style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor, flexShrink: 0 }}
-                  />
-                  <span className="text-xs font-medium truncate" style={{ maxWidth: 84 }}>
-                    {node.title.length > 13 ? node.title.slice(0, 12) + "…" : node.title}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                  {node.day_night === "Night" ? (
-                    <Moon className="h-2.5 w-2.5 shrink-0 text-[hsl(262_80%_65%)]" />
-                  ) : node.day_night === "Day" ? (
-                    <Sun className="h-2.5 w-2.5 shrink-0 text-[hsl(38_92%_55%)]" />
-                  ) : null}
-                  <span className="truncate">{node.time_display}</span>
-                </div>
-              </button>
-            </div>
+            <button
+              key={node.id}
+              onClick={() => {
+                if (isScene && node.scene_id) onSceneClick(node.scene_id);
+                else onEventClick(node);
+              }}
+              style={{
+                position: "absolute",
+                left: x,
+                top: cardTop - (yOffset < 0 ? 32 : 0),
+                transform: "translateX(-50%)",
+                width: NODE_W,
+                textAlign: "left",
+                cursor: "pointer",
+              }}
+              className={cn(
+                "rounded-md border border-border/60 bg-card px-2 py-1.5 hover:bg-secondary/60 transition-colors shadow-sm",
+              )}
+              title={node.title}
+            >
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
+                <span className="text-xs font-medium truncate" style={{ maxWidth: 84 }}>
+                  {node.title.length > 13 ? node.title.slice(0, 12) + "…" : node.title}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                {node.day_night === "Night" ? (
+                  <Moon className="h-2.5 w-2.5 shrink-0 text-[hsl(262_80%_65%)]" />
+                ) : node.day_night === "Day" ? (
+                  <Sun className="h-2.5 w-2.5 shrink-0 text-[hsl(38_92%_55%)]" />
+                ) : null}
+                <span className="truncate">{node.time_display}</span>
+              </div>
+            </button>
           );
         })}
       </div>
