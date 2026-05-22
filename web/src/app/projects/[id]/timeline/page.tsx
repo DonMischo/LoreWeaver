@@ -62,9 +62,12 @@ const RULER_NICE = [1, 2, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000,
 const MAX_TICKS = 10;
 
 // Convert an absolute tick to a readable label by decomposing it into unit values.
-// e.g. tick=11553624 with Year/Month/Day/Hour → "Y1337 M3 D15 H12"
+// Trailing zero components (units the user left blank) are omitted.
+// e.g. tick for Y1337 M3 (no day/hour) → "Y1337\nM3"   (multiline=true)
+//      tick for Y1337 M3 D15 H12       → "Y1337 M3\nD15 H12"
 // For 1-2 unit systems uses the full singular name ("Year 1337").
-function tickToLabel(tick: number, units: TimeUnit[], upToIdx: number): string {
+// multiline=true splits the parts across 2 lines (useful for labels on the canvas).
+function tickToLabel(tick: number, units: TimeUnit[], upToIdx: number, multiline = false): string {
   const enabled = units.filter(u => u.enabled);
   const n = enabled.length;
   if (n === 0) return "";
@@ -73,20 +76,27 @@ function tickToLabel(tick: number, units: TimeUnit[], upToIdx: number): string {
     mults[i] = mults[i + 1] * (enabled[i + 1].count_per_parent ?? 1000);
   const target = Math.min(upToIdx, n - 1);
   const parts: string[] = [];
+  const vals: number[] = [];
   let rem = Math.round(Math.max(0, tick));
   for (let i = 0; i <= target; i++) {
     const val = Math.floor(rem / mults[i]);
     rem = Math.max(0, rem - val * mults[i]);
+    vals.push(val);
     const u = enabled[i];
     if (u.value_names && u.value_names[val - 1]) {
       parts.push(u.value_names[val - 1]);
     } else {
-      // 3+ unit systems: terse first-letter prefix ("Y1337"); 1-2 units: full name ("Year 1337")
       const pfx = n > 2 ? u.singular[0].toUpperCase() : u.singular;
       parts.push(`${pfx}${val}`);
     }
   }
-  return parts.join(" ");
+  // Trim trailing zeros (units the user didn't fill in)
+  let end = parts.length;
+  while (end > 1 && vals[end - 1] === 0) end--;
+  const trimmed = parts.slice(0, end);
+  if (!multiline || trimmed.length < 2) return trimmed.join(" ");
+  const mid = Math.ceil(trimmed.length / 2);
+  return trimmed.slice(0, mid).join(" ") + "\n" + trimmed.slice(mid).join(" ");
 }
 
 function rulerTicks(
@@ -122,7 +132,7 @@ function rulerTicks(
   const first = Math.ceil(startTick / step) * step;
   for (let t = first; t <= endTick && ticks.length < MAX_TICKS; t += step) {
     const x = ((t - startTick) / range) * trackWidthPx;
-    ticks.push({ x, label: tickToLabel(t, units, chosenIdx), chosenIdx });
+    ticks.push({ x, label: tickToLabel(t, units, chosenIdx, true), chosenIdx });
   }
   return ticks;
 }
@@ -256,6 +266,8 @@ function TrackVisualization({
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
+    // If the click originated from an interactive card, let it through normally
+    if ((e.target as HTMLElement).closest("button")) return;
     isDragging.current = true;
     dragStartX.current = e.clientX;
     dragStartScroll.current = containerRef.current?.scrollLeft ?? 0;
@@ -461,21 +473,21 @@ function TrackVisualization({
         {/* ── Start / end time labels (above the axis) ────────────────────── */}
         {trackStartTime && Object.keys(trackStartTime).length > 0 && (
           <span style={{
-            position: "absolute", left: LEFT_MARGIN + 5, top: axisY - 18,
-            fontSize: 10, color: "hsl(var(--muted-foreground))", whiteSpace: "nowrap",
-            pointerEvents: "none", opacity: 0.85, fontWeight: 500,
+            position: "absolute", left: LEFT_MARGIN + 5, top: axisY - 30,
+            fontSize: 10, color: "hsl(var(--muted-foreground))", whiteSpace: "pre",
+            lineHeight: 1.4, pointerEvents: "none", opacity: 0.85, fontWeight: 500,
           }}>
-            {tickToLabel(startTick, units, enabled.length - 1)}
+            {tickToLabel(startTick, units, enabled.length - 1, true)}
           </span>
         )}
         {trackEndTime && Object.keys(trackEndTime).length > 0 && (
           <span style={{
-            position: "absolute", left: LEFT_MARGIN + trackW - 5, top: axisY - 18,
-            fontSize: 10, color: "hsl(var(--muted-foreground))", whiteSpace: "nowrap",
-            transform: "translateX(-100%)",
+            position: "absolute", left: LEFT_MARGIN + trackW - 5, top: axisY - 30,
+            fontSize: 10, color: "hsl(var(--muted-foreground))", whiteSpace: "pre",
+            lineHeight: 1.4, transform: "translateX(-100%)",
             pointerEvents: "none", opacity: 0.85, fontWeight: 500,
           }}>
-            {tickToLabel(endTick, units, enabled.length - 1)}
+            {tickToLabel(endTick, units, enabled.length - 1, true)}
           </span>
         )}
 
@@ -491,7 +503,8 @@ function TrackVisualization({
                 top: axisY + 12,
                 fontSize: 10,
                 color: "hsl(var(--muted-foreground))",
-                whiteSpace: "nowrap",
+                whiteSpace: "pre",
+                lineHeight: 1.4,
                 pointerEvents: "none",
                 transform: `translateX(${Math.round(pct * -100)}%)`,
               }}
