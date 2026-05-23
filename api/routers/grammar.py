@@ -41,12 +41,14 @@ async def check_grammar(body: CheckRequest, db: Session = Depends(get_db)):
         "enabledOnly": "false",
     }
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             r = await client.post(f"{lt_url}/v2/check", data=payload)
         r.raise_for_status()
         return r.json()
     except httpx.ConnectError:
         raise HTTPException(503, "LanguageTool is not reachable. Is the container running?")
+    except httpx.ReadTimeout:
+        raise HTTPException(503, "LanguageTool took too long to respond. It may still be loading ngram models — try again in a moment.")
     except httpx.HTTPStatusError as exc:
         raise HTTPException(502, f"LanguageTool error: {exc.response.status_code}")
 
