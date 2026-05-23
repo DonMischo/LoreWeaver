@@ -612,3 +612,20 @@ class ExportOptions(BaseModel):
     # the file as an attachment.  The frontend sets this whenever the user has
     # not explicitly chosen a different directory via the folder picker.
     save_to_disk: bool = False
+
+    # ── Heading typography ─────────────────────────────────────────────────────
+    heading_font: Optional[str] = None       # None = same as body font
+    heading_align: str = "center"            # "center" | "left"
+    h1_size: str = "2em"
+    h2_size: str = "1.5em"
+    h3_size: str = "1.25em"
+    h3_style: str = "italic"                 # "italic" | "normal" | "bold"
+
+    # ── Paragraph layout ───────────────────────────────────────────────────────
+    paragraph_indent: str = "1.5em"          # "0" = block style (¶-gap, no indent)
+    text_align: str = "justify"              # "justify" | "left"
+
+    # ── PDF / LaTeX extras ────────────────────────────────────────────────────
+    pdf_margin: str = "2.5cm"
+    page_numbers: bool = True
+    drop_caps: bool = False                  # first letter of each chapter as drop cap

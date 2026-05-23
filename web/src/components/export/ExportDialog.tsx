@@ -13,19 +13,33 @@ import { cn } from "@/lib/utils";
 import { projectsApi } from "@/lib/api";
 import type { ExportOptions, ExportAct } from "@/lib/api";
 import type { BookMeta } from "@/types";
-import { useSettings } from "@/store/queries";
+import { useSettings, usePandocFonts } from "@/store/queries";
+import { FontPicker } from "./FontPicker";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Style presets ─────────────────────────────────────────────────────────────
 
-const SERIF_FONTS = [
-  "EB Garamond", "Linux Libertine O", "Palatino Linotype",
-  "TeX Gyre Pagella", "Crimson Pro", "Cormorant Garamond",
-  "GFS Artemisia", "Junicode",
-];
-const SANS_FONTS = [
-  "Fira Sans", "Source Sans Pro", "Lato", "Open Sans",
-  "Linux Biolinum O", "Cabin",
-];
+type StylePreset = Partial<ExportOptions>;
+
+const STYLE_PRESETS: Record<string, StylePreset> = {
+  "Classic Novel": {
+    font: "EB Garamond", heading_font: "", heading_align: "center",
+    h1_size: "2em", h2_size: "1.5em", h3_size: "1.25em", h3_style: "italic",
+    paragraph_indent: "1.5em", text_align: "justify",
+    font_size: "12pt", line_spacing: "1.5", page_numbers: true, drop_caps: false,
+  },
+  "Modern": {
+    font: "Open Sans", heading_font: "", heading_align: "left",
+    h1_size: "1.75em", h2_size: "1.4em", h3_size: "1.15em", h3_style: "bold",
+    paragraph_indent: "0", text_align: "left",
+    font_size: "11pt", line_spacing: "1.5", page_numbers: true, drop_caps: false,
+  },
+  "Manuscript": {
+    font: "Courier New", heading_font: "", heading_align: "center",
+    h1_size: "1.5em", h2_size: "1.25em", h3_size: "1em", h3_style: "normal",
+    paragraph_indent: "0", text_align: "left", paper_size: "letterpaper",
+    font_size: "12pt", line_spacing: "2", page_numbers: true, drop_caps: false,
+  },
+};
 
 const DEFAULT_OPTS: ExportOptions = {
   format: "md",
@@ -33,13 +47,25 @@ const DEFAULT_OPTS: ExportOptions = {
   include_act_headings: true,
   include_chapter_headings: true,
   include_scene_headings: true,
-  font: "",
+  font: "EB Garamond",
   font_size: "12pt",
   line_spacing: "1.5",
   paper_size: "a4paper",
   text_color: "#1a1a1a",
   bg_color: "#ffffff",
   page_margin: "2em",
+  // Style defaults match "Classic Novel"
+  heading_font: "",
+  heading_align: "center",
+  h1_size: "2em",
+  h2_size: "1.5em",
+  h3_size: "1.25em",
+  h3_style: "italic",
+  paragraph_indent: "1.5em",
+  text_align: "justify",
+  pdf_margin: "2.5cm",
+  page_numbers: true,
+  drop_caps: false,
 };
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
@@ -222,15 +248,20 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
   const { data: appSettings } = useSettings();
   const pandocEnabled = appSettings?.pandoc_enabled ?? false;
 
-  const [opts, setOpts] = useState<ExportOptions>({ ...DEFAULT_OPTS });
-  const [acts, setActs] = useState<ExportAct[]>([]);
-  const [allContent, setAllContent] = useState(true);
+  const [opts, setOpts]       = useState<ExportOptions>({ ...DEFAULT_OPTS });
+  const [acts, setActs]       = useState<ExportAct[]>([]);
+  const [allContent, setAllContent]           = useState(true);
   const [selectedSceneIds, setSelectedSceneIds] = useState<Set<number>>(new Set());
-  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<"idle" | "busy" | "done" | "error">("idle");
-  const [statusMsg, setStatusMsg] = useState("");
+  const [dirHandle, setDirHandle]             = useState<FileSystemDirectoryHandle | null>(null);
+  const [coverFile, setCoverFile]             = useState<File | null>(null);
+  const [status, setStatus]   = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [statusMsg, setStatusMsg]             = useState("");
+  const [activePreset, setActivePreset]       = useState<string | null>("Classic Novel");
+  const [showStyle, setShowStyle]             = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
+
+  // Fetch Pandoc font list when Pandoc is enabled
+  const { data: fontsData } = usePandocFonts(pandocEnabled);
 
   useEffect(() => {
     if (!open) return;
@@ -244,8 +275,23 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
 
   if (!open) return null;
 
-  const set = <K extends keyof ExportOptions>(k: K, v: ExportOptions[K]) =>
+  const set = <K extends keyof ExportOptions>(k: K, v: ExportOptions[K]) => {
     setOpts(o => ({ ...o, [k]: v }));
+    // Any manual change breaks out of a preset
+    const styleKeys: (keyof ExportOptions)[] = [
+      "font","heading_font","heading_align","h1_size","h2_size","h3_size",
+      "h3_style","paragraph_indent","text_align","font_size","line_spacing",
+      "page_numbers","drop_caps","paper_size",
+    ];
+    if (styleKeys.includes(k)) setActivePreset(null);
+  };
+
+  const applyPreset = (name: string) => {
+    const preset = STYLE_PRESETS[name];
+    if (!preset) return;
+    setOpts(o => ({ ...o, ...preset }));
+    setActivePreset(name);
+  };
 
   // Tree toggle helpers
   const toggleAll = () => {
@@ -427,20 +473,26 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
             )}
           </div>
 
-          {/* Typography (LaTeX + EPUB) */}
+          {/* Typography + Style (all non-md formats) */}
           {opts.format !== "md" && (
             <>
               <SectionHeading>Typography</SectionHeading>
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
-                  <Label className="text-xs">Main font</Label>
-                  <Input value={opts.font ?? ""} onChange={e => set("font", e.target.value)}
-                    placeholder="e.g. EB Garamond, Palatino Linotype"
-                    className="h-8 text-sm mt-1" list="lw-font-suggestions" />
-                  <datalist id="lw-font-suggestions">
-                    {[...SERIF_FONTS, ...SANS_FONTS].map(f => <option key={f} value={f} />)}
-                  </datalist>
-                  <p className="text-[10px] text-muted-foreground mt-1">Font must be installed on the compilation machine</p>
+                  <Label className="text-xs">Body font</Label>
+                  <div className="mt-1">
+                    <FontPicker
+                      value={opts.font ?? ""}
+                      onChange={v => set("font", v)}
+                      fonts={fontsData?.fonts ?? []}
+                      placeholder="e.g. EB Garamond"
+                    />
+                  </div>
+                  {!pandocEnabled && (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Font must be installed on the compilation machine (LaTeX). Enable Pandoc to see available fonts.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs">Font size</Label>
@@ -453,6 +505,158 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
                     options={[{ value: "1", label: "Single" }, { value: "1.5", label: "1.5×" }, { value: "2", label: "Double" }]} />
                 </div>
               </div>
+
+              {/* Style accordion */}
+              <button
+                type="button"
+                onClick={() => setShowStyle(s => !s)}
+                className="w-full flex items-center justify-between mt-4 mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span>Style</span>
+                {showStyle
+                  ? <ChevronDown className="h-3.5 w-3.5" />
+                  : <ChevronRight className="h-3.5 w-3.5" />}
+              </button>
+
+              {showStyle && (
+                <div className="space-y-4 border border-border rounded-lg p-3 bg-secondary/10">
+
+                  {/* Presets */}
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-1.5">Preset</p>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {Object.keys(STYLE_PRESETS).map(name => (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => applyPreset(name)}
+                          className={cn(
+                            "text-xs px-2.5 py-1 rounded-md border transition-colors",
+                            activePreset === name
+                              ? "border-primary bg-primary/10 text-primary font-medium"
+                              : "border-border hover:border-primary/50 text-muted-foreground hover:text-foreground",
+                          )}
+                        >{name}</button>
+                      ))}
+                      {activePreset === null && (
+                        <span className="text-xs px-2.5 py-1 rounded-md border border-dashed border-border text-muted-foreground/60 italic">
+                          Custom
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Headings */}
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-muted-foreground font-medium">Headings</p>
+                    <div>
+                      <Label className="text-xs">Heading font <span className="text-muted-foreground/60 font-normal">(leave blank = same as body)</span></Label>
+                      <div className="mt-1">
+                        <FontPicker
+                          value={opts.heading_font ?? ""}
+                          onChange={v => set("heading_font", v)}
+                          fonts={fontsData?.fonts ?? []}
+                          placeholder="Same as body font"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Alignment</Label>
+                      <ToggleGroup
+                        value={(opts.heading_align ?? "center") as "center" | "left"}
+                        onChange={v => set("heading_align", v)}
+                        options={[{ value: "center", label: "Centered" }, { value: "left", label: "Left" }]}
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(["h1_size", "h2_size", "h3_size"] as const).map((k, i) => (
+                        <div key={k}>
+                          <Label className="text-xs">H{i + 1} size</Label>
+                          <ToggleGroup
+                            value={(opts[k] ?? ["2em","1.5em","1.25em"][i]) as string}
+                            onChange={v => set(k, v)}
+                            options={[
+                              { value: "1em",    label: "1×" },
+                              { value: "1.25em", label: "1.25×" },
+                              { value: "1.5em",  label: "1.5×" },
+                              { value: "1.75em", label: "1.75×" },
+                              { value: "2em",    label: "2×" },
+                            ]}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <Label className="text-xs">Scene heading style (H3)</Label>
+                      <ToggleGroup
+                        value={(opts.h3_style ?? "italic") as "italic" | "normal" | "bold"}
+                        onChange={v => set("h3_style", v)}
+                        options={[
+                          { value: "italic", label: "Italic" },
+                          { value: "bold",   label: "Bold" },
+                          { value: "normal", label: "Normal" },
+                        ]}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Paragraph */}
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-muted-foreground font-medium">Paragraphs</p>
+                    <div>
+                      <Label className="text-xs">First-line indent</Label>
+                      <ToggleGroup
+                        value={(opts.paragraph_indent ?? "1.5em") as string}
+                        onChange={v => set("paragraph_indent", v)}
+                        options={[
+                          { value: "1.5em", label: "Indented" },
+                          { value: "0",     label: "Block (no indent)" },
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Text alignment</Label>
+                      <ToggleGroup
+                        value={(opts.text_align ?? "justify") as "justify" | "left"}
+                        onChange={v => set("text_align", v)}
+                        options={[
+                          { value: "justify", label: "Justified" },
+                          { value: "left",    label: "Left" },
+                        ]}
+                      />
+                    </div>
+                  </div>
+
+                  {/* PDF / LaTeX extras */}
+                  {(opts.format === "pdf" || opts.format === "tex") && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-muted-foreground font-medium">PDF / LaTeX</p>
+                      <div>
+                        <Label className="text-xs">Page margin</Label>
+                        <Input
+                          value={opts.pdf_margin ?? "2.5cm"}
+                          onChange={e => set("pdf_margin", e.target.value)}
+                          placeholder="e.g. 2.5cm or 1in"
+                          className="h-8 text-sm mt-1"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <ToggleRow
+                          label="Page numbers"
+                          checked={opts.page_numbers ?? true}
+                          onChange={v => set("page_numbers", v)}
+                        />
+                        <ToggleRow
+                          label="Drop caps (first letter of each chapter)"
+                          checked={opts.drop_caps ?? false}
+                          onChange={v => set("drop_caps", v)}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              )}
             </>
           )}
 
