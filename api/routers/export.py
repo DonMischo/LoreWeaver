@@ -74,11 +74,24 @@ async def export_project(
         html = export_html(project, opts)
         meta = _json.loads(project.book_meta) if project.book_meta else {}
         payload = {
-            "html": html,
-            "format": opts.format,
-            "title": project.title or "",
-            "author": meta.get("author", ""),
-            "language": meta.get("language", "en"),
+            "html":             html,
+            "format":           opts.format,
+            "title":            project.title or "",
+            "author":           meta.get("author", ""),
+            "language":         meta.get("language", "en"),
+            "font":             opts.font or None,
+            "heading_font":     opts.heading_font or None,
+            "heading_align":    opts.heading_align,
+            "h1_size":          opts.h1_size,
+            "h2_size":          opts.h2_size,
+            "h3_size":          opts.h3_size,
+            "h3_style":         opts.h3_style,
+            "paragraph_indent": opts.paragraph_indent,
+            "text_align":       opts.text_align,
+            "pdf_margin":       opts.pdf_margin,
+            "page_numbers":     opts.page_numbers,
+            "line_spacing":     opts.line_spacing,
+            "font_size":        opts.font_size,
         }
         if project.cover_image:
             payload["cover"] = project.cover_image
@@ -117,6 +130,21 @@ async def export_project(
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/export/fonts")
+async def list_pandoc_fonts(db: Session = Depends(get_db)):
+    """Proxy the Pandoc container's font list for use in the export dialog."""
+    s = db.query(UserSettings).first()
+    if not s or not s.pandoc_enabled:
+        return {"fonts": []}
+    pandoc_url = (s.pandoc_url or "http://localhost:8082").rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(f"{pandoc_url}/fonts")
+        return r.json()
+    except Exception:
+        return {"fonts": []}
 
 
 @router.get("/{project_id}/export/structure")

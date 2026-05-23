@@ -1,10 +1,17 @@
 FROM pandoc/latex:latest-ubuntu
 
-# Install Python + pip (Ubuntu uses apt-get, not apk)
+# Install Python, font packages, and curl (for Google Font downloads)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     python3-venv \
+    fontconfig \
+    fonts-liberation \
+    fonts-noto-core \
+    fonts-open-sans \
+    fonts-urw-base35 \
+    curl \
+    && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
 # Install FastAPI / uvicorn in a venv to avoid PEP 668 conflict

@@ -27,6 +27,18 @@ export interface ExportOptions {
   // author and other metadata come from project.book_meta (set via Project Info)
   /** When true the backend saves to {dataDir}/exports/ and returns {saved_to, filename} */
   save_to_disk?: boolean;
+  // ── Style ──────────────────────────────────────────────────────────────────
+  heading_font?: string | null;
+  heading_align?: "center" | "left";
+  h1_size?: string;
+  h2_size?: string;
+  h3_size?: string;
+  h3_style?: "italic" | "normal" | "bold";
+  paragraph_indent?: string;
+  text_align?: "justify" | "left";
+  pdf_margin?: string;
+  page_numbers?: boolean;
+  drop_caps?: boolean;
 }
 
 export interface ExportScene   { id: number; title: string; order_index: number }
@@ -70,6 +82,13 @@ export const projectsApi = {
   corkboard: (id: number) => req<CorkboardData>(`/projects/${id}/corkboard`),
   setSubplotNames: (id: number, names: string[]) =>
     req<string[]>(`/projects/${id}/subplot-names`, { method: "PATCH", body: JSON.stringify({ names }) }),
+};
+
+// ── Export fonts ──────────────────────────────────────────────────────────────
+
+export const fontsApi = {
+  /** List font families available in the Pandoc container for PDF/EPUB exports. */
+  pandocFonts: () => req<{ fonts: string[] }>("/projects/export/fonts"),
 };
 
 // ── Acts ──────────────────────────────────────────────────────────────────────
