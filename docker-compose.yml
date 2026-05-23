@@ -47,11 +47,10 @@ services:
       JAVA_XMS: 512m
       JAVA_XMX: 2g
     volumes:
-      # N-gram data cache (downloaded once, persisted across restarts)
-      - ./languagetool/ngrams:/ngrams
-
-      # FastText language-detection model cache (~150 MB, downloaded once)
-      - ./languagetool/fasttext:/fasttext
+      # Named volumes — stored in Docker's own volume store, completely outside
+      # the app installation directory. Survive reinstalls and app updates.
+      - foliantica-lt-ngrams:/ngrams
+      - foliantica-lt-fasttext:/fasttext
 
   pandoc:
     build:
@@ -60,3 +59,11 @@ services:
     restart: unless-stopped
     ports:
       - "8082:8082"
+
+# ── Named volumes ─────────────────────────────────────────────────────────────
+# Stored in Docker's volume store (outside the app installation directory).
+# Persist across Foliantica reinstalls, updates, and OS reboots.
+# To reclaim disk space: docker volume rm foliantica-lt-ngrams foliantica-lt-fasttext
+volumes:
+  foliantica-lt-ngrams:
+  foliantica-lt-fasttext:
