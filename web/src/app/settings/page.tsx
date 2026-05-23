@@ -919,6 +919,15 @@ export default function SettingsPage() {
                 setDockerUpState("busy");
                 setDockerUpMsg("");
                 try {
+                  // Persist current service settings first so docker compose
+                  // reads the latest language selection and URLs from the DB.
+                  await updateSettings.mutateAsync({
+                    grammar_check_enabled: grammarEnabled,
+                    grammar_check_url: grammarUrl,
+                    grammar_languages: grammarLanguages,
+                    pandoc_enabled: pandocEnabled,
+                    pandoc_url: pandocUrl,
+                  });
                   const res = await settingsApi.dockerComposeUp();
                   setDockerUpState("ok");
                   setDockerUpMsg(res.output || "Services started.");

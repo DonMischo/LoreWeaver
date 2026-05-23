@@ -56,6 +56,9 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Foliantica
+  # Never delete appData on uninstall — the user's database, uploads, and
+  # custom data-dir config must survive an uninstall/reinstall cycle.
+  deleteAppDataOnUninstall: false
 
 mac:
   icon: electron/assets/icon.icns
