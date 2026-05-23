@@ -1,6 +1,35 @@
 @echo off
 setlocal EnableDelayedExpansion
 
+:: ── Locate Node.js (mirrors devrun.bat logic) ────────────────────────────────
+set "NODE="
+
+where node >nul 2>&1
+if not errorlevel 1 for /f "delims=" %%n in ('where node') do (set "NODE=%%n" & goto :node_found)
+
+for %%p in (
+    "%ProgramFiles%\nodejs\node.exe"
+    "%ProgramFiles(x86)%\nodejs\node.exe"
+    "%LOCALAPPDATA%\Programs\nodejs\node.exe"
+    "%APPDATA%\npm\node.exe"
+) do if exist %%p (set "NODE=%%~p" & goto :node_found)
+
+for %%r in ("%APPDATA%\nvm" "%LOCALAPPDATA%\nvm") do (
+    if exist "%%~r" (
+        for /f "delims=" %%n in ('dir /b /s "%%~r\node.exe" 2^>nul ^| sort /r') do (
+            set "NODE=%%n" & goto :node_found
+        )
+    )
+)
+
+echo [ERROR] Node.js not found. Please install Node.js 18+ from https://nodejs.org
+pause & exit /b 1
+
+:node_found
+for %%d in ("%NODE%") do set "NODEDIR=%%~dpd"
+echo %PATH% | findstr /i "%NODEDIR:~0,-1%" >nul 2>&1
+if errorlevel 1 set "PATH=%NODEDIR%;%PATH%"
+
 :: ── Read current version from root package.json ───────────────────────────────
 for /f "tokens=*" %%i in ('node -e "process.stdout.write(require('./package.json').version)"') do set CURRENT_VERSION=%%i
 
