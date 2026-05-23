@@ -36,12 +36,21 @@ services:
     security_opt:
       - no-new-privileges
     ports:
-      - "8081:8081"
+      # Bind to localhost only — LanguageTool is a local service, no need to
+      # expose it to other devices on the network.
+      - "127.0.0.1:8081:8081"
     environment:
       # N-gram models improve confused-word and style detection (~2–3 GB per
       # language, downloaded once on first start — container will be slow to
       # respond until the download finishes).
       download_ngrams_for_langs: ${LT_LANGS:-en}
+
+      # Restrict API access to localhost and the Docker bridge subnet.
+      # Suppresses the "running in public mode" startup warning and prevents
+      # access from other network devices.
+      # 127.0.0.1       — host loopback (direct connections)
+      # 172.16.0.0/12   — Docker bridge networks (172.17–172.31.x.x)
+      langtool_allowedIps: 127.0.0.1;172.16.0.0/12
 
       # Java heap size — tune to your system
       JAVA_XMS: 512m
