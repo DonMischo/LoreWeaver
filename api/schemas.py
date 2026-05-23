@@ -607,3 +607,8 @@ class ExportOptions(BaseModel):
     bg_color: str = "#ffffff"
     page_margin: str = "2em"
     # Author/metadata come from project.book_meta — not stored here
+    # Output — when True the backend saves the file to {dataDir}/exports/ and
+    # returns {"saved_to": <abs-path>, "filename": <name>} instead of streaming
+    # the file as an attachment.  The frontend sets this whenever the user has
+    # not explicitly chosen a different directory via the folder picker.
+    save_to_disk: bool = False

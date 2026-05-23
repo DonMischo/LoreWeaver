@@ -1,5 +1,7 @@
+import os
 import re
 import httpx
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session, selectinload
@@ -41,31 +43,28 @@ async def export_project(
     project = _load_project(project_id, db)
     safe_name = _safe_filename(project.title)
 
+    # ── 1. Generate content ───────────────────────────────────────────────────
+    content: bytes | str
+    filename: str
+    media_type: str
+    is_binary = False
+
     if opts.format == "md":
-        content = export_markdown(project, opts)
-        return Response(
-            content=content,
-            media_type="text/markdown",
-            headers={"Content-Disposition": f'attachment; filename="{safe_name}.md"'},
-        )
+        content   = export_markdown(project, opts)
+        filename  = f"{safe_name}.md"
+        media_type = "text/markdown"
 
-    if opts.format == "tex":
-        content = export_latex(project, opts)
-        return Response(
-            content=content,
-            media_type="application/x-tex",
-            headers={"Content-Disposition": f'attachment; filename="{safe_name}.tex"'},
-        )
+    elif opts.format == "tex":
+        content   = export_latex(project, opts)
+        filename  = f"{safe_name}.tex"
+        media_type = "application/x-tex"
 
-    if opts.format == "epub-style":
-        content = export_epub_style(project, opts)
-        return Response(
-            content=content,
-            media_type="text/css",
-            headers={"Content-Disposition": f'attachment; filename="{safe_name}-style.css"'},
-        )
+    elif opts.format == "epub-style":
+        content   = export_epub_style(project, opts)
+        filename  = f"{safe_name}-style.css"
+        media_type = "text/css"
 
-    if opts.format in ("pdf", "epub"):
+    elif opts.format in ("pdf", "epub"):
         s = db.query(UserSettings).first()
         if not s or not s.pandoc_enabled:
             raise HTTPException(503, "PDF/EPUB export is not enabled in settings")
@@ -93,20 +92,31 @@ async def export_project(
         except httpx.HTTPStatusError as exc:
             raise HTTPException(502, f"Pandoc error: {exc.response.text[:200]}")
 
-        if opts.format == "pdf":
-            return Response(
-                content=r.content,
-                media_type="application/pdf",
-                headers={"Content-Disposition": f'attachment; filename="{safe_name}.pdf"'},
-            )
-        else:
-            return Response(
-                content=r.content,
-                media_type="application/epub+zip",
-                headers={"Content-Disposition": f'attachment; filename="{safe_name}.epub"'},
-            )
+        content    = r.content
+        is_binary  = True
+        filename   = f"{safe_name}.{'pdf' if opts.format == 'pdf' else 'epub'}"
+        media_type = "application/pdf" if opts.format == "pdf" else "application/epub+zip"
 
-    raise HTTPException(400, "Unknown format")
+    else:
+        raise HTTPException(400, "Unknown format")
+
+    # ── 2. Deliver ────────────────────────────────────────────────────────────
+    if opts.save_to_disk:
+        # Save to {dataDir}/exports/ — CWD is always the dataDir (set by run.py)
+        exports_dir = Path(os.getcwd()) / "exports"
+        exports_dir.mkdir(exist_ok=True)
+        dest = exports_dir / filename
+        if is_binary:
+            dest.write_bytes(content)       # type: ignore[arg-type]
+        else:
+            dest.write_text(content, encoding="utf-8")  # type: ignore[arg-type]
+        return {"saved_to": str(dest), "filename": filename}
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{project_id}/export/structure")

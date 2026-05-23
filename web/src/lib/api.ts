@@ -25,6 +25,8 @@ export interface ExportOptions {
   bg_color: string;
   page_margin: string;
   // author and other metadata come from project.book_meta (set via Project Info)
+  /** When true the backend saves to {dataDir}/exports/ and returns {saved_to, filename} */
+  save_to_disk?: boolean;
 }
 
 export interface ExportScene   { id: number; title: string; order_index: number }

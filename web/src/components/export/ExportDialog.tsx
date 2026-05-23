@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   FileText, FileCode2, BookOpen, FileDown,
-  FolderOpen, Upload, Check, Loader2, ChevronDown, ChevronRight, Download,
+  FolderOpen, Upload, Check, Loader2, ChevronDown, ChevronRight,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -276,81 +276,57 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
     } catch { /* cancelled */ }
   };
 
-  const triggerDownload = (text: string, filename: string, mimeType: string) => {
-    const blob = new Blob([text], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const handleExport = async () => {
     setStatus("busy"); setStatusMsg("");
+
+    const isBinary = opts.format === "pdf" || opts.format === "epub";
+    // Use the user-picked folder only for text formats; everything else goes to dataDir
+    const useDirHandle = !!dirHandle && !isBinary;
 
     const payload: ExportOptions = {
       ...opts,
       scene_ids: allContent ? null : Array.from(selectedSceneIds),
       font: opts.font || undefined,
+      save_to_disk: !useDirHandle,
     };
 
     try {
       const res = await projectsApi.export(projectId, payload);
       if (!res.ok) throw new Error(await res.text());
 
-      const isBinary = opts.format === "pdf" || opts.format === "epub";
-      const extMap: Record<string, string> = { md: "md", tex: "tex", "epub-style": "css", pdf: "pdf", epub: "epub" };
+      if (payload.save_to_disk) {
+        // Backend saved the file — response is JSON {saved_to, filename}
+        const { saved_to, filename } = await res.json() as { saved_to: string; filename: string };
+        setStatus("done");
+        setStatusMsg(`Saved: ${saved_to}`);
+        return;
+      }
+
+      // ── dirHandle path (text formats, user picked a folder) ──────────────
       const mimeMap: Record<string, string> = {
         md: "text/markdown", tex: "application/x-tex", "epub-style": "text/css",
-        pdf: "application/pdf", epub: "application/epub+zip",
       };
+      const extMap: Record<string, string> = { md: "md", tex: "tex", "epub-style": "css" };
       const ext = extMap[opts.format] ?? opts.format;
       const suffix = opts.format === "epub-style" ? "-style" : "";
       const safeName = projectTitle.replace(/[^a-zA-Z0-9_\-]/g, "_");
       const filename = `${safeName}${suffix}.${ext}`;
       const mimeType = mimeMap[opts.format] ?? "application/octet-stream";
 
-      if (isBinary) {
-        // PDF or EPUB — always trigger download (binary blob)
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = filename; a.click();
-        URL.revokeObjectURL(url);
-        setStatus("done");
-        setStatusMsg(`Downloaded ${filename}`);
-        return;
-      }
-
       const text = await res.text();
+      const fh = await dirHandle!.getFileHandle(filename, { create: true });
+      const w = await fh.createWritable();
+      await w.write(text); await w.close();
 
-      if (dirHandle) {
-        // Write to chosen folder
-        const fh = await dirHandle.getFileHandle(filename, { create: true });
-        const w = await fh.createWritable();
-        await w.write(text); await w.close();
-
-        if (opts.format === "epub-style" && coverFile) {
-          const coverExt = coverFile.name.split(".").pop() ?? "jpg";
-          const ch = await dirHandle.getFileHandle(`cover.${coverExt}`, { create: true });
-          const cw = await ch.createWritable();
-          await cw.write(await coverFile.arrayBuffer()); await cw.close();
-        }
-
-        setStatus("done");
-        setStatusMsg(`Saved to "${dirHandle.name}/" — ${filename}${opts.format === "epub-style" && coverFile ? " + cover" : ""}`);
-      } else {
-        // Fallback: browser download
-        triggerDownload(text, filename, mimeType);
-        if (opts.format === "epub-style" && coverFile) {
-          // Also download cover with original name
-          const coverUrl = URL.createObjectURL(coverFile);
-          const a = document.createElement("a");
-          a.href = coverUrl; a.download = coverFile.name; a.click();
-          URL.revokeObjectURL(coverUrl);
-        }
-        setStatus("done");
-        setStatusMsg(`Downloaded ${filename}`);
+      if (opts.format === "epub-style" && coverFile) {
+        const coverExt = coverFile.name.split(".").pop() ?? "jpg";
+        const ch = await dirHandle!.getFileHandle(`cover.${coverExt}`, { create: true });
+        const cw = await ch.createWritable();
+        await cw.write(await coverFile.arrayBuffer()); await cw.close();
       }
+
+      setStatus("done");
+      setStatusMsg(`Saved to "${dirHandle!.name}/" — ${filename}${opts.format === "epub-style" && coverFile ? " + cover" : ""}`);
     } catch (e: any) {
       setStatus("error");
       setStatusMsg(e.message ?? "Export failed");
@@ -538,10 +514,10 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
           )}
 
           {/* Output */}
-          {opts.format !== "pdf" && opts.format !== "epub" && (
-            <>
-              <SectionHeading>Output</SectionHeading>
-              {hasFolderPicker ? (
+          <SectionHeading>Output</SectionHeading>
+          {opts.format !== "pdf" && opts.format !== "epub" ? (
+            <div className="space-y-2">
+              {hasFolderPicker && (
                 <button onClick={pickFolder}
                   className={cn(
                     "flex items-center gap-2 px-3 py-2 text-sm rounded-md border transition-colors w-full",
@@ -557,24 +533,21 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
                       <span className="text-muted-foreground text-xs ml-1">— click to change</span>
                     </span>
                   ) : (
-                    <span>
-                      Choose output folder
-                      <span className="text-muted-foreground/70 ml-1">(or export will download to browser default)</span>
-                    </span>
+                    <span>Choose a different output folder <span className="text-muted-foreground/70">(optional)</span></span>
                   )}
                 </button>
-              ) : (
-                <div className="flex items-center gap-2 px-3 py-2 text-sm rounded-md border border-border text-muted-foreground">
-                  <Download className="h-4 w-4 shrink-0" />
-                  File will be downloaded to your browser&apos;s default download folder
+              )}
+              {!dirHandle && (
+                <div className="flex items-center gap-2 px-3 py-2 text-xs rounded-md border border-border text-muted-foreground">
+                  <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                  Saved to your data folder → <span className="font-mono">exports/</span>
                 </div>
               )}
-            </>
-          )}
-          {(opts.format === "pdf" || opts.format === "epub") && (
-            <div className="mt-4 flex items-center gap-2 px-3 py-2 text-xs rounded-md border border-border text-muted-foreground">
-              <Download className="h-4 w-4 shrink-0" />
-              File will be generated by the Pandoc container and downloaded automatically
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 text-xs rounded-md border border-border text-muted-foreground">
+              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+              Generated by the Pandoc container and saved to your data folder → <span className="font-mono">exports/</span>
             </div>
           )}
         </div>
@@ -589,7 +562,7 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
           <Button size="sm" onClick={handleExport} disabled={status === "busy"} className="gap-1.5 shrink-0">
             {status === "busy"
               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              : dirHandle ? <FolderOpen className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
+              : <FolderOpen className="h-3.5 w-3.5" />}
             Export {fmtLabelStr}
           </Button>
         </div>
