@@ -1,8 +1,28 @@
 services:
+
+  # ── QEMU binfmt registration ─────────────────────────────────────────────────
+  # meyay/languagetool is x86_64-only. On ARM hosts (Windows on ARM, Apple
+  # Silicon) Docker runs it via QEMU emulation, but the binfmt handlers must be
+  # registered first. This one-shot container does that automatically so users
+  # never have to run a manual "docker run --privileged tonistiigi/binfmt" step.
+  # On native amd64 hosts the registration is a harmless no-op.
+  binfmt:
+    image: tonistiigi/binfmt:latest
+    container_name: foliantica-binfmt
+    privileged: true
+    restart: "no"
+    command: --install amd64
+
   languagetool:
     image: meyay/languagetool:latest
+    # meyay's image is x86_64-only. linux/amd64 runs natively on amd64 hosts
+    # and under QEMU emulation on arm64 (Windows on ARM, Apple Silicon).
+    platform: linux/amd64
     container_name: foliantica-languagetool
     restart: unless-stopped
+    depends_on:
+      binfmt:
+        condition: service_completed_successfully
     read_only: true
     tmpfs:
       - /tmp:exec
@@ -18,21 +38,19 @@ services:
     ports:
       - "8081:8081"
     environment:
-      # Download n-gram data for better suggestions (optional, large)
-      # Remove or comment out if you want a lightweight start
+      # N-gram models improve confused-word and style detection (~2–3 GB per
+      # language, downloaded once on first start — container will be slow to
+      # respond until the download finishes).
       download_ngrams_for_langs: ${LT_LANGS:-en}
-      
+
       # Java heap size — tune to your system
       JAVA_XMS: 512m
       JAVA_XMX: 2g
-      
-      # Optional: skip if you don't need the web UI
-      # langtool_https_server: "false"
     volumes:
-      # N-gram data cache (~2–3 GB per language, downloaded once)
+      # N-gram data cache (downloaded once, persisted across restarts)
       - ./languagetool/ngrams:/ngrams
 
-      # FastText model cache (~150 MB, downloaded once)
+      # FastText language-detection model cache (~150 MB, downloaded once)
       - ./languagetool/fasttext:/fasttext
 
   pandoc:
