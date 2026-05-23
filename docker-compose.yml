@@ -1,7 +1,7 @@
 services:
   languagetool:
     image: meyay/languagetool:latest
-    container_name: languagetool
+    container_name: foliantica-languagetool
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -31,6 +31,14 @@ services:
     volumes:
       # N-gram data cache (~2–3 GB per language, downloaded once)
       - ./languagetool/ngrams:/ngrams
-      
+
       # FastText model cache (~150 MB, downloaded once)
       - ./languagetool/fasttext:/fasttext
+
+  pandoc:
+    build:
+      context: ./docker/pandoc
+    container_name: foliantica-pandoc
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
