@@ -21,6 +21,8 @@ import { SceneImageNode } from "./nodes/SceneImageNode";
 import { KiNode } from "./nodes/KiNode";
 import { SlashCommandMenu, COMMANDS, type CommandItem, type SlashMenuHandle } from "./SlashCommandMenu";
 import { FormattingToolbar } from "./FormattingToolbar";
+import { SearchExtension } from "./SearchExtension";
+import { SearchBar } from "./SearchBar";
 import { EditorContext } from "@/contexts/EditorContext";
 import { useUIStore } from "@/store/ui";
 
@@ -36,6 +38,8 @@ interface Props {
   onFlagsChange?: (flags: FlagItem[]) => void;
   replaceWordRef?: React.MutableRefObject<((word: string) => void) | null>;
   applyFlagRef?: React.MutableRefObject<((type: string) => void) | null>;
+  applyGrammarFixRef?: React.MutableRefObject<((matched: string, replacement: string) => void) | null>;
+  jumpToGrammarMatchRef?: React.MutableRefObject<((matched: string) => void) | null>;
 }
 
 interface SlashState {
@@ -63,7 +67,7 @@ function applyTypewriterScroll(
   } catch { /* view not mounted */ }
 }
 
-export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId, onOpenChat, onOpenTimeline, onWordSelect, onFlagsChange, replaceWordRef, applyFlagRef }: Props) {
+export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId, onOpenChat, onOpenTimeline, onWordSelect, onFlagsChange, replaceWordRef, applyFlagRef, applyGrammarFixRef, jumpToGrammarMatchRef }: Props) {
   const showLineNumbers  = useUIStore((s) => s.showParagraphNumbers);
   const typewriterMode   = useUIStore((s) => s.typewriterMode);
   const typewriterOffset = useUIStore((s) => s.typewriterOffset);
@@ -81,6 +85,11 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
   const typewriterOffsetRef = useRef(typewriterOffset);
   typewriterModeRef.current   = typewriterMode;
   typewriterOffsetRef.current = typewriterOffset;
+
+  // Search bar state
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchOpenRef = useRef(false);
+  searchOpenRef.current = searchOpen;
 
   // Slash menu state
   const [slashMenu, setSlashMenu] = useState<SlashState | null>(null);
@@ -183,6 +192,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
       GhostTextMark,
       FocusDimExtension,
       SensitivityMark,
+      SearchExtension,
     ],
     content,
     onUpdate({ editor }) {
@@ -287,6 +297,61 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
     };
   }, [editor, applyFlagRef]);
 
+  // Ctrl+F / Cmd+F → open search bar; Escape → close it
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+      if (e.key === "Escape" && searchOpenRef.current) {
+        editor?.commands.clearSearch();
+        setSearchOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [editor]);
+
+  // Grammar: jump to matched text (select it so user sees where it is)
+  useEffect(() => {
+    if (!jumpToGrammarMatchRef) return;
+    jumpToGrammarMatchRef.current = (matched: string) => {
+      if (!editor) return;
+      const { doc } = editor.state;
+      let from = -1, to = -1;
+      doc.descendants((node, pos) => {
+        if (from !== -1) return false;
+        if (node.isText && node.text) {
+          const idx = node.text.indexOf(matched);
+          if (idx !== -1) { from = pos + idx; to = from + matched.length; return false; }
+        }
+      });
+      if (from === -1) return;
+      editor.chain().focus().setTextSelection({ from, to }).run();
+      editor.view.dispatch(editor.state.tr.scrollIntoView());
+    };
+  }, [editor, jumpToGrammarMatchRef]);
+
+  // Grammar: find matched text and replace with suggestion
+  useEffect(() => {
+    if (!applyGrammarFixRef) return;
+    applyGrammarFixRef.current = (matched: string, replacement: string) => {
+      if (!editor) return;
+      const { doc } = editor.state;
+      let from = -1, to = -1;
+      doc.descendants((node, pos) => {
+        if (from !== -1) return false;
+        if (node.isText && node.text) {
+          const idx = node.text.indexOf(matched);
+          if (idx !== -1) { from = pos + idx; to = from + matched.length; return false; }
+        }
+      });
+      if (from === -1) return;
+      editor.chain().focus().setTextSelection({ from, to }).insertContent(replacement).run();
+    };
+  }, [editor, applyGrammarFixRef]);
+
   // Typewriter: update ProseMirror top/bottom padding so the cursor can reach
   // the target position even on the very first or very last line.
   useEffect(() => {
@@ -321,6 +386,9 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
       <div ref={scrollRef} className={wrapperClass}>
         <EditorContent editor={editor} className="h-full" />
         {editor && <FormattingToolbar editor={editor} />}
+        {editor && searchOpen && (
+          <SearchBar editor={editor} onClose={() => setSearchOpen(false)} />
+        )}
         {slashMenu && (
           <SlashCommandMenu
             ref={menuHandleRef}

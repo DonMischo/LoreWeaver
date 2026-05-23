@@ -106,8 +106,10 @@ export default function ScenePage() {
   const [thesaurusOpen, setThesaurusOpen]         = useState(false);
   const [selectedWord, setSelectedWord]           = useState<string>("");
   const [grammarPanelOpen, setGrammarPanelOpen]   = useState(false);
-  const replaceWordRef = useRef<((word: string) => void) | null>(null);
-  const applyFlagRef   = useRef<((type: string) => void) | null>(null);
+  const replaceWordRef         = useRef<((word: string) => void) | null>(null);
+  const applyFlagRef           = useRef<((type: string) => void) | null>(null);
+  const applyGrammarFixRef     = useRef<((matched: string, replacement: string) => void) | null>(null);
+  const jumpToGrammarMatchRef  = useRef<((matched: string) => void) | null>(null);
 
   // Count ghost-text placeholders in current content
   const ghostTexts = useMemo(() => {
@@ -565,6 +567,8 @@ export default function ScenePage() {
             onFlagsChange={setFlags}
             replaceWordRef={replaceWordRef}
             applyFlagRef={applyFlagRef}
+            applyGrammarFixRef={applyGrammarFixRef}
+            jumpToGrammarMatchRef={jumpToGrammarMatchRef}
           />
           <StatusBar sceneWordCount={wordCount} />
         </div>
@@ -625,6 +629,8 @@ export default function ScenePage() {
             text={content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()}
             language={project?.book_meta?.language ?? "auto"}
             onClose={() => setGrammarPanelOpen(false)}
+            onJumpTo={(matched) => jumpToGrammarMatchRef.current?.(matched)}
+            onApplySuggestion={(matched, replacement) => applyGrammarFixRef.current?.(matched, replacement)}
           />
         )}
 

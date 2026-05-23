@@ -308,6 +308,19 @@
   transition: opacity 0.15s ease;
 }
 
+/* ── Editor search highlights ──────────────────────────────────────────────── */
+
+.search-result {
+  background-color: hsl(48 96% 60% / 0.25);
+  border-radius: 2px;
+}
+
+.search-result-current {
+  background-color: hsl(48 96% 60% / 0.55);
+  outline: 1px solid hsl(48 96% 60% / 0.8);
+  border-radius: 2px;
+}
+
 /* ── Sensitivity / authenticity flags ──────────────────────────────────────── */
 
 .sensitivity-flag {
