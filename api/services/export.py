@@ -1,5 +1,7 @@
+import base64 as _b64
 import json
 import re
+from pathlib import Path
 from jinja2 import Environment
 from models import Project
 
@@ -9,7 +11,6 @@ _jinja = Environment(autoescape=False)
 # ── Book metadata helper ──────────────────────────────────────────────────────
 
 def _get_meta(project: Project) -> dict:
-    """Return parsed book_meta dict, or empty dict if not set."""
     if not project.book_meta:
         return {}
     try:
@@ -40,26 +41,137 @@ def _escape_latex(text: str) -> str:
     return (text or "").translate(_LATEX_ESCAPES)
 
 
-# ── YAML string escaping (for frontmatter) ────────────────────────────────────
+# ── YAML string escaping ──────────────────────────────────────────────────────
 
 def _yaml_str(value: str) -> str:
-    """Wrap a string in YAML double-quotes, escaping backslash and quote."""
     escaped = (value or "").replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
 
 
+# ── Scene-image node extraction ───────────────────────────────────────────────
+# TipTap renders custom image nodes as:
+#   <div data-type="scene-image" data-src="uploads/…" data-caption="…"></div>
+# We replace them with placeholders so the rest of the pipeline can process
+# plain text / HTML, then substitute format-specific output at the end.
+
+_SCENE_IMG_RE = re.compile(
+    r'<div\b([^>]*\bdata-type="scene-image"[^>]*)>\s*(?:</div>)?\s*',
+    re.IGNORECASE | re.DOTALL,
+)
+_IMG_PH = "\x00IMG{}\x00"         # null-byte delimited so LaTeX escaping ignores it
+_IMG_PH_RE = re.compile(r"\x00IMG(\d+)\x00")
+
+
+def _img_attr(attrs: str, name: str) -> str:
+    m = re.search(rf'{re.escape(name)}="([^"]*)"', attrs)
+    return m.group(1) if m else ""
+
+
+def _extract_images(html: str) -> "tuple[str, list[tuple[str,str]]]":
+    """Replace scene-image divs with placeholders.
+    Returns (html_with_placeholders, [(src, caption), ...])."""
+    imgs: list[tuple[str, str]] = []
+
+    def _sub(m):
+        a = m.group(1)
+        imgs.append((_img_attr(a, "data-src"), _img_attr(a, "data-caption")))
+        return _IMG_PH.format(len(imgs) - 1)
+
+    return _SCENE_IMG_RE.sub(_sub, html), imgs
+
+
+def _img_md(src: str, cap: str) -> str:
+    if not src:
+        return ""
+    rel = "../" + src.replace("\\", "/")
+    return f"\n\n![{cap}]({rel})\n\n"
+
+
+def _img_latex(src: str, cap: str) -> str:
+    if not src:
+        return ""
+    rel = "../" + src.replace("\\", "/")
+    cap_line = f"\n\\caption{{{_escape_latex(cap)}}}" if cap else ""
+    return (
+        f"\n\\begin{{figure}}[htbp]\n\\centering\n"
+        f"\\includegraphics[width=0.85\\linewidth]{{{rel}}}{cap_line}\n"
+        f"\\end{{figure}}\n\n"
+    )
+
+
+def _img_html(src: str, cap: str) -> str:
+    if not src:
+        return ""
+    p = Path(src)
+    if not p.exists():
+        return ""
+    data = p.read_bytes()
+    ext = p.suffix.lower().lstrip(".")
+    mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png",
+            "webp": "webp", "gif": "gif"}.get(ext, "jpeg")
+    b64 = _b64.b64encode(data).decode()
+    fig = f"<figcaption>{cap}</figcaption>" if cap else ""
+    return f'<figure><img src="data:image/{mime};base64,{b64}" alt="{cap}"/>{fig}</figure>\n'
+
+
+# ── Style helpers (LaTeX) ─────────────────────────────────────────────────────
+
+_H_SIZE_TO_LATEX: dict[str, str] = {
+    "2em":    r"\LARGE",
+    "1.75em": r"\Large",
+    "1.5em":  r"\large",
+    "1.4em":  r"\large",
+    "1.25em": r"\normalsize",
+    "1.15em": r"\normalsize",
+    "1.1em":  r"\normalsize",
+    "1em":    r"\normalsize",
+}
+
+
+def _h_latex_size(v: str) -> str:
+    return _H_SIZE_TO_LATEX.get(v, r"\large")
+
+
+def _h_latex_align(v: str) -> str:
+    return r"\centering" if v == "center" else ""
+
+
+def _h3_latex_style(v: str) -> str:
+    return {"italic": r"\itshape", "bold": r"\bfseries", "normal": ""}.get(v, r"\itshape")
+
+
+def _apply_dropcap_latex(text: str) -> str:
+    """Wrap the first letter of text with \\lettrine{}{} for drop caps."""
+    m = re.match(r'^([A-Za-zÀ-ÖØ-öø-ÿ])([\w]*)(.*)$', text.lstrip(), re.DOTALL)
+    if m:
+        return (
+            f"\\lettrine[lines=3]{{{m.group(1)}}}{{{m.group(2)}}}"
+            f"{m.group(3)}"
+        )
+    return text
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _scene_ids_set(opts) -> set[int] | None:
+def _scene_ids_set(opts) -> "set[int] | None":
     return set(opts.scene_ids) if opts.scene_ids is not None else None
 
 
 def _line_spacing_latex(val: str) -> str:
-    return {"1": "\\singlespacing", "1.5": "\\onehalfspacing", "2": "\\doublespacing"}.get(val, "\\onehalfspacing")
+    return {
+        "1":   "\\singlespacing",
+        "1.5": "\\onehalfspacing",
+        "2":   "\\doublespacing",
+    }.get(val, "\\onehalfspacing")
 
 
 def _font_size_latex(val: str) -> str:
     return val if val in {"10pt", "11pt", "12pt"} else "12pt"
+
+
+def _gv(opts, name: str, default):
+    """getattr with default — keeps callers that don't pass new style fields working."""
+    return getattr(opts, name, default)
 
 
 # ── Markdown export ───────────────────────────────────────────────────────────
@@ -68,7 +180,6 @@ def export_markdown(project: Project, opts) -> str:
     meta = _get_meta(project)
     allowed = _scene_ids_set(opts)
 
-    # ── YAML frontmatter (Pandoc-compatible) ──────────────────────────────────
     fm_lines = ["---"]
     fm_lines.append(f"title: {_yaml_str(project.title)}")
     if meta.get("subtitle"):
@@ -115,12 +226,11 @@ def export_markdown(project: Project, opts) -> str:
     if project.description:
         lines += [project.description, ""]
 
-    # Compute heading levels dynamically
-    h = ["##", "###", "####"]   # act, chapter, scene depth
+    h = ["##", "###", "####"]
     if not opts.include_act_headings:
-        h = ["##", "###"]        # shift chapter and scene up
+        h = ["##", "###"]
     if not opts.include_chapter_headings:
-        h = h[:1] + [h[1]]      # scene uses chapter's slot
+        h = h[:1] + [h[1]]
 
     for act in sorted(project.acts, key=lambda a: a.order_index):
         act_written = False
@@ -129,10 +239,13 @@ def export_markdown(project: Project, opts) -> str:
             for scene in sorted(chapter.scenes, key=lambda s: s.order_index):
                 if allowed is not None and scene.id not in allowed:
                     continue
-                body = _strip_html(scene.content)
-                if not body:
+                _html, _imgs = _extract_images(scene.content or "")
+                body = _strip_html(_html)
+                body = _IMG_PH_RE.sub(
+                    lambda m: _img_md(*_imgs[int(m.group(1))]), body
+                )
+                if not body.strip():
                     continue
-                # Lazy-emit ancestor headings only when we have real content
                 if opts.include_act_headings and not act_written:
                     lines += [f"{h[0]} {act.title}", ""]
                     act_written = True
@@ -151,7 +264,6 @@ def export_markdown(project: Project, opts) -> str:
 
 
 # ── LaTeX export (LuaLaTeX + fontspec) ────────────────────────────────────────
-# Jinja2 template: LaTeX's single {braces} are literal text; variables use {{ var }}.
 
 _LATEX_TEMPLATE = """\
 % Generated by Foliantica — compile with: lualatex {{ filename }}
@@ -160,23 +272,29 @@ _LATEX_TEMPLATE = """\
 % ── Engine & fonts ────────────────────────────────────────────────────────────
 \\usepackage{fontspec}
 {{ font_cmd }}
+{{ heading_font_cmd }}
 \\usepackage{microtype}
 
 % ── Page layout ───────────────────────────────────────────────────────────────
-\\usepackage[{{ paper_size }},margin=1in]{geometry}
+\\usepackage[{{ paper_size }},margin={{ pdf_margin }}]{geometry}
 
 % ── Spacing & paragraphs ──────────────────────────────────────────────────────
 \\usepackage{setspace}
 {{ spacing_cmd }}
-\\usepackage{parskip}
-\\setlength{\\parskip}{0.6em}
+{{ para_indent_cmd }}
+
+% ── Graphics ──────────────────────────────────────────────────────────────────
+\\usepackage{graphicx}
+{% if drop_caps %}
+\\usepackage{lettrine}
+{% endif %}
 
 % ── Heading styles ────────────────────────────────────────────────────────────
 \\usepackage{titlesec}
-\\titleformat{\\chapter}[display]{\\normalfont\\Large\\bfseries\\centering}{}{0pt}{}[\\vspace{0.5em}\\titlerule]
+\\titleformat{\\chapter}[display]{\\normalfont{{ h1_size_cmd }}\\bfseries{{ h_align_cmd }}{{ h_font_ref }}}{}{0pt}{}[\\vspace{0.5em}\\titlerule]
 \\titlespacing*{\\chapter}{0pt}{-20pt}{30pt}
-\\titleformat{\\section}{\\normalfont\\large\\bfseries}{}{0pt}{}
-\\titleformat{\\subsection}{\\normalfont\\normalsize\\itshape}{}{0pt}{}
+\\titleformat{\\section}{\\normalfont{{ h2_size_cmd }}\\bfseries{{ h_align_cmd }}{{ h_font_ref }}}{}{0pt}{}
+\\titleformat{\\subsection}{\\normalfont{{ h3_size_cmd }}{{ h3_style_cmd }}{{ h_align_cmd }}{{ h_font_ref }}}{}{0pt}{}
 
 % ── Hyperlinks ────────────────────────────────────────────────────────────────
 \\usepackage[hidelinks]{hyperref}
@@ -190,6 +308,10 @@ _LATEX_TEMPLATE = """\
 {% if isbn %}\\newcommand{\\bookisbn}{ {{ isbn }} }{% endif %}
 {% if rights %}\\newcommand{\\bookrights}{ {{ rights }} }{% endif %}
 {% if series %}\\newcommand{\\bookseries}{ {{ series }}{% if series_index %}, \\#{{ series_index }}{% endif %} }{% endif %}
+{% endif %}
+
+{% if not page_numbers %}
+\\pagestyle{empty}
 {% endif %}
 
 \\begin{document}
@@ -216,31 +338,75 @@ def export_latex(project: Project, opts) -> str:
     meta = _get_meta(project)
     allowed = _scene_ids_set(opts)
 
+    # ── Font commands ──────────────────────────────────────────────────────────
     font_cmd = (
         f"\\setmainfont{{{opts.font}}}"
         if opts.font else
         "% \\setmainfont{EB Garamond}  % uncomment and set your font"
     )
 
-    # Title block: include subtitle as a secondary line if set
-    title_esc = _escape_latex(project.title)
+    h_font = _gv(opts, "heading_font", None)
+    if h_font and h_font != opts.font:
+        heading_font_cmd = f"\\newfontfamily\\headingfont{{{h_font}}}"
+        h_font_ref       = "\\headingfont"
+    else:
+        heading_font_cmd = ""
+        h_font_ref       = ""
+
+    # ── Heading style ──────────────────────────────────────────────────────────
+    h_align_cmd  = _h_latex_align(_gv(opts, "heading_align", "center"))
+    h1_size_cmd  = _h_latex_size(_gv(opts, "h1_size",  "2em"))
+    h2_size_cmd  = _h_latex_size(_gv(opts, "h2_size",  "1.5em"))
+    h3_size_cmd  = _h_latex_size(_gv(opts, "h3_size",  "1.25em"))
+    h3_style_cmd = _h3_latex_style(_gv(opts, "h3_style", "italic"))
+
+    # ── Paragraph style ────────────────────────────────────────────────────────
+    indent = _gv(opts, "paragraph_indent", "1.5em")
+    if indent == "0":
+        para_indent_cmd = (
+            "\\setlength{\\parindent}{0pt}\n"
+            "\\setlength{\\parskip}{0.8em}"
+        )
+    else:
+        para_indent_cmd = (
+            f"\\setlength{{\\parindent}}{{{indent}}}\n"
+            "\\setlength{\\parskip}{0pt}"
+        )
+
+    drop_caps   = _gv(opts, "drop_caps",   False)
+    page_numbers = _gv(opts, "page_numbers", True)
+    pdf_margin  = _gv(opts, "pdf_margin",  "2.5cm")
+
+    # ── Title block ────────────────────────────────────────────────────────────
+    title_esc    = _escape_latex(project.title)
     subtitle_esc = _escape_latex(meta.get("subtitle", ""))
-    title_block = (
+    title_block  = (
         f"{title_esc} \\\\ \\large {subtitle_esc}"
         if subtitle_esc else title_esc
     )
 
+    # ── Body ───────────────────────────────────────────────────────────────────
     body_parts: list[str] = []
 
     for act in sorted(project.acts, key=lambda a: a.order_index):
         act_written = False
         for chapter in sorted(act.chapters, key=lambda c: c.order_index):
-            chap_written = False
+            chap_written    = False
+            first_para_chap = True   # for drop caps — first ¶ after chapter heading
+
             for scene in sorted(chapter.scenes, key=lambda s: s.order_index):
                 if allowed is not None and scene.id not in allowed:
                     continue
-                content = _escape_latex(_strip_html(scene.content))
-                if not content:
+
+                _html, _imgs = _extract_images(scene.content or "")
+                plain = _strip_html(_html)
+                escaped = _escape_latex(plain)
+                # Restore image placeholders as LaTeX
+                content = _IMG_PH_RE.sub(
+                    lambda m: _img_latex(*_imgs[int(m.group(1))]),
+                    escaped,
+                )
+                if not content.strip():
                     continue
 
                 # Lazy act heading
@@ -249,7 +415,8 @@ def export_latex(project: Project, opts) -> str:
                         f"\\chapter*{{{_escape_latex(act.title)}}}\n"
                         f"\\addcontentsline{{toc}}{{chapter}}{{{_escape_latex(act.title)}}}\n"
                     )
-                    act_written = True
+                    act_written    = True
+                    first_para_chap = True
 
                 # Lazy chapter heading
                 if opts.include_chapter_headings and not chap_written:
@@ -260,7 +427,8 @@ def export_latex(project: Project, opts) -> str:
                             f"\\chapter*{{{_escape_latex(chapter.title)}}}\n"
                             f"\\addcontentsline{{toc}}{{chapter}}{{{_escape_latex(chapter.title)}}}\n"
                         )
-                    chap_written = True
+                    chap_written    = True
+                    first_para_chap = True
 
                 # Scene heading
                 if opts.include_scene_headings and scene.title:
@@ -273,43 +441,61 @@ def export_latex(project: Project, opts) -> str:
                             f"\\chapter*{{{_escape_latex(scene.title)}}}\n"
                             f"\\addcontentsline{{toc}}{{chapter}}{{{_escape_latex(scene.title)}}}\n"
                         )
+                    first_para_chap = True
 
                 paras = [p.strip() for p in content.split("\n\n") if p.strip()]
+
+                # Apply drop cap to first real paragraph of each chapter
+                if drop_caps and first_para_chap and paras:
+                    paras[0] = _apply_dropcap_latex(paras[0])
+                    first_para_chap = False
+
                 body_parts.append("\n\n".join(paras) + "\n\n")
 
     safe_title = project.title.replace(" ", "_")
-
-    # Description block: prefer synopsis from meta, fall back to project description
-    desc_text = meta.get("synopsis") or project.description or ""
+    desc_text  = meta.get("synopsis") or project.description or ""
     description_block = (
         _jinja.from_string(_DESCRIPTION_BLOCK).render(desc=_escape_latex(desc_text))
         if desc_text else ""
     )
 
     return _jinja.from_string(_LATEX_TEMPLATE).render(
-        filename=f"{safe_title}.tex",
-        font_size=_font_size_latex(opts.font_size),
-        font_cmd=font_cmd,
-        paper_size=opts.paper_size if opts.paper_size in ("a4paper", "letterpaper") else "a4paper",
-        spacing_cmd=_line_spacing_latex(opts.line_spacing),
-        title_block=title_block,
-        author=_escape_latex(meta.get("author", "")),
-        pub_date=_escape_latex(meta.get("published_date", "")),
-        publisher=_escape_latex(meta.get("publisher", "")),
-        isbn=_escape_latex(meta.get("isbn", "")),
-        rights=_escape_latex(meta.get("rights", "")),
-        series=_escape_latex(meta.get("series", "")),
-        series_index=_escape_latex(meta.get("series_index", "")),
-        description_block=description_block,
-        body="".join(body_parts),
+        filename          = f"{safe_title}.tex",
+        font_size         = _font_size_latex(opts.font_size),
+        font_cmd          = font_cmd,
+        heading_font_cmd  = heading_font_cmd,
+        h_font_ref        = h_font_ref,
+        h_align_cmd       = h_align_cmd,
+        h1_size_cmd       = h1_size_cmd,
+        h2_size_cmd       = h2_size_cmd,
+        h3_size_cmd       = h3_size_cmd,
+        h3_style_cmd      = h3_style_cmd,
+        paper_size        = opts.paper_size if opts.paper_size in ("a4paper", "letterpaper") else "a4paper",
+        pdf_margin        = pdf_margin,
+        spacing_cmd       = _line_spacing_latex(opts.line_spacing),
+        para_indent_cmd   = para_indent_cmd,
+        drop_caps         = drop_caps,
+        page_numbers      = page_numbers,
+        title_block       = title_block,
+        author            = _escape_latex(meta.get("author", "")),
+        pub_date          = _escape_latex(meta.get("published_date", "")),
+        publisher         = _escape_latex(meta.get("publisher", "")),
+        isbn              = _escape_latex(meta.get("isbn", "")),
+        rights            = _escape_latex(meta.get("rights", "")),
+        series            = _escape_latex(meta.get("series", "")),
+        series_index      = _escape_latex(meta.get("series_index", "")),
+        description_block = description_block,
+        body              = "".join(body_parts),
     )
 
 
 # ── HTML export (used by pandoc service for PDF / EPUB) ──────────────────────
 
 def export_html(project: Project, opts) -> str:
-    """Build a minimal but well-structured HTML document for pandoc."""
-    meta = _get_meta(project)
+    """Build a minimal but well-structured HTML document for pandoc.
+    Scene images are embedded as base64 data URIs so the self-contained HTML
+    works inside the Pandoc container without filesystem access."""
+    meta    = _get_meta(project)
     allowed = _scene_ids_set(opts)
 
     parts: list[str] = []
@@ -321,7 +507,11 @@ def export_html(project: Project, opts) -> str:
             for scene in sorted(chapter.scenes, key=lambda s: s.order_index):
                 if allowed is not None and scene.id not in allowed:
                     continue
-                content = (scene.content or "").strip()
+                _html, _imgs = _extract_images(scene.content or "")
+                content = _IMG_PH_RE.sub(
+                    lambda m: _img_html(*_imgs[int(m.group(1))]),
+                    _html,
+                ).strip()
                 if not content:
                     continue
 
@@ -335,14 +525,14 @@ def export_html(project: Project, opts) -> str:
                     parts.append(f"<h3>{scene.title}</h3>")
                 parts.append(content)
 
-    body = "\n".join(parts)
-    lang = meta.get("language", "en")
-    title = project.title or ""
-    author = meta.get("author", "")
+    body     = "\n".join(parts)
+    lang     = meta.get("language", "en")
+    title    = project.title or ""
+    author   = meta.get("author", "")
     subtitle = meta.get("subtitle", "")
 
     subtitle_tag = f'<p class="subtitle">{subtitle}</p>' if subtitle else ""
-    author_tag = f'<p class="author">{author}</p>' if author else ""
+    author_tag   = f'<p class="author">{author}</p>'   if author   else ""
 
     return f"""<!DOCTYPE html>
 <html lang="{lang}">
@@ -367,6 +557,8 @@ _EPUB_CSS_TEMPLATE = """\
 
 @namespace epub "http://www.idpf.org/2007/ops";
 
+{google_font_import}
+
 body {{
   font-family: {font_family};
   font-size: {font_size_css};
@@ -374,27 +566,27 @@ body {{
   color: {text_color};
   background-color: {bg_color};
   margin: {page_margin};
-  text-align: justify;
+  text-align: {text_align};
   hyphens: auto;
   -epub-hyphens: auto;
 }}
 
 h1, h2, h3, h4 {{
-  font-family: {font_family};
+  font-family: {heading_family};
   font-weight: bold;
-  text-align: center;
+  text-align: {heading_align};
   margin-top: 2em;
   margin-bottom: 1em;
   page-break-after: avoid;
 }}
-h1 {{ font-size: 2em; }}
-h2 {{ font-size: 1.5em; border-bottom: 1px solid currentColor; padding-bottom: 0.3em; }}
-h3 {{ font-size: 1.25em; }}
+h1 {{ font-size: {h1_size}; }}
+h2 {{ font-size: {h2_size}; border-bottom: 1px solid currentColor; padding-bottom: 0.3em; }}
+h3 {{ font-size: {h3_size}; {h3_style_css} }}
 h4 {{ font-size: 1em; font-style: italic; }}
 
 p {{
   margin: 0;
-  text-indent: 1.5em;
+  text-indent: {paragraph_indent};
 }}
 p:first-of-type, h1 + p, h2 + p, h3 + p, h4 + p {{ text-indent: 0; }}
 
@@ -421,46 +613,101 @@ blockquote {{
   padding-left: 1em;
   opacity: 0.85;
 }}
+
+figure {{
+  margin: 1.5em auto;
+  text-align: center;
+}}
+figure img {{
+  max-width: 100%;
+  height: auto;
+}}
+figcaption {{
+  font-size: 0.85em;
+  color: {text_color};
+  opacity: 0.7;
+  margin-top: 0.5em;
+}}
 """
 
-_FONT_SIZE_CSS = {"10pt": "0.9em", "11pt": "1em", "12pt": "1.1em"}
+_FONT_SIZE_CSS  = {"10pt": "0.9em", "11pt": "1em", "12pt": "1.1em"}
 _LINE_HEIGHT_CSS = {"1": "1.4", "1.5": "1.7", "2": "2.0"}
 
 
 def export_epub_style(project: Project, opts) -> str:
     meta = _get_meta(project)
+
+    # Body font
     font_family = f'"{opts.font}", Georgia, serif' if opts.font else "Georgia, serif"
 
-    # Build metadata comment block
-    meta_fields = []
-    if meta.get("author"):
-        meta_fields.append(f"   Author:    {meta['author']}")
-    if meta.get("subtitle"):
-        meta_fields.append(f"   Subtitle:  {meta['subtitle']}")
-    if meta.get("language"):
-        meta_fields.append(f"   Language:  {meta['language']}")
-    if meta.get("publisher"):
-        meta_fields.append(f"   Publisher: {meta['publisher']}")
-    if meta.get("published_date"):
-        meta_fields.append(f"   Date:      {meta['published_date']}")
-    if meta.get("isbn"):
-        meta_fields.append(f"   ISBN:      {meta['isbn']}")
-    if meta.get("rights"):
-        meta_fields.append(f"   Rights:    {meta['rights']}")
-    if meta.get("series"):
-        series_str = meta["series"]
-        if meta.get("series_index"):
-            series_str += f" #{meta['series_index']}"
-        meta_fields.append(f"   Series:    {series_str}")
+    # Heading font
+    h_font = _gv(opts, "heading_font", None)
+    if h_font:
+        heading_family = f'"{h_font}", {font_family}'
+    else:
+        heading_family = font_family
 
+    # Google Fonts @import (for EPUB readers with internet access)
+    gf_imports: list[str] = []
+    for gf in [opts.font, h_font]:
+        if gf and " " in gf or (gf and gf not in ("Georgia", "serif", "sans-serif")):
+            encoded = gf.replace(" ", "+")
+            gf_imports.append(
+                f"@import url('https://fonts.googleapis.com/css2?"
+                f"family={encoded}:ital,wght@0,400;0,700;1,400&display=swap');"
+            )
+    google_font_import = "\n".join(dict.fromkeys(gf_imports))  # deduplicate
+
+    # Style vars
+    heading_align = _gv(opts, "heading_align",      "center")
+    h1_size       = _gv(opts, "h1_size",            "2em")
+    h2_size       = _gv(opts, "h2_size",            "1.5em")
+    h3_size       = _gv(opts, "h3_size",            "1.25em")
+    h3_style      = _gv(opts, "h3_style",           "italic")
+    p_indent      = _gv(opts, "paragraph_indent",   "1.5em")
+    text_align    = _gv(opts, "text_align",         "justify")
+
+    h3_style_css = {
+        "italic": "font-style: italic;",
+        "bold":   "font-weight: bold;",
+        "normal": "",
+    }.get(h3_style, "font-style: italic;")
+
+    # Metadata comment block
+    meta_fields = []
+    for label, key in [
+        ("Author",    "author"),
+        ("Subtitle",  "subtitle"),
+        ("Language",  "language"),
+        ("Publisher", "publisher"),
+        ("Date",      "published_date"),
+        ("ISBN",      "isbn"),
+        ("Rights",    "rights"),
+    ]:
+        if meta.get(key):
+            meta_fields.append(f"   {label:<11}{meta[key]}")
+    if meta.get("series"):
+        s = meta["series"]
+        if meta.get("series_index"):
+            s += f" #{meta['series_index']}"
+        meta_fields.append(f"   Series     {s}")
     meta_comment = ("\n" + "\n".join(meta_fields) + "\n") if meta_fields else ""
 
     return _EPUB_CSS_TEMPLATE.format(
-        meta_comment=meta_comment,
-        font_family=font_family,
-        font_size_css=_FONT_SIZE_CSS.get(opts.font_size, "1em"),
-        line_height=_LINE_HEIGHT_CSS.get(opts.line_spacing, "1.7"),
-        text_color=opts.text_color,
-        bg_color=opts.bg_color,
-        page_margin=opts.page_margin,
+        meta_comment       = meta_comment,
+        google_font_import = google_font_import,
+        font_family        = font_family,
+        heading_family     = heading_family,
+        font_size_css      = _FONT_SIZE_CSS.get(opts.font_size, "1em"),
+        line_height        = _LINE_HEIGHT_CSS.get(opts.line_spacing, "1.7"),
+        text_color         = opts.text_color,
+        bg_color           = opts.bg_color,
+        page_margin        = opts.page_margin,
+        text_align         = text_align,
+        heading_align      = heading_align,
+        h1_size            = h1_size,
+        h2_size            = h2_size,
+        h3_size            = h3_size,
+        h3_style_css       = h3_style_css,
+        paragraph_indent   = p_indent if p_indent != "0" else "0",
     )
