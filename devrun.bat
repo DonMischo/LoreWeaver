@@ -86,6 +86,14 @@ for %%d in ("%NODE%") do set "NODEDIR=%%~dpd"
 echo %PATH% | findstr /i "%NODEDIR:~0,-1%" >nul 2>&1
 if errorlevel 1 set "PATH=%NODEDIR%;%PATH%"
 
+where npm >nul 2>&1
+if errorlevel 1 (
+    if exist "%NODEDIR%npm.cmd"       set "PATH=%NODEDIR%;%PATH%"
+    if exist "%APPDATA%\npm\npm.cmd"  set "PATH=%APPDATA%\npm;%PATH%"
+    where npm >nul 2>&1
+    if errorlevel 1 ( echo [ERROR] npm not found. Please reinstall Node.js. & pause & exit /b 1 )
+)
+
 for /f "delims=" %%v in ('"%NODE%" --version') do set "NODEVER=%%v"
 set "NODEVER_STRIP=%NODEVER:~1%"
 for /f "tokens=1 delims=." %%m in ("%NODEVER_STRIP%") do set "NODEMAJOR=%%m"

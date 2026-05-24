@@ -54,8 +54,8 @@ echo Using Node.js %NODEVER% at %NODE%
 :: ── Check npm is available ─────────────────────────────────────────────────
 where npm >nul 2>&1
 if errorlevel 1 (
-    :: npm.cmd is usually alongside node.exe
-    if exist "%NODEDIR%npm.cmd" set "PATH=%NODEDIR%;%PATH%"
+    if exist "%NODEDIR%npm.cmd"       set "PATH=%NODEDIR%;%PATH%"
+    if exist "%APPDATA%\npm\npm.cmd"  set "PATH=%APPDATA%\npm;%PATH%"
     where npm >nul 2>&1
     if errorlevel 1 (
         echo [ERROR] npm not found alongside node.exe at %NODEDIR%

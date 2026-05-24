@@ -60,8 +60,23 @@ pause & exit /b 1
 
 :node_found
 for %%d in ("%NODE%") do set "NODEDIR=%%~dpd"
+:: Always prepend node dir so both node.exe and npm.cmd are reachable
 echo %PATH% | findstr /i "%NODEDIR:~0,-1%" >nul 2>&1
 if errorlevel 1 set "PATH=%NODEDIR%;%PATH%"
+
+:: npm.cmd sometimes lives in a different directory (e.g. %APPDATA%\npm with nvm)
+where npm >nul 2>&1
+if errorlevel 1 (
+    if exist "%NODEDIR%npm.cmd"       set "PATH=%NODEDIR%;%PATH%"
+    if exist "%APPDATA%\npm\npm.cmd"  set "PATH=%APPDATA%\npm;%PATH%"
+    where npm >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] npm not found alongside node.exe at %NODEDIR%
+        echo         Please reinstall Node.js from https://nodejs.org
+        pause & exit /b 1
+    )
+)
+
 for /f "delims=" %%v in ('"%NODE%" --version') do set "NODEVER=%%v"
 echo Using Node.js %NODEVER% at %NODE%
 echo.
