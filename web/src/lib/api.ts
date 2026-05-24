@@ -556,6 +556,8 @@ export const grammarApi = {
     req<GrammarCheckResult>("/grammar/check", {
       method: "POST",
       body: JSON.stringify({ text, language }),
+      // LanguageTool can be slow on first use or long texts; give it 3 minutes.
+      signal: AbortSignal.timeout(180_000),
     }),
   languages: () =>
     req<{ name: string; code: string; longCode: string }[]>("/grammar/languages"),

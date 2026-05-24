@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { X, SpellCheck, ChevronDown, ChevronRight, Loader2, AlertCircle, Check, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGrammarCheck } from "@/store/queries";
@@ -123,21 +123,6 @@ function MatchCard({ match, onApplySuggestion, onJumpTo }: MatchCardProps) {
 
 export function GrammarPanel({ text, language = "auto", onClose, onApplySuggestion, onJumpTo }: Props) {
   const check = useGrammarCheck();
-  const [slowHint, setSlowHint] = useState(false);
-  const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Show a warm-up hint if LanguageTool takes more than 30 s (cold container start)
-  useEffect(() => {
-    if (check.isPending) {
-      slowTimer.current = setTimeout(() => setSlowHint(true), 30_000);
-    } else {
-      if (slowTimer.current) clearTimeout(slowTimer.current);
-      setSlowHint(false);
-    }
-    return () => {
-      if (slowTimer.current) clearTimeout(slowTimer.current);
-    };
-  }, [check.isPending]);
 
   const handleCheck = () => {
     check.mutate({ text, language });
@@ -171,11 +156,11 @@ export function GrammarPanel({ text, language = "auto", onClose, onApplySuggesti
           }
         </Button>
 
-        {check.isPending && slowHint && (
+        {check.isPending && (
           <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
             <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-600 dark:text-amber-400 leading-snug">
-              Still waiting… LanguageTool may need a moment to fully start up after the container was just launched.
+              Please be patient — LanguageTool is analysing your text. This may take up to a minute for longer scenes.
             </p>
           </div>
         )}
