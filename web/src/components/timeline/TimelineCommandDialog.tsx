@@ -48,6 +48,7 @@ export function TimelineCommandDialog({ open, onClose, projectId, sceneTitle, ti
   const { data: tracks = [] } = useTimelineTracks(projectId);
   const qc = useQueryClient();
 
+  const [eventTitle, setEventTitle] = useState(sceneTitle ?? "");
   const [selectedTrackId, setSelectedTrackId] = useState<number | "new">("new");
   const [newTrackName, setNewTrackName] = useState("");
   const [timeVals, setTimeVals] = useState<SceneTime>({});
@@ -60,6 +61,7 @@ export function TimelineCommandDialog({ open, onClose, projectId, sceneTitle, ti
 
   useEffect(() => {
     if (!open) return;
+    setEventTitle(sceneTitle ?? "");
     setSelectedTrackId(tracks.length > 0 ? tracks[0].id : "new");
     setNewTrackName("");
     setTimeVals({});
@@ -121,7 +123,7 @@ export function TimelineCommandDialog({ open, onClose, projectId, sceneTitle, ti
 
       await timelineEventsApi.create(projectId, {
         track_id:   trackId,
-        title:      sceneTitle || "Event",
+        title:      eventTitle.trim() || sceneTitle || "Event",
         scene_time: Object.keys(timeVals).length > 0 ? timeVals : null,
       });
 
@@ -141,6 +143,18 @@ export function TimelineCommandDialog({ open, onClose, projectId, sceneTitle, ti
           <DialogTitle>Add to Timeline</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-1">
+
+          {/* Event name */}
+          <div className="space-y-1">
+            <Label className="text-xs">Event name</Label>
+            <Input
+              value={eventTitle}
+              onChange={e => setEventTitle(e.target.value)}
+              placeholder="Event name…"
+              className="h-8 text-sm"
+              autoFocus
+            />
+          </div>
 
           {/* Track selector */}
           <div className="space-y-1">
