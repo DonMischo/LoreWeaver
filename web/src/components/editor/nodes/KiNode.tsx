@@ -33,15 +33,15 @@ function KiNodeView({ node, updateAttributes, deleteNode, getPos, editor }: any)
     ? settings.enabled_models
     : settings?.default_model ? [settings.default_model] : [];
 
-  // The effective model: use stored attr, else fall back to default
-  const effectiveModel = model || settings?.default_model || "";
-
   // Parse comma-separated stored IDs
   const codexIds: number[]      = codexIdsStr ? codexIdsStr.split(",").map(Number).filter(Boolean) : [];
   const extraSceneIds: number[] = sceneIdsStr  ? sceneIdsStr.split(",").map(Number).filter(Boolean) : [];
 
   const selectedPrompt = prompts.find(p => String(p.id) === promptId) ?? null;
   const isCodexDistill = selectedPrompt?.built_in_key === "codex_distill";
+
+  // The effective model: use stored attr, then distill-specific default, then global default
+  const effectiveModel = model || (isCodexDistill ? settings?.default_codex_model : null) || settings?.default_model || "";
 
   // Word count: node attribute overrides prompt default; fall back to prompt's value or 400
   const promptWordCount = selectedPrompt?.word_count ?? 400;

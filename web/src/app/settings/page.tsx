@@ -85,8 +85,10 @@ export default function SettingsPage() {
 
   const [apiKey, setApiKey]               = useState("");
   const [apiKeyDirty, setApiKeyDirty]     = useState(false);
-  const [defaultModel, setDefaultModel]         = useState("anthropic/claude-3.5-sonnet");
-  const [defaultChatModel, setDefaultChatModel] = useState<string>("");
+  const [defaultModel, setDefaultModel]                   = useState("anthropic/claude-3.5-sonnet");
+  const [defaultChatModel, setDefaultChatModel]           = useState<string>("");
+  const [defaultSynopsisModel, setDefaultSynopsisModel]   = useState<string>("");
+  const [defaultCodexModel, setDefaultCodexModel]         = useState<string>("");
   const [enabledModels, setEnabledModels]       = useState<string[]>([]);
   const [modelSearch, setModelSearch]     = useState("");
   const [saved, setSaved]                 = useState(false);
@@ -183,6 +185,8 @@ export default function SettingsPage() {
     if (settings) {
       setDefaultModel(settings.default_model);
       setDefaultChatModel(settings.default_chat_model ?? "");
+      setDefaultSynopsisModel(settings.default_synopsis_model ?? "");
+      setDefaultCodexModel(settings.default_codex_model ?? "");
       setEnabledModels(settings.enabled_models ?? []);
       setGrammarEnabled(settings.grammar_check_enabled ?? false);
       setGrammarUrl(settings.grammar_check_url ?? "http://localhost:8081");
@@ -202,6 +206,8 @@ export default function SettingsPage() {
     const payload: Parameters<typeof updateSettings.mutateAsync>[0] = {
       default_model: defaultModel,
       default_chat_model: defaultChatModel || null,
+      default_synopsis_model: defaultSynopsisModel || null,
+      default_codex_model: defaultCodexModel || null,
       enabled_models: enabledModels,
       theme,
       grammar_check_enabled: grammarEnabled,
@@ -345,6 +351,46 @@ export default function SettingsPage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">Used by the Scene Chat panel.</p>
+          </div>
+
+          {/* Default synopsis model */}
+          <div className="space-y-1.5">
+            <Label>Default Synopsis Model</Label>
+            <Select
+              value={defaultSynopsisModel || "__default__"}
+              onValueChange={(v) => setDefaultSynopsisModel(v === "__default__" ? "" : v)}
+            >
+              <SelectTrigger className="w-full max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__default__">Same as default model</SelectItem>
+                {defaultModelChoices.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Used when auto-generating scene synopses.</p>
+          </div>
+
+          {/* Default codex distillation model */}
+          <div className="space-y-1.5">
+            <Label>Default Codex Distillation Model</Label>
+            <Select
+              value={defaultCodexModel || "__default__"}
+              onValueChange={(v) => setDefaultCodexModel(v === "__default__" ? "" : v)}
+            >
+              <SelectTrigger className="w-full max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__default__">Same as default model</SelectItem>
+                {defaultModelChoices.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Used by /ki when distilling codex entries.</p>
           </div>
 
           {/* Available models (checkbox list for /ki command) */}

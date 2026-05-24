@@ -289,7 +289,7 @@ async def generate_synopsis(scene_id: int, db: Session = Depends(get_db)):
         raise HTTPException(400, "Scene has no content to summarize")
 
     api_key = decrypt(settings.openrouter_api_key)
-    model = settings.default_model
+    model = settings.default_synopsis_model or settings.default_model
     lang = _project_language(scene, db)
 
     async with httpx.AsyncClient(timeout=30) as client:

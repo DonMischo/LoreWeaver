@@ -91,6 +91,8 @@ def migrate_new_columns():
         ("codex_entries", "image_path",              "TEXT"),
         ("user_settings", "enabled_models",          "TEXT DEFAULT '[]'"),
         ("user_settings", "default_chat_model",      "TEXT"),
+        ("user_settings", "default_synopsis_model",   "TEXT"),
+        ("user_settings", "default_codex_model",      "TEXT"),
         ("fragments",     "category",                "TEXT"),
         ("scenes",        "synopsis",                "TEXT"),
         ("scenes",        "subplot",                 "TEXT"),

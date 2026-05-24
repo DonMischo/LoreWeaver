@@ -60,6 +60,8 @@ def _settings_out(s: UserSettings) -> SettingsOut:
         has_api_key=bool(s.openrouter_api_key),
         default_model=s.default_model,
         default_chat_model=s.default_chat_model or None,
+        default_synopsis_model=s.default_synopsis_model or None,
+        default_codex_model=s.default_codex_model or None,
         theme=s.theme or "dark",
         enabled_models=enabled,
         language=s.language or "en",
@@ -89,6 +91,10 @@ def update_settings(body: SettingsUpdate, db: Session = Depends(get_db)):
         s.default_model = body.default_model
     if body.default_chat_model is not None:
         s.default_chat_model = body.default_chat_model or None
+    if body.default_synopsis_model is not None:
+        s.default_synopsis_model = body.default_synopsis_model or None
+    if body.default_codex_model is not None:
+        s.default_codex_model = body.default_codex_model or None
     if body.theme is not None:
         s.theme = body.theme
     if body.enabled_models is not None:

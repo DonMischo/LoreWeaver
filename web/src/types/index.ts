@@ -216,6 +216,8 @@ export interface Settings {
   has_api_key: boolean;
   default_model: string;
   default_chat_model: string | null;
+  default_synopsis_model: string | null;
+  default_codex_model: string | null;
   theme: string;
   enabled_models: string[];
   language: string;

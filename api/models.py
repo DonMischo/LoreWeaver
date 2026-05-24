@@ -240,6 +240,8 @@ class UserSettings(Base):
         String(100), default="anthropic/claude-3.5-sonnet"
     )
     default_chat_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    default_synopsis_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    default_codex_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     theme: Mapped[str] = mapped_column(String(20), default="dark")
     enabled_models: Mapped[str] = mapped_column(Text, default="[]")  # JSON list of model IDs
     language: Mapped[str] = mapped_column(String(10), default="en")
