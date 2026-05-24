@@ -29,7 +29,7 @@ const TYPE_ICONS: Record<EntryType, React.ElementType> = {
 
 // ── Sort types ────────────────────────────────────────────────────────────────
 
-type SortKey = "name" | "color" | "group" | "type";
+type SortKey = "name" | "color" | "group" | "type" | "tag";
 type SortDir = "asc" | "desc";
 
 // ── SortTh — sortable <th> for the list table ─────────────────────────────────
@@ -263,6 +263,7 @@ export default function CodexPage() {
       case "color": cmp = a.color.localeCompare(b.color); break;
       case "group": cmp = (a.groups[0] ?? "").localeCompare(b.groups[0] ?? ""); break;
       case "type":  cmp = a.entry_type.localeCompare(b.entry_type); break;
+      case "tag":   cmp = (a.tags[0] ?? "").localeCompare(b.tags[0] ?? ""); break;
       default:      cmp = a.name.localeCompare(b.name);
     }
     if (cmp === 0) cmp = a.name.localeCompare(b.name); // stable secondary
@@ -509,7 +510,7 @@ export default function CodexPage() {
           {/* Grid sort bar */}
           <div className="flex items-center gap-1 mb-3 flex-wrap">
             <span className="text-xs text-muted-foreground mr-1">{t("codex_sort")}</span>
-            {(["name","type","group","color"] as SortKey[]).map(col => (
+            {(["name","type","group","color","tag"] as SortKey[]).map(col => (
               <button
                 key={col}
                 onClick={() => handleSort(col)}
@@ -520,7 +521,7 @@ export default function CodexPage() {
                     : "bg-secondary text-muted-foreground hover:text-foreground"
                 )}
               >
-                {col === "name" ? t("codex_col_name") : col === "type" ? t("codex_col_type") : col === "group" ? t("codex_group") : t("codex_color")}
+                {col === "name" ? t("codex_col_name") : col === "type" ? t("codex_col_type") : col === "group" ? t("codex_group") : col === "tag" ? t("codex_tags") : t("codex_color")}
                 {sortBy === col
                   ? sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                   : <ChevronsUpDown className="h-3 w-3 opacity-30" />
@@ -633,7 +634,7 @@ export default function CodexPage() {
                   {/* Group col */}
                   <SortTh col="group" label={t("codex_group")} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-32" />
                   {/* Tags col */}
-                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-48">{t("codex_tags")}</th>
+                  <SortTh col="tag" label={t("codex_tags")} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-48" />
                   {/* Description col */}
                   <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("codex_col_description")}</th>
                   {/* Actions col */}
