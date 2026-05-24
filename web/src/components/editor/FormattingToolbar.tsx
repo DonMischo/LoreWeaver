@@ -2,7 +2,12 @@
 
 import { BubbleMenu } from "./BubbleMenuReact";
 import type { Editor } from "@tiptap/react";
-import { Bold, Italic, Strikethrough, Heading1, Heading2, Heading3, List, ListOrdered, Quote } from "lucide-react";
+import {
+  Bold, Italic, Underline, Strikethrough,
+  Heading1, Heading2, Heading3,
+  List, ListOrdered, Quote,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ── Toolbar button ─────────────────────────────────────────────────────────────
@@ -71,6 +76,13 @@ export function FormattingToolbar({ editor }: Props) {
         <Italic className="h-3.5 w-3.5" />
       </Btn>
       <Btn
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        active={editor.isActive("underline")}
+        title="Underline (Ctrl+U)"
+      >
+        <Underline className="h-3.5 w-3.5" />
+      </Btn>
+      <Btn
         onClick={() => editor.chain().focus().toggleStrike().run()}
         active={editor.isActive("strike")}
         title="Strikethrough"
@@ -126,6 +138,38 @@ export function FormattingToolbar({ editor }: Props) {
         title="Blockquote"
       >
         <Quote className="h-3.5 w-3.5" />
+      </Btn>
+
+      <Divider />
+
+      {/* Text alignment */}
+      <Btn
+        onClick={() => editor.chain().focus().setTextAlign("left").run()}
+        active={editor.isActive({ textAlign: "left" })}
+        title="Align left"
+      >
+        <AlignLeft className="h-3.5 w-3.5" />
+      </Btn>
+      <Btn
+        onClick={() => editor.chain().focus().setTextAlign("center").run()}
+        active={editor.isActive({ textAlign: "center" })}
+        title="Align center"
+      >
+        <AlignCenter className="h-3.5 w-3.5" />
+      </Btn>
+      <Btn
+        onClick={() => editor.chain().focus().setTextAlign("right").run()}
+        active={editor.isActive({ textAlign: "right" })}
+        title="Align right"
+      >
+        <AlignRight className="h-3.5 w-3.5" />
+      </Btn>
+      <Btn
+        onClick={() => editor.chain().focus().setTextAlign("justify").run()}
+        active={editor.isActive({ textAlign: "justify" })}
+        title="Justify"
+      >
+        <AlignJustify className="h-3.5 w-3.5" />
       </Btn>
     </BubbleMenu>
   );

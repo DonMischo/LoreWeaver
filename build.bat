@@ -140,7 +140,7 @@ echo [2/5] Building Next.js (standalone)...
 cd /d "%ROOT%\web"
 if exist "node_modules" rd /s /q "node_modules"
 call npm install
-if errorlevel 1 ( echo [ERROR] npm install (web) failed & pause & exit /b 1 )
+if errorlevel 1 ( echo [ERROR] web npm install failed & pause & exit /b 1 )
 call npm run build
 if errorlevel 1 ( echo [ERROR] Next.js build failed & pause & exit /b 1 )
 

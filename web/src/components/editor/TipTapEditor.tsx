@@ -4,6 +4,15 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import { Typography } from "@tiptap/extension-typography";
+import { Underline } from "@tiptap/extension-underline";
+import { TextAlign } from "@tiptap/extension-text-align";
+import { TaskList } from "@tiptap/extension-task-list";
+import { TaskItem } from "@tiptap/extension-task-item";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableCell } from "@tiptap/extension-table-cell";
+import { TableHeader } from "@tiptap/extension-table-header";
 import { Extension } from "@tiptap/core";
 import Suggestion, { exitSuggestion } from "@tiptap/suggestion";
 import type { EditorView } from "@tiptap/pm/view";
@@ -166,6 +175,9 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
                 .insertContent('<span data-ghost="" class="ghost-text">[placeholder]</span>')
                 .unsetMark("ghostText")
                 .run();
+            } else if (props.id === "table") {
+              editor.chain().focus().deleteRange(range)
+                .insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
             } else if (props.content) {
               editor.chain().focus().deleteRange(range).insertContent(props.content()).run();
             }
@@ -180,6 +192,15 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
     extensions: [
       StarterKit,
       Placeholder.configure({ placeholder: "Start writing your scene… (type / to insert a command)" }),
+      Typography,
+      Underline,
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableCell,
+      TableHeader,
       CodexHighlight,
       TagDecorationExtension,
       NoteNode,

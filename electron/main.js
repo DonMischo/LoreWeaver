@@ -147,6 +147,47 @@ function createMain(webPort) {
     mainWin.focus();
   });
 
+  // ── Context menu (right-click) with spell suggestions ─────────────────────
+  mainWin.webContents.on("context-menu", (_event, params) => {
+    const items = [];
+
+    if (params.misspelledWord) {
+      if (params.dictionarySuggestions.length > 0) {
+        for (const suggestion of params.dictionarySuggestions) {
+          items.push({
+            label: suggestion,
+            click: () => mainWin.webContents.replaceMisspelling(suggestion),
+          });
+        }
+      } else {
+        items.push({ label: "No suggestions", enabled: false });
+      }
+      items.push({ type: "separator" });
+      items.push({
+        label: "Add to dictionary",
+        click: () =>
+          mainWin.webContents.session.addWordToSpellCheckerDictionary(
+            params.misspelledWord
+          ),
+      });
+      items.push({ type: "separator" });
+    }
+
+    // Standard editing actions — always present
+    items.push(
+      { role: "undo",      accelerator: "CmdOrCtrl+Z" },
+      { role: "redo",      accelerator: "CmdOrCtrl+Y" },
+      { type: "separator" },
+      { role: "cut",       accelerator: "CmdOrCtrl+X" },
+      { role: "copy",      accelerator: "CmdOrCtrl+C" },
+      { role: "paste",     accelerator: "CmdOrCtrl+V" },
+      { type: "separator" },
+      { role: "selectAll", accelerator: "CmdOrCtrl+A" },
+    );
+
+    Menu.buildFromTemplate(items).popup({ window: mainWin });
+  });
+
   // Persist window state before the window closes or hides.
   const persistBounds = () => {
     if (!mainWin || mainWin.isMinimized()) return;

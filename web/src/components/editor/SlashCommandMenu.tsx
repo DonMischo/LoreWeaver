@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
-import { StickyNote, Coins, Package, ImageIcon, Sparkles, MessageSquare, Braces, GitBranch } from "lucide-react";
+import { StickyNote, Coins, Package, ImageIcon, Sparkles, MessageSquare, Braces, GitBranch, Table2, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface CommandItem {
@@ -85,6 +85,27 @@ export const COMMANDS: CommandItem[] = [
     icon: GitBranch,
     color: "#10b981",
     keywords: ["timeline", "time", "track", "event", "when", "date"],
+    content: null,
+  },
+  {
+    id: "tasklist",
+    label: "Checklist",
+    description: "Insert a task / to-do checklist",
+    icon: ListChecks,
+    color: "#22c55e",
+    keywords: ["task", "checklist", "todo", "check", "list"],
+    content: () => ({
+      type: "taskList",
+      content: [{ type: "taskItem", attrs: { checked: false }, content: [{ type: "paragraph" }] }],
+    }),
+  },
+  {
+    id: "table",
+    label: "Table",
+    description: "Insert a 3×3 table — great for codex entries and snippets",
+    icon: Table2,
+    color: "#64748b",
+    keywords: ["table", "grid", "row", "column", "cell", "codex", "matrix"],
     content: null,
   },
 ];

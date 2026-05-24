@@ -20,6 +20,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ScenePlanPopover } from "./ScenePlanPopover";
 import { useQueryClient } from "@tanstack/react-query";
 import { scenesApi } from "@/lib/api";
 import {
@@ -94,6 +95,7 @@ function SceneItem({
           <Clock className="h-2.5 w-2.5 shrink-0 text-primary/60" aria-label="Has scene time" />
         )}
       </Link>
+      <ScenePlanPopover sceneId={scene.id} sceneTitle={scene.title || ""} />
       <button
         className="opacity-0 group-hover:opacity-60 hover:opacity-100 hover:text-destructive"
         onClick={(e) => {
