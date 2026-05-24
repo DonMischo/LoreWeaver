@@ -242,7 +242,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit,
+      StarterKit.configure({ underline: false }), // Underline added standalone below; exclude from StarterKit to avoid duplicate
       Placeholder.configure({ placeholder: "Start writing your scene… (type / to insert a command)" }),
       Typography,
       Underline,

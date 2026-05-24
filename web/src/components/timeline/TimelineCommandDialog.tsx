@@ -138,7 +138,7 @@ export function TimelineCommandDialog({ open, onClose, projectId, sceneTitle, ti
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Add to Timeline</DialogTitle>
         </DialogHeader>

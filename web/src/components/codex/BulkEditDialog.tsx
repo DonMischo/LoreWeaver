@@ -151,7 +151,7 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>
             {t("bulk_apply_to")} {selectedEntries.length} {selectedEntries.length === 1 ? t("codex_entry") : t("codex_entries")}

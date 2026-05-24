@@ -601,7 +601,7 @@ function TrackDialog({ open, initial, units, onClose, onSave }: TrackDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{initial?.id ? "Edit Track" : "New Track"}</DialogTitle>
         </DialogHeader>
@@ -716,7 +716,7 @@ function EventDialog({ open, initial, tracks, units, defaultTrackId, onClose, on
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{initial?.id ? "Edit Event" : "New Event"}</DialogTitle>
         </DialogHeader>
