@@ -108,8 +108,8 @@ export default function ScenePage() {
   const [grammarPanelOpen, setGrammarPanelOpen]   = useState(false);
   const replaceWordRef         = useRef<((word: string) => void) | null>(null);
   const applyFlagRef           = useRef<((type: string) => void) | null>(null);
-  const applyGrammarFixRef     = useRef<((matched: string, replacement: string) => void) | null>(null);
-  const jumpToGrammarMatchRef  = useRef<((matched: string) => void) | null>(null);
+  const applyGrammarFixRef     = useRef<((matched: string, replacement: string, offset: number) => void) | null>(null);
+  const jumpToGrammarMatchRef  = useRef<((matched: string, offset: number) => void) | null>(null);
 
   // Count ghost-text placeholders in current content
   const ghostTexts = useMemo(() => {
@@ -629,8 +629,8 @@ export default function ScenePage() {
             text={content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()}
             language={project?.book_meta?.language ?? "auto"}
             onClose={() => setGrammarPanelOpen(false)}
-            onJumpTo={(matched) => jumpToGrammarMatchRef.current?.(matched)}
-            onApplySuggestion={(matched, replacement) => applyGrammarFixRef.current?.(matched, replacement)}
+            onJumpTo={(matched, offset) => jumpToGrammarMatchRef.current?.(matched, offset)}
+            onApplySuggestion={(matched, replacement, offset) => applyGrammarFixRef.current?.(matched, replacement, offset)}
           />
         )}
 

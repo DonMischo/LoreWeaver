@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent, type Editor as TiptapEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Typography } from "@tiptap/extension-typography";
@@ -47,14 +47,66 @@ interface Props {
   onFlagsChange?: (flags: FlagItem[]) => void;
   replaceWordRef?: React.MutableRefObject<((word: string) => void) | null>;
   applyFlagRef?: React.MutableRefObject<((type: string) => void) | null>;
-  applyGrammarFixRef?: React.MutableRefObject<((matched: string, replacement: string) => void) | null>;
-  jumpToGrammarMatchRef?: React.MutableRefObject<((matched: string) => void) | null>;
+  applyGrammarFixRef?: React.MutableRefObject<((matched: string, replacement: string, plainOffset: number) => void) | null>;
+  jumpToGrammarMatchRef?: React.MutableRefObject<((matched: string, plainOffset: number) => void) | null>;
 }
 
 interface SlashState {
   items: CommandItem[];
   rect: DOMRect | null;
   command: (item: CommandItem) => void;
+}
+
+// ── Grammar: find Nth occurrence helper ───────────────────────────────────────
+// LanguageTool gives us `plainOffset` — a char position in the same
+// normalised plain text the scene page sent to the API.  We rebuild that same
+// string from the editor HTML, count how many occurrences of `matched` appear
+// before `plainOffset` (= which occurrence index this is), then walk the
+// ProseMirror document to land on exactly that occurrence.
+function grammarFindInDoc(
+  editor: TiptapEditor,
+  matched: string,
+  plainOffset: number,
+): { from: number; to: number } | null {
+  if (!matched) return null;
+
+  // Rebuild the same plain text sent to LanguageTool
+  const plainText = editor.getHTML()
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Count occurrences of `matched` strictly before plainOffset → occurrence index
+  let skipCount = 0;
+  let pos = 0;
+  const step = Math.max(matched.length, 1);
+  while (pos < plainOffset) {
+    const idx = plainText.indexOf(matched, pos);
+    if (idx === -1 || idx >= plainOffset) break;
+    skipCount++;
+    pos = idx + step;
+  }
+
+  // Walk the ProseMirror doc and find the (skipCount+1)th text occurrence
+  let seen = 0;
+  let result: { from: number; to: number } | null = null;
+  editor.state.doc.descendants((node, pmPos) => {
+    if (result) return false;
+    if (!node.isText || !node.text) return;
+    let localPos = 0;
+    while (localPos <= node.text.length - matched.length) {
+      const idx = node.text.indexOf(matched, localPos);
+      if (idx === -1) break;
+      if (seen === skipCount) {
+        result = { from: pmPos + idx, to: pmPos + idx + matched.length };
+        return false;
+      }
+      seen++;
+      localPos = idx + step;
+    }
+  });
+
+  return result;
 }
 
 // ── Typewriter scroll helper ───────────────────────────────────────────────────
@@ -337,19 +389,11 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
   // Grammar: jump to matched text (select it so user sees where it is)
   useEffect(() => {
     if (!jumpToGrammarMatchRef) return;
-    jumpToGrammarMatchRef.current = (matched: string) => {
+    jumpToGrammarMatchRef.current = (matched: string, plainOffset: number) => {
       if (!editor) return;
-      const { doc } = editor.state;
-      let from = -1, to = -1;
-      doc.descendants((node, pos) => {
-        if (from !== -1) return false;
-        if (node.isText && node.text) {
-          const idx = node.text.indexOf(matched);
-          if (idx !== -1) { from = pos + idx; to = from + matched.length; return false; }
-        }
-      });
-      if (from === -1) return;
-      editor.chain().focus().setTextSelection({ from, to }).run();
+      const range = grammarFindInDoc(editor, matched, plainOffset);
+      if (!range) return;
+      editor.chain().focus().setTextSelection(range).run();
       editor.view.dispatch(editor.state.tr.scrollIntoView());
     };
   }, [editor, jumpToGrammarMatchRef]);
@@ -357,19 +401,11 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
   // Grammar: find matched text and replace with suggestion
   useEffect(() => {
     if (!applyGrammarFixRef) return;
-    applyGrammarFixRef.current = (matched: string, replacement: string) => {
+    applyGrammarFixRef.current = (matched: string, replacement: string, plainOffset: number) => {
       if (!editor) return;
-      const { doc } = editor.state;
-      let from = -1, to = -1;
-      doc.descendants((node, pos) => {
-        if (from !== -1) return false;
-        if (node.isText && node.text) {
-          const idx = node.text.indexOf(matched);
-          if (idx !== -1) { from = pos + idx; to = from + matched.length; return false; }
-        }
-      });
-      if (from === -1) return;
-      editor.chain().focus().setTextSelection({ from, to }).insertContent(replacement).run();
+      const range = grammarFindInDoc(editor, matched, plainOffset);
+      if (!range) return;
+      editor.chain().focus().setTextSelection(range).insertContent(replacement).run();
     };
   }, [editor, applyGrammarFixRef]);
 

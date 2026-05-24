@@ -13,9 +13,9 @@ interface Props {
   language?: string;
   onClose: () => void;
   /** Called when user clicks a suggestion chip — replaces matched text in editor */
-  onApplySuggestion?: (matched: string, replacement: string) => void;
+  onApplySuggestion?: (matched: string, replacement: string, offset: number) => void;
   /** Called when match card is opened — scrolls to and selects the text in editor */
-  onJumpTo?: (matched: string) => void;
+  onJumpTo?: (matched: string, offset: number) => void;
 }
 
 const ISSUE_COLOR: Record<string, string> = {
@@ -32,8 +32,8 @@ function issueColor(type: string) {
 
 interface MatchCardProps {
   match: GrammarMatch;
-  onApplySuggestion?: (matched: string, replacement: string) => void;
-  onJumpTo?: (matched: string) => void;
+  onApplySuggestion?: (matched: string, replacement: string, offset: number) => void;
+  onJumpTo?: (matched: string, offset: number) => void;
 }
 
 function MatchCard({ match, onApplySuggestion, onJumpTo }: MatchCardProps) {
@@ -49,12 +49,12 @@ function MatchCard({ match, onApplySuggestion, onJumpTo }: MatchCardProps) {
     const next = !open;
     setOpen(next);
     // Jump to the text in the editor when expanding
-    if (next) onJumpTo?.(matched);
+    if (next) onJumpTo?.(matched, match.offset);
   };
 
   const handleApply = (value: string) => {
     if (onApplySuggestion) {
-      onApplySuggestion(matched, value);
+      onApplySuggestion(matched, value, match.offset);
       setApplied(value);
     } else {
       navigator.clipboard.writeText(value);
