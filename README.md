@@ -17,7 +17,7 @@ Available as a **standalone desktop app** (Windows, macOS, Linux) or run directl
 
 Download the latest installer from [Releases](../../releases) and run it. Foliantica starts as a self-contained app — no Node.js or Python required.
 
-**Cloud sync:** point Foliantica at a folder inside your Dropbox, Google Drive, or OneDrive and it syncs automatically across devices. *(Settings → Data folder)*
+**Cloud sync:** Go to **Settings → Data Folder**, point Foliantica at a folder inside your Dropbox, Google Drive, or OneDrive, and it syncs automatically across devices. Foliantica can migrate your existing data to the new location in one click.
 
 ---
 
