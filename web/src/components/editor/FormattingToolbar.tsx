@@ -2,6 +2,7 @@
 
 import { BubbleMenu } from "./BubbleMenuReact";
 import type { Editor } from "@tiptap/react";
+import { isTextSelection } from "@tiptap/core";
 import {
   Bold, Italic, Underline, Strikethrough,
   Heading1, Heading2, Heading3,
@@ -52,10 +53,12 @@ export function FormattingToolbar({ editor }: Props) {
   return (
     <BubbleMenu
       editor={editor}
-      // Only show for text selections, not node selections (images, custom nodes, etc.)
+      // Only show for genuine non-empty text selections.
+      // isTextSelection filters out AllSelection (set by setContent on scene load)
+      // and NodeSelection (custom nodes, images, etc.).
       shouldShow={({ editor, state }) => {
         const { selection } = state;
-        return !selection.empty && editor.isEditable;
+        return editor.isEditable && isTextSelection(selection) && !selection.empty;
       }}
       options={{ placement: "top" }}
       className="flex items-center gap-0.5 rounded-lg border border-border bg-card shadow-xl px-1.5 py-1"
