@@ -534,11 +534,38 @@ def export_html(project: Project, opts) -> str:
     subtitle_tag = f'<p class="subtitle">{subtitle}</p>' if subtitle else ""
     author_tag   = f'<p class="author">{author}</p>'   if author   else ""
 
+    # Embed Google Fonts import + basic font-family rule so PDF/EPUB renderers
+    # (wkhtmltopdf, WeasyPrint, headless Chrome) can actually fetch and apply the
+    # font.  Use the plain family= URL — no axis specification — so display fonts
+    # that lack italic/bold variants are served correctly.
+    _SYSTEM_FONTS = {"Georgia", "Times New Roman", "Arial", "Helvetica", "Verdana",
+                     "Courier New", "serif", "sans-serif", "monospace"}
+    font_name    = getattr(opts, "font", None) or None
+    heading_font = getattr(opts, "heading_font", None) or None
+    gf_imports: list[str] = []
+    for gf in filter(None, [font_name, heading_font]):
+        if gf not in _SYSTEM_FONTS:
+            encoded = gf.replace(" ", "+")
+            gf_imports.append(
+                f"@import url('https://fonts.googleapis.com/css2?family={encoded}&display=swap');"
+            )
+    font_style_block = ""
+    if font_name or gf_imports:
+        imports_css = "\n".join(dict.fromkeys(gf_imports))
+        body_family = f'"{font_name}", serif' if font_name else "serif"
+        h_family    = f'"{heading_font}", {body_family}' if heading_font else body_family
+        font_style_block = f"""
+<style>
+{imports_css}
+body {{ font-family: {body_family}; }}
+h1, h2, h3, h4, h5, h6 {{ font-family: {h_family}; }}
+</style>"""
+
     return f"""<!DOCTYPE html>
 <html lang="{lang}">
 <head>
 <meta charset="utf-8">
-<title>{title}</title>
+<title>{title}</title>{font_style_block}
 </head>
 <body>
 <h1 class="title">{title}</h1>
@@ -647,14 +674,18 @@ def export_epub_style(project: Project, opts) -> str:
     else:
         heading_family = font_family
 
-    # Google Fonts @import (for EPUB readers with internet access)
+    # Google Fonts @import (for EPUB readers with internet access).
+    # Use the plain family= form — no axis specification — so decorative/display
+    # fonts that lack italic or bold variants (e.g. Pirata One) are served correctly.
+    _SYSTEM_FONTS = {"Georgia", "Times New Roman", "Arial", "Helvetica", "Verdana",
+                     "Courier New", "serif", "sans-serif", "monospace"}
     gf_imports: list[str] = []
-    for gf in [opts.font, h_font]:
-        if gf and " " in gf or (gf and gf not in ("Georgia", "serif", "sans-serif")):
+    for gf in filter(None, [opts.font, h_font]):
+        if gf not in _SYSTEM_FONTS:
             encoded = gf.replace(" ", "+")
             gf_imports.append(
                 f"@import url('https://fonts.googleapis.com/css2?"
-                f"family={encoded}:ital,wght@0,400;0,700;1,400&display=swap');"
+                f"family={encoded}&display=swap');"
             )
     google_font_import = "\n".join(dict.fromkeys(gf_imports))  # deduplicate
 
