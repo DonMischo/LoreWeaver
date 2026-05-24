@@ -1,7 +1,9 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-:: ── Locate Node.js (mirrors devrun.bat logic) ────────────────────────────────
+:: ══════════════════════════════════════════════════════════════════════════════
+:: Locate (and install) Node.js — mirrors devrun.bat :frontend logic
+:: ══════════════════════════════════════════════════════════════════════════════
 set "NODE="
 
 where node >nul 2>&1
@@ -22,7 +24,23 @@ for %%r in ("%APPDATA%\nvm" "%LOCALAPPDATA%\nvm") do (
     )
 )
 
-echo [ERROR] Node.js not found. Please install Node.js 18+ from https://nodejs.org
+:: Not found — try to install via winget
+echo Node.js not found. Attempting to install via winget...
+where winget >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] winget not available. Please install Node.js 18+ from https://nodejs.org
+    pause & exit /b 1
+)
+winget install --id OpenJS.NodeJS.LTS --silent --accept-source-agreements --accept-package-agreements
+if errorlevel 1 (
+    echo [ERROR] winget install failed. Please install Node.js 18+ from https://nodejs.org
+    pause & exit /b 1
+)
+:: Refresh PATH from the registry after install
+for /f "tokens=2*" %%a in ('reg query "HKCU\Environment" /v PATH 2^>nul') do set "PATH=%%b;%PATH%"
+for /f "tokens=2*" %%a in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v PATH 2^>nul') do set "PATH=%%b;%PATH%"
+for /f "delims=" %%n in ('where node 2^>nul') do (set "NODE=%%n" & goto :node_found)
+echo [ERROR] Node.js installed but still not found — please restart and try again.
 pause & exit /b 1
 
 :node_found
@@ -30,7 +48,25 @@ for %%d in ("%NODE%") do set "NODEDIR=%%~dpd"
 echo %PATH% | findstr /i "%NODEDIR:~0,-1%" >nul 2>&1
 if errorlevel 1 set "PATH=%NODEDIR%;%PATH%"
 
-:: ── Read current version from root package.json ───────────────────────────────
+for /f "delims=" %%v in ('"%NODE%" --version') do set "NODEVER=%%v"
+echo Using Node.js %NODEVER% at %NODE%
+
+:: ── Check npm is available ─────────────────────────────────────────────────
+where npm >nul 2>&1
+if errorlevel 1 (
+    :: npm.cmd is usually alongside node.exe
+    if exist "%NODEDIR%npm.cmd" set "PATH=%NODEDIR%;%PATH%"
+    where npm >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] npm not found alongside node.exe at %NODEDIR%
+        echo         Please reinstall Node.js from https://nodejs.org
+        pause & exit /b 1
+    )
+)
+
+:: ══════════════════════════════════════════════════════════════════════════════
+:: Read current version from root package.json
+:: ══════════════════════════════════════════════════════════════════════════════
 for /f "tokens=*" %%i in ('node -e "process.stdout.write(require('./package.json').version)"') do set CURRENT_VERSION=%%i
 
 for /f "tokens=1,2,3 delims=." %%a in ("%CURRENT_VERSION%") do (
@@ -107,11 +143,27 @@ node -e "const fs=require('fs'),p=JSON.parse(fs.readFileSync('package.json'));p.
 node -e "const fs=require('fs'),p=JSON.parse(fs.readFileSync('web/package.json'));p.version='%NEW_VERSION%';fs.writeFileSync('web/package.json',JSON.stringify(p,null,2)+'\n');"
 echo %NEW_VERSION%> VERSION
 
-:: ── Build frontend for validation ─────────────────────────────────────────────
+:: ── Install npm deps if needed, then build ────────────────────────────────────
 echo [2/4] Building frontend (release validation)...
 cd web
-call npm run build --silent
-if errorlevel 1 ( echo [ERROR] Build failed & exit /b 1 )
+
+if not exist node_modules (
+    echo   Installing npm dependencies ^(first run^)...
+    call npm install
+    if errorlevel 1 ( echo [ERROR] npm install failed & cd .. & exit /b 1 )
+) else (
+    :: Reinstall if package.json is newer than node_modules (deps changed)
+    for /f %%t in ('powershell -NoProfile -Command "(Get-Item package.json).LastWriteTime -gt (Get-Item node_modules).LastWriteTime"') do (
+        if /i "%%t"=="True" (
+            echo   package.json updated — running npm install...
+            call npm install
+            if errorlevel 1 ( echo [ERROR] npm install failed & cd .. & exit /b 1 )
+        )
+    )
+)
+
+call npm run build
+if errorlevel 1 ( echo [ERROR] Build failed & cd .. & exit /b 1 )
 cd ..
 
 :: ── Commit + tag ──────────────────────────────────────────────────────────────

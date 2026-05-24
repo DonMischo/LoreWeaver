@@ -97,7 +97,16 @@ if %NODEMAJOR% lss 18 (
 cd /d "%~dp0web"
 if not exist node_modules (
     echo Installing npm dependencies...
-    npm install
+    call npm install
+    if errorlevel 1 ( echo [ERROR] npm install failed. & pause & exit /b 1 )
+) else (
+    for /f %%t in ('powershell -NoProfile -Command "(Get-Item package.json).LastWriteTime -gt (Get-Item node_modules).LastWriteTime"') do (
+        if /i "%%t"=="True" (
+            echo Dependencies changed -- running npm install...
+            call npm install
+            if errorlevel 1 ( echo [ERROR] npm install failed. & pause & exit /b 1 )
+        )
+    )
 )
 
 echo Starting Next.js dev server on http://localhost:3000
