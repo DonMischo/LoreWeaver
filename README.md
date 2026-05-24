@@ -1,6 +1,13 @@
-# Foliantica Personal Novel Writer Studio
+# Foliantica — Personal Novel Writer Studio
 
-A local-first novel writing studio — write, world-build, and track your story's timeline and relationships, all running on your own machine. No subscriptions, no cloud required.
+> *Every story has its own logic, its own language, its own world.*
+> *Foliantica is the desk you build around it.*
+
+You open the app. Your manuscript is there, exactly where you left it. Your world bible is a sidebar click away. The AI knows your characters and speaks your language. The timeline remembers every hour of every day you mapped. Nothing is in someone else's cloud. Nothing runs on someone else's clock.
+
+**Foliantica is a local-first writing studio for novelists and world-builders** — a single app where manuscript, codex, timeline, and AI assistant live together, offline, on your own machine. Write your novel in long quiet sessions. Build lore entries between chapters. Ask the AI to draft a scene and then take it apart line by line. Come back tomorrow and nothing has moved.
+
+No subscriptions. No accounts. No telemetry. Your words stay yours.
 
 Available as a **standalone desktop app** (Windows, macOS, Linux) or run directly from source.
 
@@ -10,13 +17,13 @@ Available as a **standalone desktop app** (Windows, macOS, Linux) or run directl
 
 Download the latest installer from [Releases](../../releases) and run it. Foliantica starts as a self-contained app — no Node.js or Python required.
 
-**Cloud sync:** point Foliantica at a folder inside your Dropbox, Google Drive, or OneDrive and it syncs automatically across devices. *(Settings → Data folder — coming soon as a UI option; advanced users can set `dataDir` in `config.json` manually.)*
+**Cloud sync:** point Foliantica at a folder inside your Dropbox, Google Drive, or OneDrive and it syncs automatically across devices. *(Settings → Data folder)*
 
 ---
 
 ## Development / Run from Source
 
-Open two PowerShell terminals from the `foliantica/` directory:
+Open two terminals from the `foliantica/` directory:
 
 **Terminal 1 — Backend (Python/FastAPI):**
 ```powershell
@@ -49,128 +56,149 @@ Requires Node.js 20+, Python 3.11+, and [uv](https://github.com/astral-sh/uv). P
 
 | Layer | Tech |
 |-------|------|
-| Desktop | Electron 36, electron-builder |
+| Desktop | Electron 42, electron-builder |
 | Frontend | Next.js 14, TypeScript, Tailwind CSS, shadcn/ui |
-| Editor | TipTap with Codex highlight extension |
+| Editor | TipTap v3 — Typography, Underline, TextAlign, TaskList, Table + custom extensions |
 | State | Zustand + TanStack Query v5 |
 | Backend | FastAPI, SQLAlchemy 2.0, SQLite (WAL mode) |
 | AI | OpenRouter (any model, proxied via backend) |
-| Export | Markdown, LaTeX, EPUB-style HTML (Jinja2 templates) |
+| Export | Markdown, LaTeX, PDF (Pandoc), EPUB (Pandoc) |
 
 ---
 
 ## Features
 
 ### ✍️ Story Editor
-- 4-level hierarchy: **Project → Act → Chapter → Scene**
-- Drag-and-drop reordering at every level (acts, chapters, scenes)
-- Insert a scene between existing scenes using the **+** divider that appears on hover
-- Double-click an act or chapter title in the sidebar to rename it inline
+
+- **4-level hierarchy**: Project → Act → Chapter → Scene
+- Drag-and-drop reordering at every level; insert a scene between existing ones via the **+** divider on hover
+- Double-click any act or chapter title to rename inline
 - Scene titles auto-generated from content if left blank
 - Debounced **autosave** (1 s) + periodic interval save; localStorage fallback when the backend is unreachable
 - Word count in the status bar; per-scene counts persist to the database
-- **Export** to `.md` (Markdown), `.tex` (LaTeX), or EPUB-style HTML — LaTeX output uses `\chapter` / `\section` structure with proper special-character escaping
-- **Import** a Markdown story file (splits on `##` / `###` / `####` headings into acts / chapters / scenes) — always imports into the current project
-- Read view per chapter and per act — flowing prose layout with story typography (indent, justify, no-indent after headings)
+- **Slash commands** (`/`) — headings, lists, blockquote, task list, table, divider, images, currency/item nodes, AI nodes, and more
+- **Rich formatting toolbar** — appears on text selection with bold, italic, underline, strikethrough, headings, lists, blockquote, and text alignment; stays out of the way otherwise
+- **Smart typography** — curly quotes, en/em dashes, and ellipses applied automatically as you type
+- **Task lists** — interactive checkboxes directly in the prose (`/tasklist`)
+- **Tables** — insert a full table with header row via `/table`
+- **Spellcheck** with native dictionary suggestions — right-click any underlined word to see corrections or add it to your personal dictionary
+- **Typewriter mode** — the cursor stays pinned at a configurable vertical position as you write
+- **Focus mode** — dims everything outside the active paragraph
+- **Paragraph numbers** — optional count markers every 5 / 10 paragraphs
+- **Find & Replace** — Ctrl+F / Cmd+F opens an in-editor search bar with match highlighting and replace
+- **Export** to `.md`, `.tex` (LaTeX), PDF (via Pandoc), and EPUB
+- **Import** a Markdown draft — headings `##` / `###` / `####` map to acts / chapters / scenes
+- Read view per chapter and per act — flowing prose with story typography
+
+### 🗒️ Scene Plan
+
+- Each scene has a **plan checklist** — click the clipboard icon that appears next to its name in the sidebar
+- Add tasks, check them off, edit inline (double-click), delete individually or bulk-clear completed
+- A progress bar fills as tasks are ticked off; a green ✓ badge replaces the count when all are done
+- Plans are stored locally (no backend changes needed) and survive app restarts
 
 ### 🕓 Version History
-- **Automatic snapshots** every 5 minutes while a scene is open (only when content has changed)
-- **Scene-leave snapshot** — a snapshot is taken automatically when navigating away from a scene
-- **Pre-restore snapshot** — before restoring an older version, the current content is always saved first so nothing is lost
-- SHA-256 deduplication — identical content is never saved twice
-- Retention policy: up to **30 versions** per scene; if over 30, versions older than 30 days are pruned first, then the oldest overall
-- **History sidebar** (History button in the scene toolbar):
-  - Lists all snapshots with relative time ("5m ago") and absolute timestamp in your local timezone
-  - Hover any entry to reveal **Preview** (eye icon) and **Restore** (↺ icon) buttons
-  - Preview renders the snapshot content inline without leaving the editor
-  - Restore shows an inline confirmation before applying
+
+- **Automatic snapshots** every 5 minutes while a scene is open (only when content changed)
+- **Scene-leave snapshot** on navigation; **pre-restore snapshot** before any restore
+- SHA-256 deduplication — identical content never saved twice
+- Retention: up to **30 versions** per scene; oldest pruned first after 30 days
+- **History sidebar** — relative timestamps, inline preview (eye icon), and one-click restore with confirmation
 
 ### 📚 Codex (World-building Database)
+
 - Entry types: **Character**, **Location**, **Item**, **Lore**, **Custom**
-- Fields: name, aliases, description, notes, colour tag, groups (multi-value), species (characters) / subtype (others), tags
-- **Main character flag** — mark any character as a protagonist; main characters are starred (★) in relation dropdowns and used as the default centre of the Relations graph
-- **Character inventory** — track currencies (custom names + amounts) and possessions (linked to item/location/lore entries with quantity and notes)
-- **Multi-group** — assign an entry to any number of groups via a dropdown with existing group suggestions; filter by group in the Codex list
-- Inline **Codex highlighting** in the editor — any word matching a Codex entry name or alias gets a coloured underline; click it to open the entry in the sidebar
-- **List view** (default) — sortable table with columns for type/subtype, groups, tags, description; click column headers to sort ↑↓
-- **Grid view** — colour-coded cards with sort pill-bar
-- **Filters**: entry type, group, species, subtype, tags — each a multi-select dropdown with checkboxes; combine freely
-- **Multi-select**: check entries (or click while another is selected) to enter selection mode; floating action bar lets you bulk-edit type, subtype/species, add shared tags, add shared relations, or delete
-- Click any entry name or card to open the full edit dialog (two-column layout: options left, description right)
-- **Relations**: link any two entries with a typed relation (Friend, Enemy, Ally, Rival, Family, Mentor, Student, Possession, Home, Origin, Member Of, Leads, or a custom label); direction-aware — shows "→ target" and "← source" in the detail view; relation target dropdown defaults to the first main character
-- **Import Codex** from CSV/JSON or a folder of `.md` files
+- Fields: name, aliases, description, notes, colour tag, groups, species / subtype, tags
+- **Main character flag** — protagonists are starred (★) in dropdowns and centred in the relations graph
+- **Character inventory** — currencies (custom names + amounts) and possessions (linked items with quantity and notes)
+- Inline **Codex highlighting** — any word matching an entry name or alias gets a coloured underline; click to open
+- **List view** — sortable by name, type, group, colour, or **tags**; click column headers to toggle ↑↓
+- **Grid view** — colour-coded cards with the same sort pill-bar
+- **Filters**: type, group, species, subtype, tags — multi-select dropdowns, combine freely
+- **Multi-select** + bulk-edit: change type, subtype/species, add shared tags/relations, or delete in one action
+- **Relations**: typed links between entries (Friend, Enemy, Family, Leads, Possession, custom…); direction-aware
+- **Import** from CSV, JSON, or a folder of `.md` files
 
 ### 🔗 Shared Codex
-- When creating a project, choose **Share codex** to live-link it to an existing project's world bible — both projects read and write the same codex entries
-- Or choose **Copy codex** to start with an independent snapshot that can diverge freely
-- Projects that share a codex also share a **combined timeline** spanning scenes from all sibling projects
-- The source project is protected from deletion while any other project links to its codex; unlink first to delete
-- Shared codex shown with a link badge on the dashboard project cards
+
+- Link a new project to an existing one's world bible — both projects read and write the same codex
+- Or **copy** the codex to start an independent fork
+- Shared projects share a combined timeline spanning all their scenes
 
 ### 🕸️ Relations Graph
-- SVG radial mindmap — one entry at the centre, linked entries on the inner ring, second-degree connections on the outer ring
-- **Depth slider (1–3)** — control how many relationship hops are shown at once
-- Defaults to centring on the first **main character** (★) in the codex; falls back to the first character, then the first node
-- Click any **node in the SVG** to re-centre the graph on that entry
-- **Right-click a node** for a context menu: *Edit Codex Entry* or *Remove Relation*
-- Click any **entry in the left panel** to open its full edit dialog inline — edit name, description, relations, inventory, and more without leaving the page
-- Nodes rendered with a **spheric gradient** style, colour-coded by entry type; relation type shown on the connecting line with larger labels
-- Solid lines = Codex relations; dashed lines = inline `[rel:]` tags from scene text
+
+- SVG radial mindmap — one entry at centre, linked entries on the inner ring, second-degree on the outer ring
+- **Depth slider (1–3)** — control relationship hops
+- Click any node to re-centre; right-click for *Edit Entry* / *Remove Relation*
+- Solid lines = explicit relations; dashed lines = inline `[rel:]` tags from scene text
 
 ### 🕐 Time System
-- Per-project **configurable time units** — choose any combination of Age, Year, Season, Month, Day, Hour, Minute, Second; rename them to fit your world (e.g. "Cycle" instead of "Year")
-- Set **count-per-parent** for each unit (e.g. 13 months per year, 28 days per month)
-- Define **custom value names** for any unit with ≤ 60 values (e.g. month names, season names)
-- **Day/Night cycle dial** — set how many hours a day has, when night starts, and how long it lasts; a purple arc on the SVG clock shows nighttime visually
-- Accessible from the sidebar **Time System** button or from within any scene
-- Per-scene **Time** panel (clock button in the scene toolbar):
-  - Inputs for each enabled unit; named-value units show a dropdown (e.g. pick "Spring" instead of typing 1)
-  - Live preview badge shows formatted time + ☀ Day / 🌙 Night label
-  - "Configure time system…" link to jump straight to the config dialog
-  - Apply saves immediately; Clear removes the scene's time stamp
-- A small **🕐 icon** appears next to scene titles in the sidebar when they have a time set
+
+- Per-project **configurable time units** — any combination of Age, Year, Season, Month, Day, Hour, Minute, Second; rename any unit to fit your world
+- Custom count-per-parent (e.g. 13 months/year) and **named values** (e.g. month names, season names)
+- **Day/Night cycle dial** — set day length, night start, and night duration; visualised as a purple arc on the SVG clock
+- Per-scene **Time panel** — inputs for each enabled unit, live preview badge with ☀ / 🌙 label
 
 ### 📅 Timeline
-- Horizontal grid — each **row** is a scene, each **column** is a distinct point in time
-- Column headers show the formatted time label and a ☀/🌙 Day/Night badge
-- Click any cell to navigate directly to that scene
-- Hover to see the full Act → Chapter → Scene breadcrumb
-- When codex is shared between projects, the timeline **spans all sibling projects** with a project label on each row
-- Empty-state prompt with a direct link to configure the time system
-- **Time config** button in the header to adjust the time system without leaving the page
+
+- Horizontal grid — rows are scenes, columns are time points
+- Column headers show formatted time and ☀ / 🌙 badge; click a cell to jump to that scene
+- **Timeline tracks** — add named parallel story threads (e.g. "Parallel world", "Backstory"), each with its own colour and time range
+- **Timeline events** — free-standing named events at any point in time, linked to a track; add them directly from the scene editor with the `/timeline` slash command (auto-fills the scene title and time)
+- Shared-codex projects show a combined multi-project timeline
 
 ### 🤖 AI Assistant
-- Sidebar panel in the scene editor (Sparkles button)
-- Classic actions: **Continue**, **Rewrite**, **Brainstorm**, **Ask**, **Custom**
-- **KI inline command** (`/ki` in the editor) — insert an AI generation node directly into the prose flow:
-  - Select a **wrapper prompt** (Story Generation, Lector Review, Codex Entry Distillation, or any custom prompt)
-  - Pick **codex entries** to inject as world-building context
-  - Add **extra scenes** for additional context beyond the active scene
-  - Set a **word count** target (presets: 600 / 800 / 1000, or enter any value); defaults to the prompt's configured word count
-  - For the Codex Entry Distillation prompt, choose the **entry type** to extract (Character, Location, Item, Lore)
+
+- Sidebar panel — **Continue**, **Rewrite**, **Brainstorm**, **Ask**, **Custom** modes
+- **`/ki` inline AI node** — insert a generation block directly into the prose:
+  - Choose a **prompt** (Story Generation, Lector Review, Codex Distillation, or any custom prompt)
+  - Inject **codex entries** and **extra scenes** as context
+  - Set a **word count** target; entry-type selector for codex distillation
+- **Auto-synopsis** — one-click scene synopsis generation from the scene toolbar
 - Streams output from any [OpenRouter](https://openrouter.ai) model
-- Insert generated text directly into the editor at the cursor
+- **Per-operation model overrides**: set a dedicated model for synopsis generation and codex distillation in Settings, independent of the global default
 
 ### 📝 AI Prompts
-- Three **built-in prompts** shipped with the app:
-  - **Story Generation** — continues or fills a scene, mirrors the author's voice; uses `{{WORD_COUNT}}` and `{{LANGUAGE}}`
-  - **Lector Review** — full editorial report across grammar, logic, character consistency, prose quality, pacing, and dialogue
-  - **Codex Entry Distillation** — extracts a structured codex entry (character, location, item, or lore) from scene content
-- All built-in prompts inject the **project language** automatically (e.g. `language: "de"` → writes in German)
-- **Custom prompts** — create your own with a name, description, system instruction, user template, and default word count
-- Manage all prompts from **Settings → AI Prompts**: edit, create, delete, and **revert to default** (built-ins only)
+
+- Three built-in prompts: **Story Generation**, **Lector Review**, **Codex Entry Distillation**
+- All inject the project language automatically (e.g. writes in German when `language: "de"`)
+- **Custom prompts** — name, system instruction, user template, word count target
 - Template placeholders: `{{SCENE_CONTENT}}`, `{{CODEX_ENTRIES}}`, `{{USER_PROMPT}}`, `{{LANGUAGE}}`, `{{WORD_COUNT}}`, `{{ENTRY_TYPE}}`
+- Manage all prompts in **Settings → AI Prompts**; revert built-ins to factory defaults any time
+
+### 🔍 Grammar & Style Check
+
+- Powered by **LanguageTool** (self-hosted via Docker — your text never leaves your machine)
+- Highlights grammar, style, spelling, and punctuation issues with colour-coded categories
+- Click any issue to jump to the exact occurrence in the editor (handles repeated phrases correctly)
+- One-click **Apply suggestion** to accept a fix in place
+- 3-minute generous timeout with an immediate patience message while the check runs
+- Supported languages: English, German, French, Spanish, Portuguese, Italian, Dutch, Polish, Russian, and more
+
+### 📤 Export
+
+- **Markdown** — clean `.md` output
+- **LaTeX** — `\chapter` / `\section` structure with proper escaping; configurable font, size, margins, drop caps, page numbers
+- **PDF** — via Pandoc (Docker); full LaTeX pipeline with custom typography settings
+- **EPUB** — via Pandoc; configurable fonts, colours, margins
+- Scene selection, heading inclusion, and typography all configurable from the export dialog
 
 ---
 
 ## Settings
 
-Open `/settings` or click **Settings** in the sidebar to:
-
-- Add your [OpenRouter API key](https://openrouter.ai/keys) — stored server-side, never sent to the browser
-- Choose your default AI model and enable/disable available models
-- Switch between **dark** and **light** theme
-- **AI Prompts** — view, edit, create, and revert all story generation prompts
+- **OpenRouter API key** — stored server-side, never sent to the browser
+- **Default AI model** — used for the writing panel; override separately for chat, synopsis, and codex distillation
+- **Default Chat Model** — dedicated model for the Scene Chat panel
+- **Default Synopsis Model** — dedicated model for auto-synopsis generation
+- **Default Codex Distillation Model** — dedicated model for `/ki` codex distillation
+- Enable/disable individual models for the `/ki` command
+- **Themes** — Dark, Light, and themed variants
+- **Paragraph numbers**, **session timer**, **typewriter position**
+- **Grammar Check** — enable, set service URL and languages
+- **PDF/EPUB Export** — enable Pandoc service and set URL
+- **Data folder** — point to Dropbox / Drive / OneDrive for cross-device sync; migrate existing data in one click
+- **AI Prompts** — edit, create, delete, revert built-ins
 
 ---
 
@@ -179,28 +207,33 @@ Open `/settings` or click **Settings** in the sidebar to:
 | Tip | How |
 |-----|-----|
 | Rename an act or chapter | Double-click its title in the sidebar |
-| Insert a scene between two scenes | Hover the divider line between them → click **+** |
-| Reorder anything | Grab the ⠿ drag handle that appears on hover |
-| Open a Codex entry from the editor | Click the coloured underline under any highlighted word |
-| Jump to a scene from the Timeline | Click its diamond marker |
-| Clear a scene's time stamp | Time panel → **Clear** button |
-| Bulk-edit Codex entries | Check multiple entries → use the floating action bar |
+| Insert a scene between two scenes | Hover the divider → click **+** |
+| Reorder anything | Grab the ⠿ drag handle on hover |
+| Plan your scene | Click the 📋 icon next to its name in the sidebar |
+| Open a Codex entry from the editor | Click the coloured underline under a highlighted word |
+| Fix a spelling error | Right-click the underlined word → pick a suggestion |
+| Add a word to the dictionary | Right-click → **Add to dictionary** |
+| Insert a table | Type `/table` in the editor |
+| Insert a task list | Type `/tasklist` in the editor |
+| Smart quotes & em-dashes | Just type — they're applied automatically |
+| Format selected text | Select text → use the bubble toolbar |
+| Jump to a scene from the Timeline | Click the cell |
+| Add an event to the timeline from a scene | Type `/timeline` in the editor |
+| Clear a scene's time stamp | Time panel → **Clear** |
+| Bulk-edit Codex entries | Check multiple entries → floating action bar |
+| Sort codex by tags | List view → click **Tags** column header |
 | Add custom month/season names | Time System → unit row → **Custom names** |
-| Export the whole project | Sidebar → **Export .md** or **.tex** |
-| Import a Markdown draft | Sidebar → **Import** — headings `##` / `###` / `####` map to acts / chapters / scenes |
-| Mark a protagonist | Codex entry → **Main character** checkbox (character type only) |
+| Export the project | Sidebar → **Export** |
+| Import a Markdown draft | Sidebar → **Import** — `##`/`###`/`####` → acts/chapters/scenes |
+| Mark a protagonist | Codex entry → **Main character** checkbox |
 | Edit an entry from the Relations graph | Click its name in the left panel |
-| Edit or remove a relation | Right-click a node in the Relations graph |
-| Adjust graph depth | Relations graph → depth slider (1–3 hops) |
-| Share a world bible across projects | New Project → **Share codex** → pick the source project |
-| Track what a character owns | Codex entry (character) → **Inventory** section |
-| Browse scene snapshots | Scene editor → **History** button (top toolbar) |
-| Restore an older version of a scene | History sidebar → hover a version → ↺ Restore |
-| Preview a version without restoring | History sidebar → hover a version → 👁 eye icon |
-| Generate text inline with AI | Type `/ki` in the editor, configure the node, click Generate |
-| Customise an AI prompt | Settings → AI Prompts → select a prompt → edit system/template |
-| Revert a built-in prompt to default | Settings → AI Prompts → select built-in → Revert to Default |
-| Set the language for AI output | Project settings → Book Metadata → Language (BCP 47 code, e.g. `de`) |
+| Share a world bible across projects | New Project → **Share codex** |
+| Track character possessions | Codex entry (character) → **Inventory** |
+| Browse scene snapshots | Scene editor → **History** button |
+| Restore an older version | History sidebar → hover a version → ↺ |
+| Generate text inline with AI | Type `/ki`, configure the node, click Generate |
+| Set the language for AI output | Project → Book Metadata → Language (e.g. `de`) |
+| Use a different model for codex distillation | Settings → Default Codex Distillation Model |
 
 ---
 
@@ -210,9 +243,9 @@ Open `/settings` or click **Settings** in the sidebar to:
 foliantica/
 ├── electron/             # Electron main process + splash screen
 │   └── assets/           # App icons (ico, icns, png)
-├── scripts/              # electron-builder hooks (afterPack)
+├── scripts/              # electron-builder hooks
 ├── api/                  # FastAPI backend
-│   ├── routers/          # projects, acts, chapters, scenes, codex, time, graph, ai, settings, export, imports
+│   ├── routers/          # projects, scenes, codex, time, graph, ai, settings, export, imports, timeline
 │   ├── models.py         # SQLAlchemy ORM models
 │   ├── schemas.py        # Pydantic request/response schemas
 │   ├── database.py       # Engine, session, migration helpers
@@ -220,7 +253,7 @@ foliantica/
 └── web/                  # Next.js 14 frontend
     └── src/
         ├── app/          # App Router pages (projects, codex, timeline, relations, settings…)
-        ├── components/   # Editor, Codex, AI panel, Time panel, Version History panel, layout
+        ├── components/   # Editor, Codex, AI panel, Time panel, Version History, Scene Plan
         ├── store/        # Zustand UI store + TanStack Query hooks
         ├── hooks/        # useAutosave, useExport
         └── types/        # Shared TypeScript interfaces
