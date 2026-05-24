@@ -1,6 +1,6 @@
 "use client";
 
-import { BubbleMenu } from "@tiptap/react";
+import { BubbleMenu } from "./BubbleMenuReact";
 import type { Editor } from "@tiptap/react";
 import { Bold, Italic, Strikethrough, Heading1, Heading2, Heading3, List, ListOrdered, Quote } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -52,7 +52,7 @@ export function FormattingToolbar({ editor }: Props) {
         const { selection } = state;
         return !selection.empty && editor.isEditable;
       }}
-      tippyOptions={{ duration: 100, placement: "top", zIndex: 40 }}
+      options={{ placement: "top" }}
       className="flex items-center gap-0.5 rounded-lg border border-border bg-card shadow-xl px-1.5 py-1"
     >
       {/* Inline marks */}

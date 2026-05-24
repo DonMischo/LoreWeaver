@@ -220,7 +220,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
     if (content !== prevSceneContent.current && content !== editor.getHTML()) {
       prevSceneContent.current = content;
       queueMicrotask(() => {
-        editor.commands.setContent(content || "", false);
+        editor.commands.setContent(content || "", { emitUpdate: false });
       });
     }
   }, [content, editor]);
