@@ -122,7 +122,7 @@ set "WEB_DIR=%~dp0web"
 cd /d "%WEB_DIR%"
 if errorlevel 1 ( echo [ERROR] Could not cd to %WEB_DIR% & pause & exit /b 1 )
 
-if not exist node_modules (
+if not exist "node_modules\.bin\next.cmd" (
     echo Installing npm dependencies...
     call npm install
     if errorlevel 1 ( echo [ERROR] npm install failed. & pause & exit /b 1 )
