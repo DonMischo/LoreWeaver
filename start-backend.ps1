@@ -22,6 +22,8 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
 if (-not $env:UV_PROJECT_ENVIRONMENT) {
     $env:UV_PROJECT_ENVIRONMENT = "$env:USERPROFILE\.local\foliantica-venv"
 }
+# uv pip install reads VIRTUAL_ENV, not UV_PROJECT_ENVIRONMENT
+$env:VIRTUAL_ENV = $env:UV_PROJECT_ENVIRONMENT
 
 # Remove old in-project .venv if present (no longer used)
 if (Test-Path ".venv") {

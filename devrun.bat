@@ -37,6 +37,9 @@ if not defined UV_PROJECT_ENVIRONMENT (
     set "UV_PROJECT_ENVIRONMENT=%USERPROFILE%\.local\foliantica-venv"
 )
 
+rem uv pip install reads VIRTUAL_ENV, not UV_PROJECT_ENVIRONMENT
+set "VIRTUAL_ENV=%UV_PROJECT_ENVIRONMENT%"
+
 rem Remove old in-project .venv if it exists (no longer used)
 if exist .venv (
     echo Removing old in-project .venv...
@@ -115,7 +118,10 @@ if %NODEMAJOR% lss 18 (
     pause & exit /b 1
 )
 
-cd /d "%~dp0web"
+set "WEB_DIR=%~dp0web"
+cd /d "%WEB_DIR%"
+if errorlevel 1 ( echo [ERROR] Could not cd to %WEB_DIR% & pause & exit /b 1 )
+
 if not exist node_modules (
     echo Installing npm dependencies...
     call npm install
@@ -131,5 +137,5 @@ if not exist node_modules (
 )
 
 echo Starting Next.js dev server on http://localhost:3000
-npx next dev --webpack
+npm run dev
 exit /b
