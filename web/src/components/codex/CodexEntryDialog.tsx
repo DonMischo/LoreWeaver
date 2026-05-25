@@ -20,6 +20,12 @@ import type { NameType } from "@/lib/nameGenerator";
 
 const ENTRY_TYPES: EntryType[] = ["character", "location", "item", "lore", "custom"];
 
+// Stable empty-array fallback — must live outside the component so its reference
+// never changes between renders. Using [] as a default parameter creates a new
+// array on every render, which makes the useEffect([…allEntries]) dependency fire
+// every render and produces an infinite setState → re-render loop.
+const EMPTY_ENTRIES: CodexEntry[] = [];
+
 const TRANSLATE_LANGUAGES = [
   { code: "en", label: "English" },
   { code: "de", label: "German" },
@@ -249,7 +255,7 @@ interface Props {
 }
 
 export function CodexEntryDialog({
-  open, onClose, onSave, initial, title, allEntries = [], onOpenEntry, onOpenRelation,
+  open, onClose, onSave, initial, title, allEntries = EMPTY_ENTRIES, onOpenEntry, onOpenRelation,
 }: Props) {
   const [name, setName]               = useState(initial?.name ?? "");
   const [aliasInput, setAliasInput]   = useState("");
@@ -355,6 +361,8 @@ export function CodexEntryDialog({
       setTagInput("");
       setGroupInput("");
       setGroupDropOpen(false);
+      setTranslateOpen(false);
+      setTranslating(false);
       // Default relation target to first main character (other than this entry)
       const thisId = initial?.id ?? 0;
       const mainChar = allEntries.find(e => e.is_main_char && e.id !== thisId);
