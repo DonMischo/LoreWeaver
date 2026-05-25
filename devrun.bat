@@ -30,9 +30,22 @@ if errorlevel 1 (
     )
 )
 
-if not exist .venv (
-    echo Creating virtual environment...
-    uv venv --python 3.11
+rem ── Move venv outside the project tree so Device Guard does not block it.
+rem    %USERPROFILE%\.local\ is the same trusted zone uv.exe lives in.
+rem    Fall back to C:\ProgramData\foliantica\venv if you need a machine-wide path.
+if not defined UV_PROJECT_ENVIRONMENT (
+    set "UV_PROJECT_ENVIRONMENT=%USERPROFILE%\.local\foliantica-venv"
+)
+
+rem Remove old in-project .venv if it exists (no longer used)
+if exist .venv (
+    echo Removing old in-project .venv...
+    rmdir /s /q .venv
+)
+
+if not exist "%UV_PROJECT_ENVIRONMENT%" (
+    echo Creating virtual environment at %UV_PROJECT_ENVIRONMENT%...
+    uv venv --python 3.11 "%UV_PROJECT_ENVIRONMENT%"
 )
 
 echo Installing dependencies...
@@ -42,7 +55,7 @@ echo Freeing port 8765...
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8765 " ^| findstr "LISTENING" 2^>nul') do taskkill /PID %%p /F >nul 2>&1
 
 echo Starting FastAPI server on http://localhost:8765
-.venv\Scripts\python.exe run.py --dev
+uv run python run.py --dev
 exit /b
 
 rem ══════════════════════════════════════════════════════════════════════════

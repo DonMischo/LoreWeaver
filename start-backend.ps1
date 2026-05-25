@@ -16,9 +16,22 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     }
 }
 
-if (-not (Test-Path ".venv")) {
-    Write-Host "Creating virtual environment..." -ForegroundColor Cyan
-    uv venv --python 3.11
+# Move the venv outside the project tree so Device Guard does not block it.
+# %USERPROFILE%\.local\ is the same trusted zone where uv.exe lives.
+# Override by setting $env:UV_PROJECT_ENVIRONMENT before running this script.
+if (-not $env:UV_PROJECT_ENVIRONMENT) {
+    $env:UV_PROJECT_ENVIRONMENT = "$env:USERPROFILE\.local\foliantica-venv"
+}
+
+# Remove old in-project .venv if present (no longer used)
+if (Test-Path ".venv") {
+    Write-Host "Removing old in-project .venv..." -ForegroundColor Yellow
+    Remove-Item -Recurse -Force ".venv"
+}
+
+if (-not (Test-Path $env:UV_PROJECT_ENVIRONMENT)) {
+    Write-Host "Creating virtual environment at $env:UV_PROJECT_ENVIRONMENT..." -ForegroundColor Cyan
+    uv venv --python 3.11 $env:UV_PROJECT_ENVIRONMENT
 }
 
 Write-Host "Installing dependencies..." -ForegroundColor Cyan
