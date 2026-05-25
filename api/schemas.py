@@ -53,6 +53,7 @@ class ProjectOut(ProjectBase):
     updated_at: datetime
     book_meta: Optional[BookMeta] = None
     shared_codex_project_id: Optional[int] = None
+    shared_codex_project_title: Optional[str] = None  # resolved title of the parent codex project
     cover_image: Optional[str] = None
 
     model_config = {"from_attributes": True}
@@ -153,6 +154,8 @@ class SceneUpdate(BaseModel):
     stack_group: Optional[str] = None
     node_x: Optional[float] = None
     node_y: Optional[float] = None
+    pov_character_id: Optional[int] = None
+    beat: Optional[str] = None
 
 
 class SceneOut(SceneBase):
@@ -166,6 +169,8 @@ class SceneOut(SceneBase):
     stack_group: Optional[str] = None
     node_x: Optional[float] = None
     node_y: Optional[float] = None
+    pov_character_id: Optional[int] = None
+    beat: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

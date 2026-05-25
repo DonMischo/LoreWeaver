@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi, writingLogApi, synopsisApi, timelineTracksApi, timelineEventsApi, grammarApi, fontsApi } from "@/lib/api";
-import type { GrammarCheckResult } from "@/lib/api";
+import type { GrammarCheckResult, PovStats } from "@/lib/api";
 import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry, OpenRouterModel } from "@/lib/api";
 import type { AIPrompt, ProjectSceneItem, SceneVersion, SceneVersionDetail, CorkboardAct, CorkboardData } from "@/types";
 
@@ -39,6 +39,25 @@ export const useDeleteProject = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
   });
 };
+
+export const useDetachCodexSharing = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => projectsApi.detachCodexSharing(projectId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects", projectId] });
+      qc.invalidateQueries({ queryKey: ["codex", projectId] });
+    },
+  });
+};
+
+export const usePovStats = (projectId: number) =>
+  useQuery<PovStats>({
+    queryKey: ["pov-stats", projectId],
+    queryFn: () => projectsApi.getPovStats(projectId),
+    enabled: projectId > 0,
+  });
 
 // ── Acts ──────────────────────────────────────────────────────────────────────
 

@@ -112,6 +112,8 @@ def migrate_new_columns():
         ("user_settings", "grammar_languages",        "TEXT DEFAULT '[\"en\"]'"),
         ("user_settings", "pandoc_enabled",           "INTEGER DEFAULT 0"),
         ("user_settings", "pandoc_url",               "TEXT DEFAULT 'http://localhost:8082'"),
+        ("scenes",        "pov_character_id",           "INTEGER"),
+        ("scenes",        "beat",                       "TEXT"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in new_columns:

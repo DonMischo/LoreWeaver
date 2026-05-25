@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronDown, ChevronRight, Plus, Trash2,
-  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors, Info, ListChecks, MoreHorizontal, LayoutGrid,
+  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors, Info, ListChecks, MoreHorizontal, LayoutGrid, Users,
 } from "lucide-react";
 import {
   DndContext, closestCenter, DragEndEvent,
@@ -513,6 +513,14 @@ export function ProjectSidebar({ projectId }: Props) {
                 >
                   <ListChecks className="h-3.5 w-3.5" />
                   Plot Beats
+                </Link>
+                <Link
+                  href={`/projects/${projectId}/pov`}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  POV Balance
                 </Link>
                 <Link
                   href={`/projects/${projectId}/timeline`}

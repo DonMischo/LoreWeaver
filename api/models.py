@@ -96,6 +96,8 @@ class Scene(Base):
     stack_group: Mapped[Optional[str]] = mapped_column(String(36), nullable=True) # scenes sharing this value form a draggable stack
     node_x: Mapped[Optional[float]] = mapped_column(nullable=True)  # canvas x position (React Flow)
     node_y: Mapped[Optional[float]] = mapped_column(nullable=True)  # canvas y position (React Flow)
+    pov_character_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # codex_entries.id — POV character for this scene
+    beat: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # plot beat label (e.g. "Inciting Incident")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 

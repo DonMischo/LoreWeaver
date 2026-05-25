@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare, Focus, Braces, ChevronDown, AlignCenter, Timer, Flag, BookMarked, MoreHorizontal, Check, SpellCheck } from "lucide-react";
+import { BookOpen, Sparkles, Clock, Moon, Sun, Archive, History, MessageSquare, Focus, Braces, ChevronDown, AlignCenter, Timer, Flag, BookMarked, MoreHorizontal, Check, SpellCheck, User, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
@@ -33,6 +33,7 @@ import type { SceneCommandIn } from "@/lib/api";
 import { versionsApi } from "@/lib/api";
 import { DEFAULT_TIME_CONFIG } from "@/types";
 import { cn } from "@/lib/utils";
+import { PLOT_TEMPLATES } from "@/lib/plotTemplates";
 
 function getDayNightLabel(config: typeof DEFAULT_TIME_CONFIG, time: SceneTime | null): "Day" | "Night" | null {
   if (!time) return null;
@@ -110,6 +111,29 @@ export default function ScenePage() {
   const applyFlagRef           = useRef<((type: string) => void) | null>(null);
   const applyGrammarFixRef     = useRef<((matched: string, replacement: string, offset: number) => void) | null>(null);
   const jumpToGrammarMatchRef  = useRef<((matched: string, offset: number) => void) | null>(null);
+
+  // Characters for POV selector
+  const characters = useMemo(
+    () => codexEntries
+      .filter(e => e.entry_type === "character")
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [codexEntries],
+  );
+
+  // Deduplicated beat names from all plot templates
+  const allBeats = useMemo(() => {
+    const seen = new Set<string>();
+    const beats: { id: string; name: string }[] = [];
+    for (const template of PLOT_TEMPLATES) {
+      for (const beat of template.beats) {
+        if (!seen.has(beat.name)) {
+          seen.add(beat.name);
+          beats.push({ id: beat.id, name: beat.name });
+        }
+      }
+    }
+    return beats;
+  }, []);
 
   // Count ghost-text placeholders in current content
   const ghostTexts = useMemo(() => {
@@ -430,6 +454,46 @@ export default function ScenePage() {
                 Chat
                 {chatPanelOpen && <Check className="ml-auto h-3 w-3 text-primary" />}
               </button>
+
+              <div className="border-t border-border my-1" />
+
+              {/* Scene metadata: POV + Beat */}
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 pt-1 pb-0.5">Scene info</p>
+              <div className="px-3 py-1.5 flex items-center gap-2">
+                <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs text-muted-foreground shrink-0 w-8">POV</span>
+                <select
+                  value={scene?.pov_character_id ?? ""}
+                  onChange={e => {
+                    const val = e.target.value ? Number(e.target.value) : null;
+                    updateScene.mutate({ data: { pov_character_id: val } });
+                  }}
+                  onClick={e => e.stopPropagation()}
+                  className="flex-1 text-xs bg-secondary border border-border rounded px-1.5 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="">— none —</option>
+                  {characters.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="px-3 py-1.5 flex items-center gap-2">
+                <ListChecks className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs text-muted-foreground shrink-0 w-8">Beat</span>
+                <select
+                  value={scene?.beat ?? ""}
+                  onChange={e => {
+                    updateScene.mutate({ data: { beat: e.target.value || null } });
+                  }}
+                  onClick={e => e.stopPropagation()}
+                  className="flex-1 text-xs bg-secondary border border-border rounded px-1.5 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="">— none —</option>
+                  {allBeats.map(b => (
+                    <option key={b.id} value={b.name}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
 
               <div className="border-t border-border my-1" />
 

@@ -6,6 +6,7 @@ import {
   Plus, Pencil, Trash2, User, MapPin, Package, Scroll, Tag,
   LayoutGrid, LayoutList, FolderOpen, Loader2, CheckCircle2, X,
   ChevronDown, ChevronUp, ChevronsUpDown, CheckSquare, Square,
+  Link2, Link2Off, AlertCircle,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { CodexEntryDialog } from "@/components/codex/CodexEntryDialog";
 import { BulkEditDialog } from "@/components/codex/BulkEditDialog";
 import { ImportButton } from "@/components/layout/ImportButton";
-import { useCodexEntries, useCreateCodexEntry, useUpdateCodexEntry, useDeleteCodexEntry, useResyncProjectCommands } from "@/store/queries";
+import { useCodexEntries, useCreateCodexEntry, useUpdateCodexEntry, useDeleteCodexEntry, useResyncProjectCommands, useProject, useDetachCodexSharing } from "@/store/queries";
 import { importApi } from "@/lib/api";
 import type { CodexEntry, EntryType } from "@/types";
 import { cn } from "@/lib/utils";
@@ -176,11 +177,13 @@ export default function CodexPage() {
   const { t } = useLanguage();
   const typeLabel = (type: EntryType) => t(`type_${type}`);
 
+  const { data: project } = useProject(projectId);
   const { data: entries = [], isLoading } = useCodexEntries(projectId);
   const createEntry = useCreateCodexEntry(projectId);
   const updateEntry = useUpdateCodexEntry(projectId);
   const deleteEntry = useDeleteCodexEntry(projectId);
   const resync = useResyncProjectCommands(projectId);
+  const detachSharing = useDetachCodexSharing(projectId);
 
   // Re-extract commands from all scene HTML on mount so inventory / logs are always
   // current even if the debounced sync never fired in a previous session.
@@ -368,6 +371,33 @@ export default function CodexPage() {
           </Button>
         </div>
       </header>
+
+      {/* Sharing banner */}
+      {project?.shared_codex_project_id && (
+        <div className="flex items-center gap-3 px-6 py-2 bg-primary/5 border-b border-primary/20 shrink-0 text-sm">
+          <Link2 className="h-4 w-4 text-primary shrink-0" />
+          <span className="flex-1 text-muted-foreground">
+            Shared codex from{" "}
+            <span className="font-medium text-foreground">
+              {project.shared_codex_project_title ?? `Project #${project.shared_codex_project_id}`}
+            </span>
+            . Changes are shared with all linked projects.
+          </span>
+          <button
+            onClick={() => {
+              if (!confirm(
+                `Detach from shared codex?\n\nThis will copy all entries to this project and break the link. The original project's codex will not be affected.`
+              )) return;
+              detachSharing.mutate();
+            }}
+            disabled={detachSharing.isPending}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+          >
+            <Link2Off className="h-3.5 w-3.5" />
+            {detachSharing.isPending ? "Detaching…" : "Detach"}
+          </button>
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="px-6 py-2 border-b border-border space-y-2 shrink-0">

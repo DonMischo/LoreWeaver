@@ -61,6 +61,18 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
+export interface PovStat {
+  pov_character_id: number | null;
+  name: string;
+  color: string;
+  count: number;
+}
+
+export interface PovStats {
+  stats: PovStat[];
+  total_scenes: number;
+}
+
 export const projectsApi = {
   list: () => req<Project[]>("/projects"),
   get: (id: number) => req<Project>(`/projects/${id}`),
@@ -82,6 +94,9 @@ export const projectsApi = {
   corkboard: (id: number) => req<CorkboardData>(`/projects/${id}/corkboard`),
   setSubplotNames: (id: number, names: string[]) =>
     req<string[]>(`/projects/${id}/subplot-names`, { method: "PATCH", body: JSON.stringify({ names }) }),
+  detachCodexSharing: (id: number) =>
+    req<Project>(`/projects/${id}/codex-sharing/detach`, { method: "POST" }),
+  getPovStats: (id: number) => req<PovStats>(`/projects/${id}/pov-stats`),
 };
 
 // ── Export fonts ──────────────────────────────────────────────────────────────
@@ -132,6 +147,8 @@ export const scenesApi = {
     global_order?: number;
     node_x?: number | null;
     node_y?: number | null;
+    pov_character_id?: number | null;
+    beat?: string | null;
   }) =>
     req<Scene>(`/scenes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: number) => req<void>(`/scenes/${id}`, { method: "DELETE" }),

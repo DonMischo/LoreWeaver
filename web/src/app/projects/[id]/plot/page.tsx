@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, ChevronDown, ChevronRight, RotateCcw, Copy } from "lucide-react";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { ArrowLeft, ChevronDown, ChevronRight, RotateCcw, Copy, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { PLOT_TEMPLATES, type PlotTemplate } from "@/lib/plotTemplates";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { scenesApi } from "@/lib/api";
+import { useProjectScenes, useCorkboard } from "@/store/queries";
 
 // ── Local-storage helpers ─────────────────────────────────────────────────────
 
@@ -104,11 +107,46 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
 export default function PlotPage() {
   const { id } = useParams();
   const projectId = Number(id);
+  const qc = useQueryClient();
 
   const [activeTemplate, setActiveTemplate] = useState<PlotTemplate>(PLOT_TEMPLATES[0]);
   const [states, setStates] = useState<TemplateState>({});
-  const [view, setView] = useState<"checklist" | "skeleton">("checklist");
+  const [view, setView] = useState<"checklist" | "skeleton" | "scenes">("checklist");
   const [copied, setCopied] = useState(false);
+  const [localBeat, setLocalBeat] = useState<Record<number, string | null>>({});
+
+  const { data: projectScenes = [] } = useProjectScenes(projectId);
+  const { data: corkboard } = useCorkboard(projectId);
+
+  // Beat map from corkboard
+  const corkboardBeatMap = useMemo(() => {
+    const map: Record<number, string | null> = {};
+    for (const s of corkboard?.scenes ?? []) {
+      map[s.id] = s.beat ?? null;
+    }
+    return map;
+  }, [corkboard]);
+
+  // All beat names for the current template
+  const templateBeatNames = useMemo(
+    () => activeTemplate.beats.map(b => b.name),
+    [activeTemplate],
+  );
+
+  const updateBeatMutation = useMutation({
+    mutationFn: ({ sceneId, beat }: { sceneId: number; beat: string | null }) =>
+      scenesApi.update(sceneId, { beat }),
+    onSuccess: (_, { sceneId, beat }) => {
+      setLocalBeat(prev => ({ ...prev, [sceneId]: beat }));
+      qc.invalidateQueries({ queryKey: ["corkboard", projectId] });
+    },
+  });
+
+  const handleBeatChange = (sceneId: number, val: string) => {
+    const beat = val || null;
+    setLocalBeat(prev => ({ ...prev, [sceneId]: beat }));  // optimistic
+    updateBeatMutation.mutate({ sceneId, beat });
+  };
 
   // Load from localStorage when template changes
   useEffect(() => {
@@ -182,7 +220,7 @@ export default function PlotPage() {
         {/* View toggle + actions */}
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border border-border overflow-hidden">
-            {(["checklist", "skeleton"] as const).map((v) => (
+            {(["checklist", "scenes", "skeleton"] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -233,6 +271,77 @@ export default function PlotPage() {
             <pre className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed font-mono">
               {skeletonText}
             </pre>
+          </div>
+        )}
+
+        {/* Scenes view — assign each scene to a beat */}
+        {view === "scenes" && (
+          <div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Assign each scene to a beat from the <strong>{activeTemplate.name}</strong> template.
+              Beats are also editable in the scene editor (More → Scene info).
+            </p>
+            {projectScenes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No scenes yet.</p>
+            ) : (
+              <>
+                {/* Beat sections */}
+                {[...activeTemplate.beats.map(b => b.name), null].map(beatName => {
+                  const scenesForBeat = projectScenes.filter(s => {
+                    const current = localBeat[s.id] !== undefined ? localBeat[s.id] : (corkboardBeatMap[s.id] ?? null);
+                    return beatName === null ? !current || !templateBeatNames.includes(current) : current === beatName;
+                  });
+                  if (scenesForBeat.length === 0 && beatName !== null) return null;
+                  const beatDef = beatName ? activeTemplate.beats.find(b => b.name === beatName) : null;
+                  return (
+                    <div key={beatName ?? "__unassigned"} className="mb-6">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="text-sm font-semibold">
+                          {beatName ?? "Unassigned"}
+                        </h3>
+                        {beatDef && (
+                          <span className="text-[10px] text-muted-foreground/60">~{beatDef.position}%</span>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          ({scenesForBeat.length} scene{scenesForBeat.length !== 1 ? "s" : ""})
+                        </span>
+                      </div>
+                      {beatDef && (
+                        <p className="text-xs text-muted-foreground mb-2 ml-0.5">{beatDef.description}</p>
+                      )}
+                      {scenesForBeat.length === 0 ? (
+                        <p className="text-xs text-muted-foreground/50 ml-0.5 italic">No scenes assigned.</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {scenesForBeat.map(s => {
+                            const currentBeat = localBeat[s.id] !== undefined ? localBeat[s.id] : (corkboardBeatMap[s.id] ?? null);
+                            return (
+                              <div key={s.id} className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2">
+                                <BookOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-sm font-medium truncate block">{s.title}</span>
+                                  <span className="text-xs text-muted-foreground">{s.act_title} · {s.chapter_title}</span>
+                                </div>
+                                <select
+                                  value={currentBeat ?? ""}
+                                  onChange={e => handleBeatChange(s.id, e.target.value)}
+                                  className="text-xs bg-secondary border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer shrink-0"
+                                >
+                                  <option value="">— none —</option>
+                                  {activeTemplate.beats.map(b => (
+                                    <option key={b.id} value={b.name}>{b.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </div>
         )}
 

@@ -24,6 +24,7 @@ export interface Project {
   description: string | null;
   book_meta: BookMeta | null;
   shared_codex_project_id: number | null;
+  shared_codex_project_title: string | null;
   cover_image: string | null;
   created_at: string;
   updated_at: string;
@@ -56,6 +57,8 @@ export interface Scene {
   order_index: number;
   word_count: number;
   scene_time: SceneTime | null;
+  pov_character_id: number | null;
+  beat: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -73,6 +76,8 @@ export interface CorkboardScene {
   chapter_id: number;
   node_x: number | null;       // React Flow canvas x position
   node_y: number | null;       // React Flow canvas y position
+  pov_character_id: number | null;  // POV character for this scene
+  beat: string | null;              // plot beat label
 }
 
 export interface CorkboardData {

@@ -1,4 +1,5 @@
 import json
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -9,9 +10,37 @@ from schemas import ProjectCreate, ProjectOut, ProjectUpdate
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
+def _project_to_out(p: Project, parent_title: Optional[str] = None) -> dict:
+    """Serialize a Project ORM object to a dict suitable for ProjectOut.
+    Handles book_meta JSON parsing and injects the parent codex project title."""
+    book_meta = None
+    if p.book_meta:
+        try:
+            book_meta = json.loads(p.book_meta)
+        except Exception:
+            pass
+    return {
+        "id": p.id,
+        "title": p.title,
+        "description": p.description,
+        "book_meta": book_meta,
+        "shared_codex_project_id": p.shared_codex_project_id,
+        "shared_codex_project_title": parent_title,
+        "cover_image": p.cover_image,
+        "created_at": p.created_at,
+        "updated_at": p.updated_at,
+    }
+
+
 @router.get("", response_model=list[ProjectOut])
 def list_projects(db: Session = Depends(get_db)):
-    return db.query(Project).order_by(Project.updated_at.desc()).all()
+    projects = db.query(Project).order_by(Project.updated_at.desc()).all()
+    parent_ids = {p.shared_codex_project_id for p in projects if p.shared_codex_project_id}
+    parent_map: dict[int, str] = {}
+    if parent_ids:
+        for parent in db.query(Project).filter(Project.id.in_(parent_ids)).all():
+            parent_map[parent.id] = parent.title
+    return [_project_to_out(p, parent_map.get(p.shared_codex_project_id)) for p in projects]
 
 
 @router.post("", response_model=ProjectOut, status_code=201)
@@ -37,7 +66,11 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
         db.add(project)
         db.commit()
         db.refresh(project)
-        return project
+        parent_title = None
+        if project.shared_codex_project_id:
+            parent = db.get(Project, project.shared_codex_project_id)
+            parent_title = parent.title if parent else None
+        return _project_to_out(project, parent_title)
 
     if copy_id:
         source = db.get(Project, copy_id)
@@ -99,7 +132,7 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(project)
 
-    return project
+    return _project_to_out(project, None)
 
 
 @router.get("/{project_id}", response_model=ProjectOut)
@@ -107,7 +140,11 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
-    return project
+    parent_title = None
+    if project.shared_codex_project_id:
+        parent = db.get(Project, project.shared_codex_project_id)
+        parent_title = parent.title if parent else None
+    return _project_to_out(project, parent_title)
 
 
 @router.patch("/{project_id}", response_model=ProjectOut)
@@ -123,7 +160,11 @@ def update_project(project_id: int, body: ProjectUpdate, db: Session = Depends(g
         setattr(project, k, v)
     db.commit()
     db.refresh(project)
-    return project
+    parent_title = None
+    if project.shared_codex_project_id:
+        parent = db.get(Project, project.shared_codex_project_id)
+        parent_title = parent.title if parent else None
+    return _project_to_out(project, parent_title)
 
 
 @router.delete("/{project_id}", status_code=204)
@@ -203,6 +244,8 @@ def get_corkboard(project_id: int, db: Session = Depends(get_db)):
                 "chapter_id": s.chapter_id,
                 "node_x": s.node_x,
                 "node_y": s.node_y,
+                "pov_character_id": getattr(s, "pov_character_id", None),
+                "beat": getattr(s, "beat", None),
             }
             for s in sorted(all_scenes, key=lambda sc: sc.global_order or 0)
         ],
@@ -286,3 +329,101 @@ def list_project_scenes(project_id: int, db: Session = Depends(get_db)):
                     "act_title": act.title,
                 })
     return result
+
+
+@router.post("/{project_id}/codex-sharing/detach", response_model=ProjectOut)
+def detach_codex_sharing(project_id: int, db: Session = Depends(get_db)):
+    """Break the live-share link: copy all parent codex entries to this project, then clear the FK."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    if not project.shared_codex_project_id:
+        raise HTTPException(400, "This project does not share a codex")
+
+    parent_id = project.shared_codex_project_id
+    source_entries = db.query(CodexEntry).filter(CodexEntry.project_id == parent_id).all()
+
+    old_to_new: dict[int, int] = {}
+    for src in source_entries:
+        new_entry = CodexEntry(
+            project_id=project_id,
+            name=src.name,
+            aliases=src.aliases,
+            entry_type=src.entry_type,
+            description=src.description,
+            notes=src.notes,
+            color=src.color,
+            species=src.species,
+            subtype=src.subtype,
+            tags=src.tags,
+            is_main_char=src.is_main_char,
+            inventory=src.inventory,
+        )
+        new_entry.set_groups(src.get_groups())
+        db.add(new_entry)
+        db.flush()
+        old_to_new[src.id] = new_entry.id
+
+    # Copy relations
+    source_relations = db.query(CodexRelation).filter(
+        CodexRelation.source_id.in_(old_to_new.keys()),
+        CodexRelation.target_id.in_(old_to_new.keys()),
+    ).all()
+    for rel in source_relations:
+        db.add(CodexRelation(
+            source_id=old_to_new[rel.source_id],
+            target_id=old_to_new[rel.target_id],
+            relation_type=rel.relation_type,
+        ))
+
+    project.shared_codex_project_id = None
+    db.commit()
+    db.refresh(project)
+    return _project_to_out(project, None)
+
+
+@router.get("/{project_id}/pov-stats")
+def get_pov_stats(project_id: int, db: Session = Depends(get_db)):
+    """Return POV character distribution: scene counts per pov_character_id."""
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    acts = db.query(Act).filter(Act.project_id == project_id).order_by(Act.order_index).all()
+    all_scenes: list[Scene] = []
+    for act in sorted(acts, key=lambda a: a.order_index):
+        for ch in sorted(act.chapters, key=lambda c: c.order_index):
+            for s in sorted(ch.scenes, key=lambda sc: sc.order_index):
+                all_scenes.append(s)
+
+    total = len(all_scenes)
+    counts: dict[Optional[int], int] = {}
+    for s in all_scenes:
+        key = getattr(s, "pov_character_id", None)
+        counts[key] = counts.get(key, 0) + 1
+
+    # Resolve character names/colors from the canonical codex owner
+    char_ids = {k for k in counts if k is not None}
+    chars: dict[int, CodexEntry] = {}
+    if char_ids:
+        owner_id = project.shared_codex_project_id or project.id
+        for entry in db.query(CodexEntry).filter(
+            CodexEntry.project_id == owner_id,
+            CodexEntry.id.in_(char_ids),
+        ).all():
+            chars[entry.id] = entry
+
+    stats = []
+    for char_id, count in sorted(counts.items(), key=lambda x: -(x[1])):
+        if char_id is None:
+            stats.append({"pov_character_id": None, "name": "No POV", "color": "#6b7280", "count": count})
+        else:
+            entry = chars.get(char_id)
+            stats.append({
+                "pov_character_id": char_id,
+                "name": entry.name if entry else f"Unknown #{char_id}",
+                "color": entry.color if entry else "#6b7280",
+                "count": count,
+            })
+
+    return {"stats": stats, "total_scenes": total}
