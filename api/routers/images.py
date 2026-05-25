@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Project, CodexEntry, Scene
+from models import Project, CodexEntry, Scene, ResearchItem
 
 router = APIRouter(tags=["images"])
 
@@ -85,6 +85,35 @@ def delete_codex_image(entry_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Codex entry not found")
     _delete_file(entry.image_path or "")
     entry.image_path = None
+    db.commit()
+
+
+# ── Research item image ───────────────────────────────────────────────────────
+
+@router.post("/api/research/{item_id}/image")
+def upload_research_image(
+    item_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    item = db.get(ResearchItem, item_id)
+    if not item:
+        raise HTTPException(404, "Research item not found")
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(400, "Unsupported image type. Use JPG, PNG, WebP, or GIF.")
+    _delete_file(item.image_path or "")
+    item.image_path = _save_upload(file, f"research/{item_id}", "image")
+    db.commit()
+    return {"image_path": item.image_path}
+
+
+@router.delete("/api/research/{item_id}/image", status_code=204)
+def delete_research_image(item_id: int, db: Session = Depends(get_db)):
+    item = db.get(ResearchItem, item_id)
+    if not item:
+        raise HTTPException(404, "Research item not found")
+    _delete_file(item.image_path or "")
+    item.image_path = None
     db.commit()
 
 
