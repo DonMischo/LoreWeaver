@@ -8,7 +8,7 @@ import httpx
 from crypto import decrypt
 from database import get_db
 from models import Scene, Chapter, Act, Project, UserSettings, CodexEntry, AIPrompt
-from schemas import AIGenerateRequest, KiGenerateRequest, ChatRequest, TranslateRequest
+from schemas import AIGenerateRequest, KiGenerateRequest, ChatRequest, TranslateRequest, StructureRequest
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -379,6 +379,151 @@ async def translate_text(body: TranslateRequest, db: Session = Depends(get_db)):
 
     translated = resp.json()["choices"][0]["message"]["content"].strip()
     return {"text": translated}
+
+
+# Section templates per entry type (English keys; AI translates headers to the text's language)
+_STRUCTURE_SECTIONS: dict[str, list[str]] = {
+    "character": ["Age", "Appearance", "Personality", "Abilities", "Social", "Background"],
+    "location":  ["Geography", "Atmosphere", "Notable features", "Inhabitants", "History"],
+    "item":      ["Appearance", "Function", "Owner", "History", "Significance"],
+    "lore":      ["Description", "Scope", "Origin", "Known facts", "Open questions"],
+    "custom":    ["Description", "Details", "History", "Notes"],
+}
+
+
+@router.post("/structure")
+async def structure_text(body: StructureRequest, db: Session = Depends(get_db)):
+    """Reorganize free-form description text into typed sections for a codex entry."""
+    settings = db.query(UserSettings).first()
+    if not settings or not settings.openrouter_api_key:
+        raise HTTPException(400, "OpenRouter API key not configured")
+
+    api_key = decrypt(settings.openrouter_api_key)
+    model = body.model or settings.default_codex_model or settings.default_model
+    if not model:
+        raise HTTPException(400, "No AI model configured")
+
+    entry_type = (body.entry_type or "custom").lower()
+    sections = _STRUCTURE_SECTIONS.get(entry_type, _STRUCTURE_SECTIONS["custom"])
+    sections_list = "\n".join(f"- {s}" for s in sections)
+
+    # ── Language directive — top of prompt so the model cannot miss it ──────────
+    if body.target_language:
+        lang_directive = (
+            f"OUTPUT LANGUAGE: {body.target_language}\n"
+            f"You MUST write every single word of your response in {body.target_language}. "
+            f"This includes section headers, sub-labels, all body text, and the tag/group "
+            f"suggestions. Translate the source material into {body.target_language} as you "
+            f"reorganise it.\n\n"
+        )
+    else:
+        lang_directive = (
+            "OUTPUT LANGUAGE: same as the input text "
+            "(auto-detect the source language and match it throughout, including suggestions).\n\n"
+        )
+
+    # ── Entry-type-specific notes ─────────────────────────────────────────────
+    type_notes = ""
+    if entry_type == "character":
+        type_notes = (
+            "\nAppearance sub-labels (each followed by colon, translated to output language): "
+            "Skin, Eyes, Hair, Build"
+            "\nPersonality: list each trait as a bullet point starting with '- '"
+        )
+
+    # ── Minimal format example (colon + empty section) ────────────────────────
+    ex_a = sections[0]
+    ex_b = sections[1] if len(sections) > 1 else sections[0]
+    format_example = f"{ex_a}:\ncontent goes here\n\n{ex_b}:\n"
+
+    # ── Subtype guidance (not relevant for characters) ────────────────────────
+    subtype_rule = (
+        "- suggested_subtype: the single most fitting type classification found in the text "
+        f"(e.g. for {entry_type}: a descriptive noun like 'garden', 'ruins', 'artifact'…); "
+        "null if nothing clear\n"
+        if entry_type != "character"
+        else "- suggested_subtype: null (not applicable for characters)\n"
+    )
+
+    system_content = (
+        f"{lang_directive}"
+        f"Reorganise the following {entry_type} codex entry into these fixed sections "
+        f"(create ALL of them, in this order):\n"
+        f"{sections_list}"
+        f"{type_notes}\n\n"
+        f"=== RESPONSE FORMAT ===\n"
+        f"Use EXACTLY these two delimiter lines and nothing else around them:\n\n"
+        f"<<<TEXT>>>\n"
+        f"[the reorganised description here]\n"
+        f"<<<SUGGESTIONS>>>\n"
+        f'[a single JSON object on one line: {{"suggested_tags":["tag"],"suggested_groups":["Group"],"suggested_subtype":"type or null"}}]\n\n'
+        f"--- Format rules for <<<TEXT>>> ---\n"
+        f"- Every section header ends with a colon (:) on its own line\n"
+        f"- Content follows on the next line(s); sections separated by one blank line\n"
+        f"- Empty sections: header with colon only, no placeholder text\n"
+        f"- Do NOT invent content — only reorganise what is in the source\n"
+        f"- Preserve all original information\n\n"
+        f"Example of correct <<<TEXT>>> format:\n"
+        f"{format_example}\n"
+        f"--- Rules for <<<SUGGESTIONS>>> JSON ---\n"
+        f"- suggested_tags: up to 8 lowercase keywords/descriptors extracted from the text\n"
+        f"- suggested_groups: organisations, factions, institutions the entry belongs to "
+        f"(proper names, max 5)\n"
+        f"{subtype_rule}"
+        f"- Return valid JSON on a single line; do not wrap in code fences"
+    )
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "http://localhost:3000",
+                "X-Title": "Foliantica",
+            },
+            json={
+                "model": model,
+                "stream": False,
+                "messages": [
+                    {"role": "system", "content": system_content},
+                    {"role": "user",   "content": body.text},
+                ],
+            },
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(502, f"OpenRouter error: {resp.text}")
+
+    raw = resp.json()["choices"][0]["message"]["content"].strip()
+
+    # ── Split on delimiter ────────────────────────────────────────────────────
+    structured_text = raw
+    sugg_tags: list[str] = []
+    sugg_groups: list[str] = []
+    sugg_subtype: str | None = None
+
+    if "<<<SUGGESTIONS>>>" in raw:
+        text_part, sugg_part = raw.split("<<<SUGGESTIONS>>>", 1)
+        structured_text = text_part.replace("<<<TEXT>>>", "").strip()
+        sugg_raw = re.sub(r"```(?:json)?\s*|\s*```", "", sugg_part).strip()
+        try:
+            sugg = json.loads(sugg_raw)
+            sugg_tags   = [str(t).lower().strip() for t in sugg.get("suggested_tags", []) if t]
+            sugg_groups = [str(g).strip() for g in sugg.get("suggested_groups", []) if g]
+            raw_st = sugg.get("suggested_subtype")
+            sugg_subtype = str(raw_st).strip() if raw_st and str(raw_st).lower() != "null" else None
+        except (json.JSONDecodeError, ValueError):
+            pass
+    elif "<<<TEXT>>>" in raw:
+        structured_text = raw.replace("<<<TEXT>>>", "").strip()
+
+    return {
+        "text": structured_text,
+        "suggested_tags": sugg_tags,
+        "suggested_groups": sugg_groups,
+        "suggested_subtype": sugg_subtype,
+    }
 
 
 @router.post("/scenes/{scene_id}/synopsis")

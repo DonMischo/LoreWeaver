@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins, History, ChevronUp, Pencil, Globe } from "lucide-react";
-import { imagesApi, translateApi } from "@/lib/api";
+import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins, History, ChevronUp, Pencil, Globe, LayoutList } from "lucide-react";
+import { imagesApi, translateApi, structureApi, type StructureResult } from "@/lib/api";
 import { useUploadCodexImage, useDeleteCodexImage, useInventorySummary, useCharacterItemLog, useCharacterCurrencyLog, useEntryRelations, useCreateRelation, useDeleteRelation, useSettings } from "@/store/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -305,6 +305,16 @@ export function CodexEntryDialog({
   const [translateLang, setTranslateLang]   = useState("German");
   const [translating, setTranslating]       = useState(false);
 
+  // Structure state
+  const [structureOpen, setStructureOpen]   = useState(false);
+  const [structureLang, setStructureLang]   = useState("German");
+  const [structuring, setStructuring]       = useState(false);
+  // Pending suggestions from structure response
+  const [pendingSugg, setPendingSugg]       = useState<Omit<StructureResult, "text"> | null>(null);
+  const [suggTags, setSuggTags]             = useState<string[]>([]);
+  const [suggGroups, setSuggGroups]         = useState<string[]>([]);
+  const [suggSubtype, setSuggSubtype]       = useState(false);
+
   const { data: appSettings } = useSettings();
   const { t } = useLanguage();
   const isExisting = !!initial?.id;
@@ -363,6 +373,12 @@ export function CodexEntryDialog({
       setGroupDropOpen(false);
       setTranslateOpen(false);
       setTranslating(false);
+      setStructureOpen(false);
+      setStructuring(false);
+      setPendingSugg(null);
+      setSuggTags([]);
+      setSuggGroups([]);
+      setSuggSubtype(false);
       // Default relation target to first main character (other than this entry)
       const thisId = initial?.id ?? 0;
       const mainChar = allEntries.find(e => e.is_main_char && e.id !== thisId);
@@ -455,6 +471,45 @@ export function CodexEntryDialog({
     } finally {
       setTranslating(false);
     }
+  };
+
+  const handleStructure = async () => {
+    if (!description.trim()) return;
+    setStructureOpen(false);
+    setStructuring(true);
+    try {
+      const model = appSettings?.default_codex_model ?? appSettings?.default_model ?? undefined;
+      const result = await structureApi.structure({
+        text: description,
+        entry_type: entryType,
+        target_language: structureLang,
+        model,
+      });
+      setDescription(result.text);
+      // Collect only suggestions that aren't already applied
+      const newTags   = result.suggested_tags.filter(t => !tags.includes(t));
+      const newGroups = result.suggested_groups.filter(g => !groups.includes(g));
+      const newSubtype = (entryType !== "character" && result.suggested_subtype &&
+                          result.suggested_subtype !== subtype)
+                        ? result.suggested_subtype : null;
+      if (newTags.length || newGroups.length || newSubtype) {
+        setPendingSugg({ suggested_tags: newTags, suggested_groups: newGroups, suggested_subtype: newSubtype });
+        setSuggTags(newTags);       // all pre-checked
+        setSuggGroups(newGroups);
+        setSuggSubtype(!!newSubtype);
+      }
+    } catch (e: any) {
+      alert(`Structure failed: ${e.message ?? "Unknown error"}`);
+    } finally {
+      setStructuring(false);
+    }
+  };
+
+  const handleApplySuggestions = () => {
+    if (suggTags.length)   setTags(prev => [...prev, ...suggTags.filter(t => !prev.includes(t))]);
+    if (suggGroups.length) setGroups(prev => [...prev, ...suggGroups.filter(g => !prev.includes(g))]);
+    if (suggSubtype && pendingSugg?.suggested_subtype) setSubtype(pendingSugg.suggested_subtype);
+    setPendingSugg(null);
   };
 
   // Other entries that are not this one, for relation target dropdown — grouped by type
@@ -992,25 +1047,67 @@ export function CodexEntryDialog({
 
             {/* ── Right column: Description ── */}
             <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-              {/* Label row with translate button */}
+              {/* Label row with structure + translate buttons */}
               <div className="flex items-center justify-between min-h-[1.5rem]">
                 <Label>{t("entry_description")}</Label>
                 <div className="flex items-center gap-1">
-                  {translating && (
-                    <span className="text-[11px] text-muted-foreground animate-pulse">Translating…</span>
+                  {(translating || structuring) && (
+                    <span className="text-[11px] text-muted-foreground animate-pulse">
+                      {structuring ? "Structuring…" : "Translating…"}
+                    </span>
                   )}
-                  {!translateOpen && !translating && (
-                    <button
-                      type="button"
-                      onClick={() => setTranslateOpen(true)}
-                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-secondary transition-colors"
-                      title="Translate description with AI"
-                    >
-                      <Globe className="h-3 w-3" />
-                      Translate
-                    </button>
+                  {!translateOpen && !structureOpen && !translating && !structuring && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setStructureOpen(true)}
+                        disabled={!description.trim()}
+                        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-secondary transition-colors disabled:opacity-40"
+                        title="Organise description into sections"
+                      >
+                        <LayoutList className="h-3 w-3" />
+                        Structure
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTranslateOpen(true)}
+                        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-secondary transition-colors"
+                        title="Translate description with AI"
+                      >
+                        <Globe className="h-3 w-3" />
+                        Translate
+                      </button>
+                    </>
                   )}
-                  {translateOpen && !translating && (
+                  {structureOpen && !structuring && !translating && (
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={structureLang}
+                        onChange={e => setStructureLang(e.target.value)}
+                        className="h-6 text-[11px] rounded border border-border bg-background px-1.5 outline-none"
+                      >
+                        {TRANSLATE_LANGUAGES.map(l => (
+                          <option key={l.code} value={l.label}>{l.label}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleStructure}
+                        disabled={!description.trim()}
+                        className="text-[11px] px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 transition-colors"
+                      >
+                        Go
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStructureOpen(false)}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                  {translateOpen && !translating && !structuring && (
                     <div className="flex items-center gap-1">
                       <select
                         value={translateLang}
@@ -1046,6 +1143,94 @@ export function CodexEntryDialog({
                 placeholder="Who or what is this?"
                 className="flex-1 resize-none min-h-[120px]"
               />
+
+              {/* ── AI structure suggestions confirmation panel ── */}
+              {pendingSugg && (
+                <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-2.5 text-sm">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                    Suggestions — check what to apply
+                  </p>
+
+                  {pendingSugg.suggested_tags.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground">Tags</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {pendingSugg.suggested_tags.map(tag => (
+                          <label key={tag} className="flex items-center gap-1 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={suggTags.includes(tag)}
+                              onChange={e => setSuggTags(prev =>
+                                e.target.checked ? [...prev, tag] : prev.filter(t => t !== tag)
+                              )}
+                              className="accent-primary w-3.5 h-3.5"
+                            />
+                            <span className="text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                              #{tag}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {pendingSugg.suggested_groups.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground">Groups</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {pendingSugg.suggested_groups.map(group => (
+                          <label key={group} className="flex items-center gap-1 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={suggGroups.includes(group)}
+                              onChange={e => setSuggGroups(prev =>
+                                e.target.checked ? [...prev, group] : prev.filter(g => g !== group)
+                              )}
+                              className="accent-primary w-3.5 h-3.5"
+                            />
+                            <span className="text-[11px] bg-secondary px-1.5 py-0.5 rounded">
+                              {group}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {pendingSugg.suggested_subtype && entryType !== "character" && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground">Subtype</p>
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={suggSubtype}
+                          onChange={e => setSuggSubtype(e.target.checked)}
+                          className="accent-primary w-3.5 h-3.5"
+                        />
+                        <span className="text-[11px]">{pendingSugg.suggested_subtype}</span>
+                      </label>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={handleApplySuggestions}
+                      disabled={!suggTags.length && !suggGroups.length && !suggSubtype}
+                      className="text-[11px] px-3 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors"
+                    >
+                      Apply selected
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingSugg(null)}
+                      className="text-[11px] px-3 py-1 rounded hover:bg-secondary text-muted-foreground transition-colors"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>{/* end two-column row */}

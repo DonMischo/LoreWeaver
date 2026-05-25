@@ -508,6 +508,20 @@ export const translateApi = {
     req<{ text: string }>("/ai/translate", { method: "POST", body: JSON.stringify(data) }),
 };
 
+// ── Structure ─────────────────────────────────────────────────────────────────
+
+export interface StructureResult {
+  text: string;
+  suggested_tags: string[];
+  suggested_groups: string[];
+  suggested_subtype: string | null;
+}
+
+export const structureApi = {
+  structure: (data: { text: string; entry_type?: string; target_language?: string; model?: string }) =>
+    req<StructureResult>("/ai/structure", { method: "POST", body: JSON.stringify(data) }),
+};
+
 // ── Mention stats ─────────────────────────────────────────────────────────────
 
 export const mentionStatsApi = {

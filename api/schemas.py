@@ -464,6 +464,13 @@ class TranslateRequest(BaseModel):
     model: Optional[str] = None
 
 
+class StructureRequest(BaseModel):
+    text: str
+    entry_type: str = "character"
+    target_language: Optional[str] = None  # if set, translate while structuring
+    model: Optional[str] = None
+
+
 class ChatMessage(BaseModel):
     role: str   # "user" | "assistant"
     content: str
