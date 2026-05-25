@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins, History, ChevronUp, Pencil } from "lucide-react";
-import { imagesApi } from "@/lib/api";
-import { useUploadCodexImage, useDeleteCodexImage, useInventorySummary, useCharacterItemLog, useCharacterCurrencyLog, useEntryRelations, useCreateRelation, useDeleteRelation } from "@/store/queries";
+import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins, History, ChevronUp, Pencil, Globe } from "lucide-react";
+import { imagesApi, translateApi } from "@/lib/api";
+import { useUploadCodexImage, useDeleteCodexImage, useInventorySummary, useCharacterItemLog, useCharacterCurrencyLog, useEntryRelations, useCreateRelation, useDeleteRelation, useSettings } from "@/store/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +19,31 @@ import { NameGeneratorWidget } from "./NameGeneratorWidget";
 import type { NameType } from "@/lib/nameGenerator";
 
 const ENTRY_TYPES: EntryType[] = ["character", "location", "item", "lore", "custom"];
+
+const TRANSLATE_LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "de", label: "German" },
+  { code: "fr", label: "French" },
+  { code: "es", label: "Spanish" },
+  { code: "pt", label: "Portuguese" },
+  { code: "it", label: "Italian" },
+  { code: "nl", label: "Dutch" },
+  { code: "ru", label: "Russian" },
+  { code: "pl", label: "Polish" },
+  { code: "sv", label: "Swedish" },
+  { code: "da", label: "Danish" },
+  { code: "no", label: "Norwegian" },
+  { code: "fi", label: "Finnish" },
+  { code: "cs", label: "Czech" },
+  { code: "hu", label: "Hungarian" },
+  { code: "ro", label: "Romanian" },
+  { code: "tr", label: "Turkish" },
+  { code: "uk", label: "Ukrainian" },
+  { code: "ar", label: "Arabic" },
+  { code: "ja", label: "Japanese" },
+  { code: "zh", label: "Chinese" },
+  { code: "ko", label: "Korean" },
+];
 
 const PRESET_COLORS = [
   "#eab308", "#ef4444", "#3b82f6", "#22c55e",
@@ -269,6 +294,12 @@ export function CodexEntryDialog({
   const [relPreset, setRelPreset]     = useState(PRESET_RELATIONS[0]);
   const [relCustom, setRelCustom]     = useState("");
 
+  // Translate state
+  const [translateOpen, setTranslateOpen]   = useState(false);
+  const [translateLang, setTranslateLang]   = useState("German");
+  const [translating, setTranslating]       = useState(false);
+
+  const { data: appSettings } = useSettings();
   const { t } = useLanguage();
   const isExisting = !!initial?.id;
   const entryId    = initial?.id ?? 0;
@@ -396,6 +427,26 @@ export function CodexEntryDialog({
       name_type: nameType || null,
     });
     onClose();
+  };
+
+  const handleTranslate = async () => {
+    if (!description.trim()) return;
+    setTranslating(true);
+    try {
+      const model = appSettings?.default_codex_model ?? appSettings?.default_model ?? undefined;
+      const result = await translateApi.translate({
+        text: description,
+        target_language: translateLang,
+        model,
+      });
+      setDescription(result.text);
+      setTranslateOpen(false);
+    } catch (e: any) {
+      // Surface error as a brief alert; don't wipe description
+      alert(`Translation failed: ${e.message ?? "Unknown error"}`);
+    } finally {
+      setTranslating(false);
+    }
   };
 
   // Other entries that are not this one, for relation target dropdown — grouped by type
@@ -933,7 +984,54 @@ export function CodexEntryDialog({
 
             {/* ── Right column: Description ── */}
             <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-              <Label>{t("entry_description")}</Label>
+              {/* Label row with translate button */}
+              <div className="flex items-center justify-between min-h-[1.5rem]">
+                <Label>{t("entry_description")}</Label>
+                <div className="flex items-center gap-1">
+                  {translating && (
+                    <span className="text-[11px] text-muted-foreground animate-pulse">Translating…</span>
+                  )}
+                  {!translateOpen && !translating && (
+                    <button
+                      type="button"
+                      onClick={() => setTranslateOpen(true)}
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded hover:bg-secondary transition-colors"
+                      title="Translate description with AI"
+                    >
+                      <Globe className="h-3 w-3" />
+                      Translate
+                    </button>
+                  )}
+                  {translateOpen && !translating && (
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={translateLang}
+                        onChange={e => setTranslateLang(e.target.value)}
+                        className="h-6 text-[11px] rounded border border-border bg-background px-1.5 outline-none"
+                      >
+                        {TRANSLATE_LANGUAGES.map(l => (
+                          <option key={l.code} value={l.label}>{l.label}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleTranslate}
+                        disabled={!description.trim()}
+                        className="text-[11px] px-2 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 transition-colors"
+                      >
+                        Go
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTranslateOpen(false)}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}

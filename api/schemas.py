@@ -455,6 +455,13 @@ class KiGenerateRequest(BaseModel):
     prompt_id: Optional[int] = None
     entry_type: str = ""
     word_count: Optional[int] = None  # per-node override; falls back to prompt's word_count
+    create_entry: bool = False  # when True, return structured JSON for codex entry creation
+
+
+class TranslateRequest(BaseModel):
+    text: str
+    target_language: str
+    model: Optional[str] = None
 
 
 class ChatMessage(BaseModel):

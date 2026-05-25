@@ -28,7 +28,7 @@ import {
   useSyncSceneCommands, useCreateSceneVersion,
   useUpdateSettings, useSettings,
 } from "@/store/queries";
-import type { SceneTime } from "@/types";
+import type { SceneTime, CodexEntry } from "@/types";
 import type { SceneCommandIn } from "@/lib/api";
 import { versionsApi } from "@/lib/api";
 import { DEFAULT_TIME_CONFIG } from "@/types";
@@ -82,7 +82,7 @@ export default function ScenePage() {
   const [wordCount, setWordCount] = useState(0);
   const [selectedCodexId, setSelectedCodexId] = useState<number>(-1);
   const [newEntryDialogOpen, setNewEntryDialogOpen] = useState(false);
-  const [newEntryInitial, setNewEntryInitial] = useState<{ name?: string }>({});
+  const [newEntryInitial, setNewEntryInitial] = useState<Partial<CodexEntry>>({});
   const [timePanelOpen, setTimePanelOpen] = useState(false);
   const [timeConfigOpen, setTimeConfigOpen] = useState(false);
   const [timelineCommandOpen, setTimelineCommandOpen] = useState(false);
@@ -569,6 +569,7 @@ export default function ScenePage() {
             applyFlagRef={applyFlagRef}
             applyGrammarFixRef={applyGrammarFixRef}
             jumpToGrammarMatchRef={jumpToGrammarMatchRef}
+            onPrefillEntry={(data) => { setNewEntryInitial(data); setNewEntryDialogOpen(true); }}
           />
           <StatusBar sceneWordCount={wordCount} />
         </div>

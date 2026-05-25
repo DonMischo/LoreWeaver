@@ -7,6 +7,8 @@ export interface EditorContextValue {
   allEntries: CodexEntry[];
   sceneId: number;
   projectId: number;
+  /** Open the new-entry dialog pre-filled with AI-extracted data */
+  onPrefillEntry?: (data: Partial<CodexEntry>) => void;
 }
 
 export const EditorContext = createContext<EditorContextValue>({

@@ -497,7 +497,15 @@ export const kiApi = {
     prompt_id?: number | null;
     entry_type?: string;
     word_count?: number | null;
+    create_entry?: boolean;
   }) => req<{ text: string }>("/ai/ki", { method: "POST", body: JSON.stringify(data) }),
+};
+
+// ── Translation ───────────────────────────────────────────────────────────────
+
+export const translateApi = {
+  translate: (data: { text: string; target_language: string; model?: string }) =>
+    req<{ text: string }>("/ai/translate", { method: "POST", body: JSON.stringify(data) }),
 };
 
 // ── Mention stats ─────────────────────────────────────────────────────────────

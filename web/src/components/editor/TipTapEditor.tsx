@@ -49,6 +49,7 @@ interface Props {
   applyFlagRef?: React.MutableRefObject<((type: string) => void) | null>;
   applyGrammarFixRef?: React.MutableRefObject<((matched: string, replacement: string, plainOffset: number) => void) | null>;
   jumpToGrammarMatchRef?: React.MutableRefObject<((matched: string, plainOffset: number) => void) | null>;
+  onPrefillEntry?: (data: Partial<CodexEntry>) => void;
 }
 
 interface SlashState {
@@ -128,7 +129,7 @@ function applyTypewriterScroll(
   } catch { /* view not mounted */ }
 }
 
-export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId, onOpenChat, onOpenTimeline, onWordSelect, onFlagsChange, replaceWordRef, applyFlagRef, applyGrammarFixRef, jumpToGrammarMatchRef }: Props) {
+export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClick, sceneId, onOpenChat, onOpenTimeline, onWordSelect, onFlagsChange, replaceWordRef, applyFlagRef, applyGrammarFixRef, jumpToGrammarMatchRef, onPrefillEntry }: Props) {
   const showLineNumbers  = useUIStore((s) => s.showParagraphNumbers);
   const typewriterMode   = useUIStore((s) => s.typewriterMode);
   const typewriterOffset = useUIStore((s) => s.typewriterOffset);
@@ -439,7 +440,7 @@ export function TipTapEditor({ content, onChange, codexEntries, onCodexEntryClic
   ].filter(Boolean).join(" ");
 
   return (
-    <EditorContext.Provider value={{ characters, items, allEntries: codexEntries, sceneId, projectId: codexEntries[0]?.project_id ?? 0 }}>
+    <EditorContext.Provider value={{ characters, items, allEntries: codexEntries, sceneId, projectId: codexEntries[0]?.project_id ?? 0, onPrefillEntry }}>
       <div ref={scrollRef} className={wrapperClass}>
         <EditorContent editor={editor} className="h-full" />
         {editor && <FormattingToolbar editor={editor} />}

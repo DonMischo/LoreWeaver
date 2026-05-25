@@ -8,7 +8,7 @@ import httpx
 from crypto import decrypt
 from database import get_db
 from models import Scene, Chapter, Act, Project, UserSettings, CodexEntry, AIPrompt
-from schemas import AIGenerateRequest, KiGenerateRequest, ChatRequest
+from schemas import AIGenerateRequest, KiGenerateRequest, ChatRequest, TranslateRequest
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -202,6 +202,51 @@ def _fill_placeholders(template: str, values: dict[str, str]) -> str:
     return template
 
 
+# JSON schema hints used when create_entry=True
+_ENTRY_JSON_SCHEMAS: dict[str, str] = {
+    "character": (
+        '{\n'
+        '  "name": "full name",\n'
+        '  "entry_type": "character",\n'
+        '  "aliases": ["alias or nickname"],\n'
+        '  "species": "species or race",\n'
+        '  "tags": ["tag1", "tag2"],\n'
+        '  "description": "Alter: ...\\n\\nAppearance:\\nHaut: ...\\nAugen: ...\\nHaar: ...\\nKörperbau: ...\\n\\nPersonality:\\ntraits:\\n- ...\\n- ...\\n\\nAbilities:\\n- ...\\n\\nBackground:\\n- ..."\n'
+        '}'
+    ),
+    "location": (
+        '{\n'
+        '  "name": "location name",\n'
+        '  "entry_type": "location",\n'
+        '  "aliases": [],\n'
+        '  "subtype": "type of location (city, forest, ruin…)",\n'
+        '  "tags": ["tag1"],\n'
+        '  "description": "Geography:\\n...\\n\\nAtmosphere:\\n...\\n\\nNotable features:\\n- ...\\n\\nInhabitants:\\n...\\n\\nHistory:\\n..."\n'
+        '}'
+    ),
+    "item": (
+        '{\n'
+        '  "name": "item name",\n'
+        '  "entry_type": "item",\n'
+        '  "aliases": [],\n'
+        '  "subtype": "item type (weapon, artifact, tool…)",\n'
+        '  "tags": [],\n'
+        '  "description": "Appearance:\\n...\\n\\nFunction:\\n...\\n\\nOwner:\\n...\\n\\nHistory:\\n...\\n\\nSignificance:\\n..."\n'
+        '}'
+    ),
+    "lore": (
+        '{\n'
+        '  "name": "concept or system name",\n'
+        '  "entry_type": "lore",\n'
+        '  "aliases": [],\n'
+        '  "subtype": "magic system / religion / event / faction…",\n'
+        '  "tags": [],\n'
+        '  "description": "Description:\\n...\\n\\nScope:\\n...\\n\\nOrigin:\\n...\\n\\nKnown facts:\\n- ...\\n\\nOpen questions:\\n..."\n'
+        '}'
+    ),
+}
+
+
 @router.post("/ki")
 async def ki_generate(body: KiGenerateRequest, db: Session = Depends(get_db)):
     """Non-streaming AI generation for the /ki editor command."""
@@ -226,6 +271,7 @@ async def ki_generate(body: KiGenerateRequest, db: Session = Depends(get_db)):
         ctx["WORD_COUNT"] = str(effective_wc)
         system = _fill_placeholders(prompt_row.system or "You are a creative writing assistant.", ctx)
         user_msg = _fill_placeholders(prompt_row.user_template or "", ctx)
+        language = ctx["LANGUAGE"]
     else:
         # Legacy inline behaviour
         parts: list[str] = []
@@ -251,6 +297,20 @@ async def ki_generate(body: KiGenerateRequest, db: Session = Depends(get_db)):
         context = "\n\n".join(parts)
         system = "You are a creative writing assistant. Write naturally, matching the existing tone and style."
         user_msg = f"{context}\n\n## Instruction\n{body.prompt}" if body.prompt else context
+        language = _project_language(scene, db)
+
+    # create_entry mode: override system to demand structured JSON output
+    if body.create_entry:
+        entry_type = (body.entry_type or "character").lower()
+        schema = _ENTRY_JSON_SCHEMAS.get(entry_type, _ENTRY_JSON_SCHEMAS["character"])
+        system += (
+            f"\n\nCRITICAL OUTPUT FORMAT: Your ENTIRE response must be a single valid JSON object. "
+            f"No markdown code fences, no preamble, no commentary outside the JSON. "
+            f"Use exactly this structure for a {entry_type}:\n{schema}\n"
+            f"Write every descriptive text value in {language}. "
+            f"The description field uses labelled sections separated by blank lines, matching the schema above. "
+            f"Extract only what is present in the source — do not invent facts."
+        )
 
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
@@ -271,6 +331,54 @@ async def ki_generate(body: KiGenerateRequest, db: Session = Depends(get_db)):
         raise HTTPException(resp.status_code, resp.text)
 
     return {"text": resp.json()["choices"][0]["message"]["content"]}
+
+
+@router.post("/translate")
+async def translate_text(body: TranslateRequest, db: Session = Depends(get_db)):
+    """Translate a block of text using the configured AI model."""
+    settings = db.query(UserSettings).first()
+    if not settings or not settings.openrouter_api_key:
+        raise HTTPException(400, "OpenRouter API key not configured")
+
+    api_key = decrypt(settings.openrouter_api_key)
+    model = body.model or settings.default_codex_model or settings.default_model
+    if not model:
+        raise HTTPException(400, "No AI model configured")
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "http://localhost:3000",
+                "X-Title": "Foliantica",
+            },
+            json={
+                "model": model,
+                "stream": False,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            f"You are a professional literary translator. "
+                            f"Translate the provided text into {body.target_language}. "
+                            f"Preserve the original formatting exactly — keep all section headers, "
+                            f"bullet points, newlines, and structural elements intact. "
+                            f"Preserve the meaning, tone, and style. "
+                            f"Return only the translated text, no preamble or explanation."
+                        ),
+                    },
+                    {"role": "user", "content": body.text},
+                ],
+            },
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(502, f"OpenRouter error: {resp.text}")
+
+    translated = resp.json()["choices"][0]["message"]["content"].strip()
+    return {"text": translated}
 
 
 @router.post("/scenes/{scene_id}/synopsis")
