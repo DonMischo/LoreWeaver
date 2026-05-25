@@ -4,7 +4,8 @@ import type {
   Fragment, FragmentTabs, BookMeta, AIPrompt, ProjectSceneItem,
   SceneVersion, SceneVersionDetail, MentionStat, SceneMentionStat,
   WritingLogEntry, GhostTextScene, CorkboardAct, CorkboardData,
-  TimelineTrack, TimelineEventItem,
+  TimelineTrack, TimelineEventItem, SeriesData,
+  ProjectAnalytics, ResearchItem, QuerySubmission, ExportProfile,
 } from "@/types";
 
 const BASE = "/api";
@@ -12,7 +13,7 @@ const BASE = "/api";
 // ── Export types ──────────────────────────────────────────────────────────────
 
 export interface ExportOptions {
-  format: "md" | "tex" | "epub-style" | "pdf" | "epub";
+  format: "md" | "tex" | "epub-style" | "pdf" | "epub" | "docx";
   scene_ids?: number[] | null;
   include_act_headings: boolean;
   include_chapter_headings: boolean;
@@ -149,6 +150,7 @@ export const scenesApi = {
     node_y?: number | null;
     pov_character_id?: number | null;
     beat?: string | null;
+    scene_type?: string | null;
   }) =>
     req<Scene>(`/scenes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   delete: (id: number) => req<void>(`/scenes/${id}`, { method: "DELETE" }),
@@ -178,6 +180,39 @@ export const codexApi = {
     req<ProjectItemLogEntry[]>(`/codex/${characterId}/item-log?item_id=${itemId}`),
   getCharacterCurrencyLog: (characterId: number, currencyName: string) =>
     req<ProjectCurrencyLogEntry[]>(`/codex/${characterId}/currency-log?currency_name=${encodeURIComponent(currencyName)}`),
+  // Entry-level sharing
+  getEntryAccess: (entryId: number) =>
+    req<{ project_ids: number[] }>(`/codex/${entryId}/access`),
+  setEntryAccess: (entryId: number, data: { project_ids: number[] }) =>
+    req<{ project_ids: number[] }>(`/codex/${entryId}/access`, { method: "PUT", body: JSON.stringify(data) }),
+};
+
+// ── Series ────────────────────────────────────────────────────────────────────
+
+export const seriesApi = {
+  get: () => req<SeriesData>("/projects/series"),
+};
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export const analyticsApi = {
+  get: (projectId: number) => req<ProjectAnalytics>(`/projects/${projectId}/analytics`),
+};
+
+// ── Research ──────────────────────────────────────────────────────────────────
+
+export const researchApi = {
+  list: (projectId: number) => req<ResearchItem[]>(`/projects/${projectId}/research`),
+  create: (projectId: number, data: {
+    title?: string; url?: string; text_content?: string;
+    linked_scene_id?: number | null; linked_codex_id?: number | null; tags?: string[];
+  }) => req<ResearchItem>(`/projects/${projectId}/research`, { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<{
+    title: string; url: string; text_content: string;
+    linked_scene_id: number | null; linked_codex_id: number | null; tags: string[];
+  }>) => req<ResearchItem>(`/research/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: number) => req<void>(`/research/${id}`, { method: "DELETE" }),
+  refetchUrl: (id: number) => req<ResearchItem>(`/research/${id}/fetch-url`, { method: "POST" }),
 };
 
 // ── Images ────────────────────────────────────────────────────────────────────
@@ -204,6 +239,10 @@ export const imagesApi = {
     upload<{ image_path: string }>(`/codex/${entryId}/image`, file),
   deleteCodexImage: (entryId: number) =>
     deleteImage(`/codex/${entryId}/image`),
+  uploadResearchImage: (itemId: number, file: File) =>
+    upload<{ image_path: string }>(`/research/${itemId}/image`, file),
+  deleteResearchImage: (itemId: number) =>
+    deleteImage(`/research/${itemId}/image`),
   /** Convert a stored relative path to an absolute URL for <img src> */
   url: (path: string) => `/${path}`,
 };
@@ -602,4 +641,57 @@ export const grammarApi = {
     }),
   languages: () =>
     req<{ name: string; code: string; longCode: string }[]>("/grammar/languages"),
+};
+
+// ── Query / Submission tracker ────────────────────────────────────────────────
+
+export interface QuerySubmissionCreate {
+  agent_name: string;
+  agency?: string | null;
+  email?: string | null;
+  submission_type?: string;
+  date_sent?: string | null;
+  response_deadline?: string | null;
+  status?: QuerySubmission["status"];
+  notes?: string | null;
+}
+
+export const submissionsApi = {
+  list: (projectId: number) =>
+    req<QuerySubmission[]>(`/projects/${projectId}/submissions`),
+  create: (projectId: number, data: QuerySubmissionCreate) =>
+    req<QuerySubmission>(`/projects/${projectId}/submissions`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (id: number, data: Partial<QuerySubmissionCreate>) =>
+    req<QuerySubmission>(`/submissions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: number) => req<void>(`/submissions/${id}`, { method: "DELETE" }),
+};
+
+// ── Export profiles ───────────────────────────────────────────────────────────
+
+export interface ExportProfileCreate {
+  name: string;
+  description?: string | null;
+  options_json?: string;
+}
+
+export const exportProfilesApi = {
+  list: (projectId: number) =>
+    req<ExportProfile[]>(`/projects/${projectId}/export-profiles`),
+  create: (projectId: number, data: ExportProfileCreate) =>
+    req<ExportProfile>(`/projects/${projectId}/export-profiles`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (id: number, data: Partial<ExportProfileCreate>) =>
+    req<ExportProfile>(`/export-profiles/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: number) => req<void>(`/export-profiles/${id}`, { method: "DELETE" }),
 };

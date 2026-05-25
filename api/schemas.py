@@ -20,7 +20,8 @@ class BookMeta(BaseModel):
     isbn: Optional[str] = None             # dc:identifier scheme=ISBN
     rights: Optional[str] = None           # dc:rights (copyright statement)
     series: Optional[str] = None           # calibre:series
-    series_index: Optional[str] = None     # calibre:series_index
+    series_index: Optional[str] = None     # calibre:series_index (numeric string, e.g. "0.5", "1", "2")
+    series_role: Optional[str] = None      # human label: "Prequel", "Book 1", "Short Story", etc.
     genre: Optional[str] = None            # primary dc:subject
     subjects: list[str] = Field(default_factory=list)  # additional dc:subject tags
     synopsis: Optional[str] = None         # dc:description (distinct from project description)
@@ -156,6 +157,7 @@ class SceneUpdate(BaseModel):
     node_y: Optional[float] = None
     pov_character_id: Optional[int] = None
     beat: Optional[str] = None
+    scene_type: Optional[str] = None
 
 
 class SceneOut(SceneBase):
@@ -171,6 +173,7 @@ class SceneOut(SceneBase):
     node_y: Optional[float] = None
     pov_character_id: Optional[int] = None
     beat: Optional[str] = None
+    scene_type: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -206,6 +209,8 @@ class CodexEntryBase(BaseModel):
     inventory: Optional[Any] = None  # CharacterInventory JSON or None
     image_path: Optional[str] = None
     name_type: Optional[str] = None  # name generation style (NameType key)
+    share_mode: str = "all"           # "all" | "specific" | "none"
+    share_future: bool = True         # auto-share with future linked projects
 
 
 class CodexEntryCreate(CodexEntryBase):
@@ -226,6 +231,8 @@ class CodexEntryUpdate(BaseModel):
     is_main_char: Optional[bool] = None
     inventory: Optional[Any] = None
     name_type: Optional[str] = None
+    share_mode: Optional[str] = None
+    share_future: Optional[bool] = None
 
 
 class CodexEntryOut(CodexEntryBase):
@@ -261,6 +268,8 @@ class CodexEntryOut(CodexEntryBase):
             "inventory": inv,
             "image_path": entry.image_path,
             "name_type": entry.name_type,
+            "share_mode": getattr(entry, "share_mode", "all") or "all",
+            "share_future": bool(getattr(entry, "share_future", 1)),
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
         }
@@ -612,7 +621,7 @@ class TimelineEventOut(BaseModel):
 from typing import Literal
 
 class ExportOptions(BaseModel):
-    format: Literal["md", "tex", "epub-style", "pdf", "epub"] = "md"
+    format: Literal["md", "tex", "epub-style", "pdf", "epub", "docx"] = "md"
     # Content selection — None means "all"
     scene_ids: Optional[list[int]] = None   # None = all scenes
     # Structural headings
@@ -652,3 +661,151 @@ class ExportOptions(BaseModel):
     pdf_margin: str = "2.5cm"
     page_numbers: bool = True
     drop_caps: bool = False                  # first letter of each chapter as drop cap
+
+
+# ── Query / Submission tracker ────────────────────────────────────────────────
+
+class QuerySubmissionCreate(BaseModel):
+    agent_name:        str            = ""
+    agency:            Optional[str]  = None
+    email:             Optional[str]  = None
+    submission_type:   str            = "query"   # query | partial | full | synopsis
+    date_sent:         Optional[str]  = None       # ISO date string
+    response_deadline: Optional[str]  = None
+    status:            str            = "queried"  # queried | partial_requested | full_requested | offer | pass | no_response | withdrawn
+    notes:             Optional[str]  = None
+
+class QuerySubmissionUpdate(BaseModel):
+    agent_name:        Optional[str] = None
+    agency:            Optional[str] = None
+    email:             Optional[str] = None
+    submission_type:   Optional[str] = None
+    date_sent:         Optional[str] = None
+    response_deadline: Optional[str] = None
+    status:            Optional[str] = None
+    notes:             Optional[str] = None
+
+class QuerySubmissionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id:                int
+    project_id:        int
+    agent_name:        str
+    agency:            Optional[str]
+    email:             Optional[str]
+    submission_type:   str
+    date_sent:         Optional[str]
+    response_deadline: Optional[str]
+    status:            str
+    notes:             Optional[str]
+    created_at:        datetime
+    updated_at:        datetime
+
+
+# ── Export profiles ───────────────────────────────────────────────────────────
+
+class ExportProfileCreate(BaseModel):
+    name:         str
+    description:  Optional[str] = None
+    options_json: str           = "{}"
+
+class ExportProfileUpdate(BaseModel):
+    name:         Optional[str] = None
+    description:  Optional[str] = None
+    options_json: Optional[str] = None
+
+class ExportProfileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id:           int
+    project_id:   Optional[int]
+    name:         str
+    description:  Optional[str]
+    is_builtin:   int
+    options_json: str
+    created_at:   datetime
+    updated_at:   datetime
+
+
+# ── Analytics ─────────────────────────────────────────────────────────────────
+
+class SceneAnalytics(BaseModel):
+    scene_id: int
+    scene_title: Optional[str]
+    chapter_id: int
+    chapter_title: str
+    act_id: int
+    act_title: str
+    order_index: int
+    word_count: int
+    scene_type: Optional[str]
+    avg_sentence_length: float
+    dialogue_ratio: float
+
+
+class ChapterAnalytics(BaseModel):
+    chapter_id: int
+    chapter_title: str
+    act_id: int
+    act_title: str
+    word_count: int
+    scene_count: int
+    flesch_score: float
+    grade_level: float
+    scene_type_dist: dict[str, int]
+
+
+class ProjectAnalytics(BaseModel):
+    scenes: list[SceneAnalytics]
+    chapters: list[ChapterAnalytics]
+    total_word_count: int
+    scene_type_dist: dict[str, int]
+
+
+# ── Research ──────────────────────────────────────────────────────────────────
+
+class ResearchItemCreate(BaseModel):
+    title: Optional[str] = None
+    url: Optional[str] = None
+    text_content: Optional[str] = None
+    linked_scene_id: Optional[int] = None
+    linked_codex_id: Optional[int] = None
+    tags: list[str] = Field(default_factory=list)
+
+
+class ResearchItemUpdate(BaseModel):
+    title: Optional[str] = None
+    url: Optional[str] = None
+    text_content: Optional[str] = None
+    linked_scene_id: Optional[int] = None
+    linked_codex_id: Optional[int] = None
+    tags: Optional[list[str]] = None
+
+
+class ResearchItemOut(BaseModel):
+    id: int
+    project_id: int
+    title: Optional[str]
+    url: Optional[str]
+    url_title: Optional[str]
+    url_description: Optional[str]
+    url_image: Optional[str]
+    text_content: Optional[str]
+    image_path: Optional[str]
+    linked_scene_id: Optional[int]
+    linked_codex_id: Optional[int]
+    tags: list[str]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _parse_tags(cls, data):
+        if hasattr(data, "__dict__"):
+            raw = getattr(data, "tags", None)
+            if isinstance(raw, str):
+                try:
+                    object.__setattr__(data, "tags", json.loads(raw))
+                except Exception:
+                    object.__setattr__(data, "tags", [])
+        return data

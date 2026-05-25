@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins, History, ChevronUp, Pencil, Globe, LayoutList } from "lucide-react";
+import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins, History, ChevronUp, ChevronDown, Pencil, Globe, LayoutList, Share2, Users, Eye, EyeOff } from "lucide-react";
 import { imagesApi, translateApi, structureApi, type StructureResult } from "@/lib/api";
-import { useUploadCodexImage, useDeleteCodexImage, useInventorySummary, useCharacterItemLog, useCharacterCurrencyLog, useEntryRelations, useCreateRelation, useDeleteRelation, useSettings } from "@/store/queries";
+import { useUploadCodexImage, useDeleteCodexImage, useInventorySummary, useCharacterItemLog, useCharacterCurrencyLog, useEntryRelations, useCreateRelation, useDeleteRelation, useSettings, useEntryAccess, useSetEntryAccess } from "@/store/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -240,6 +240,8 @@ function InventoryItemRow({
 
 // ── Main dialog ───────────────────────────────────────────────────────────────
 
+interface SharingProject { id: number; title: string }
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -252,10 +254,13 @@ interface Props {
   onOpenEntry?: (id: number) => void;
   /** Called when the user clicks a relation's target name to open that entry */
   onOpenRelation?: (id: number) => void;
+  /** All projects that share the same codex — shown in the per-entry sharing checklist */
+  sharingProjects?: SharingProject[];
 }
 
 export function CodexEntryDialog({
   open, onClose, onSave, initial, title, allEntries = EMPTY_ENTRIES, onOpenEntry, onOpenRelation,
+  sharingProjects = [],
 }: Props) {
   const [name, setName]               = useState(initial?.name ?? "");
   const [aliasInput, setAliasInput]   = useState("");
@@ -300,6 +305,13 @@ export function CodexEntryDialog({
   const [relPreset, setRelPreset]     = useState(PRESET_RELATIONS[0]);
   const [relCustom, setRelCustom]     = useState("");
 
+  // Sharing state
+  type ShareMode = "all" | "specific" | "none";
+  const [shareMode, setShareMode]           = useState<ShareMode>((initial?.share_mode ?? "all") as ShareMode);
+  const [shareFuture, setShareFuture]       = useState<boolean>(initial?.share_future ?? true);
+  const [accessProjectIds, setAccessProjectIds] = useState<number[]>([]);
+  const [sharingSectionOpen, setSharingSectionOpen] = useState(false);
+
   // Translate state
   const [translateOpen, setTranslateOpen]   = useState(false);
   const [translateLang, setTranslateLang]   = useState("German");
@@ -320,6 +332,17 @@ export function CodexEntryDialog({
   const isExisting = !!initial?.id;
   const entryId    = initial?.id ?? 0;
   const projectId  = initial?.project_id ?? 0;
+
+  // Sharing hooks
+  const { data: accessData } = useEntryAccess(isExisting ? entryId : 0);
+  const setEntryAccessMutation = useSetEntryAccess(entryId, projectId);
+
+  // Sync access list from server when dialog opens
+  useEffect(() => {
+    if (open && isExisting && accessData) {
+      setAccessProjectIds(accessData.project_ids);
+    }
+  }, [open, isExisting, accessData]);
 
   // Live inventory from scene commands (read-only display, always fresh)
   const { data: inventorySummary } = useInventorySummary(isExisting && entryType === "character" ? entryId : 0);
@@ -371,6 +394,9 @@ export function CodexEntryDialog({
       setTagInput("");
       setGroupInput("");
       setGroupDropOpen(false);
+      setShareMode((initial?.share_mode ?? "all") as ShareMode);
+      setShareFuture(initial?.share_future ?? true);
+      setSharingSectionOpen(false);
       setTranslateOpen(false);
       setTranslating(false);
       setStructureOpen(false);
@@ -449,7 +475,13 @@ export function CodexEntryDialog({
         ? { possessions: nativePossessions, currencies: nativeCurrencies }
         : null,
       name_type: nameType || null,
+      share_mode: shareMode,
+      share_future: shareFuture,
     });
+    // Save access list separately (only meaningful for existing entries)
+    if (isExisting) {
+      setEntryAccessMutation.mutate({ project_ids: shareMode === "specific" ? accessProjectIds : [] });
+    }
     onClose();
   };
 
@@ -932,6 +964,114 @@ export function CodexEntryDialog({
                   </div>
                 );
               })()}
+
+              {/* ── Sharing — visible for all existing entries in all projects ── */}
+              {isExisting && (
+                <div className="rounded-lg border border-border overflow-hidden">
+                  {/* Collapsible header */}
+                  <button
+                    type="button"
+                    onClick={() => setSharingSectionOpen(o => !o)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-left hover:bg-secondary/30 transition-colors"
+                  >
+                    <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="flex-1">Sharing</span>
+                    {shareMode === "all" && (
+                      <span className="text-[10px] text-muted-foreground/70 font-normal">All projects</span>
+                    )}
+                    {shareMode === "specific" && (
+                      <span className="text-[10px] text-primary/70 font-normal">{accessProjectIds.length} selected</span>
+                    )}
+                    {shareMode === "none" && (
+                      <span className="text-[10px] text-muted-foreground/70 font-normal">This project only</span>
+                    )}
+                    {sharingSectionOpen
+                      ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                      : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                    }
+                  </button>
+
+                  {sharingSectionOpen && (
+                    <div className="px-3 pb-3 space-y-3 border-t border-border/50">
+                      {/* Mode picker */}
+                      <div className="pt-2 space-y-1">
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Visible to</p>
+                        <div className="space-y-1.5">
+                          {(["all", "specific", "none"] as const).map((mode) => (
+                            <label key={mode} className="flex items-start gap-2 cursor-pointer select-none">
+                              <input
+                                type="radio"
+                                name="shareMode"
+                                value={mode}
+                                checked={shareMode === mode}
+                                onChange={() => setShareMode(mode)}
+                                className="mt-0.5 accent-primary"
+                              />
+                              <div>
+                                <span className="text-sm font-medium">
+                                  {mode === "all" && (
+                                    <span className="flex items-center gap-1.5"><Eye className="h-3.5 w-3.5" /> All linked projects</span>
+                                  )}
+                                  {mode === "specific" && (
+                                    <span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Specific projects</span>
+                                  )}
+                                  {mode === "none" && (
+                                    <span className="flex items-center gap-1.5"><EyeOff className="h-3.5 w-3.5" /> This project only</span>
+                                  )}
+                                </span>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {mode === "all" && "Visible to all linked projects — current and future (default)"}
+                                  {mode === "specific" && "Only visible to the projects you select below"}
+                                  {mode === "none" && "Private — not shared with any linked project"}
+                                </p>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Project checklist — only when 'specific' */}
+                      {shareMode === "specific" && (
+                        <div className="space-y-1">
+                          <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Select projects</p>
+                          {sharingProjects.length > 0 ? (
+                            <div className="space-y-1 max-h-40 overflow-y-auto">
+                              {sharingProjects.map(p => (
+                                <label key={p.id} className="flex items-center gap-2 cursor-pointer px-1 py-0.5 rounded hover:bg-secondary/40 select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={accessProjectIds.includes(p.id)}
+                                    onChange={(e) => setAccessProjectIds(prev =>
+                                      e.target.checked ? [...prev, p.id] : prev.filter(id => id !== p.id)
+                                    )}
+                                    className="accent-primary"
+                                  />
+                                  <span className="text-sm">{p.title}</span>
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground/60 italic">No other projects are linked to this codex yet.</p>
+                          )}
+                          {/* Auto-share with future linked projects */}
+                          <label className="flex items-center gap-2 cursor-pointer pt-1 select-none border-t border-border/30 mt-2">
+                            <input
+                              type="checkbox"
+                              checked={shareFuture}
+                              onChange={e => setShareFuture(e.target.checked)}
+                              className="accent-primary"
+                            />
+                            <div>
+                              <span className="text-sm">Auto-share with future linked projects</span>
+                              <p className="text-[11px] text-muted-foreground">Automatically grant access when a new project links this codex</p>
+                            </div>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Relations — only for existing (saved) entries */}
               {isExisting && (

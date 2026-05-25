@@ -10,12 +10,36 @@ export interface BookMeta {
   isbn?: string;            // dc:identifier scheme=ISBN
   rights?: string;          // dc:rights (copyright statement)
   series?: string;          // series name
-  series_index?: string;    // position in series
+  series_index?: string;    // position in series (numeric string, e.g. "0.5", "1")
+  series_role?: string;     // human label, e.g. "Prequel", "Book 1", "Short Story"
   genre?: string;           // primary subject/category
   subjects?: string[];      // additional subject tags
   synopsis?: string;        // dc:description (separate from project.description)
   translator?: string;      // dc:contributor role="trl"
   editor?: string;          // dc:contributor role="edt"
+}
+
+// ── Series ────────────────────────────────────────────────────────────────────
+
+export interface SeriesBook {
+  id: number;
+  title: string;
+  description: string | null;
+  series_index: string | null;
+  series_role: string | null;
+  cover_image: string | null;
+  shared_codex_project_id: number | null;
+  updated_at: string | null;
+}
+
+export interface SeriesGroup {
+  name: string;
+  books: SeriesBook[];
+}
+
+export interface SeriesData {
+  series: SeriesGroup[];
+  unserialized: SeriesBook[];
 }
 
 export interface Project {
@@ -59,6 +83,63 @@ export interface Scene {
   scene_time: SceneTime | null;
   pov_character_id: number | null;
   beat: string | null;
+  scene_type: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export type SceneType = "action" | "dialogue" | "introspection" | "description" | "transition";
+
+export interface SceneAnalytics {
+  scene_id: number;
+  scene_title: string | null;
+  chapter_id: number;
+  chapter_title: string;
+  act_id: number;
+  act_title: string;
+  order_index: number;
+  word_count: number;
+  scene_type: string | null;
+  avg_sentence_length: number;
+  dialogue_ratio: number;
+}
+
+export interface ChapterAnalytics {
+  chapter_id: number;
+  chapter_title: string;
+  act_id: number;
+  act_title: string;
+  word_count: number;
+  scene_count: number;
+  flesch_score: number;
+  grade_level: number;
+  scene_type_dist: Record<string, number>;
+}
+
+export interface ProjectAnalytics {
+  scenes: SceneAnalytics[];
+  chapters: ChapterAnalytics[];
+  total_word_count: number;
+  scene_type_dist: Record<string, number>;
+}
+
+// ── Research ──────────────────────────────────────────────────────────────────
+
+export interface ResearchItem {
+  id: number;
+  project_id: number;
+  title: string | null;
+  url: string | null;
+  url_title: string | null;
+  url_description: string | null;
+  url_image: string | null;
+  text_content: string | null;
+  image_path: string | null;
+  linked_scene_id: number | null;
+  linked_codex_id: number | null;
+  tags: string[];
   created_at: string;
   updated_at: string;
 }
@@ -192,6 +273,9 @@ export interface CodexEntry {
   inventory: CharacterInventory | null;
   image_path: string | null;
   name_type: string | null;
+  /** "all" = all linked projects | "specific" = access list | "none" = owner only */
+  share_mode: "all" | "specific" | "none";
+  share_future: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -347,4 +431,41 @@ export interface GhostTextScene {
   act_title: string;
   chapter_title: string;
   ghost_texts: string[];
+}
+
+// ── Publishing ────────────────────────────────────────────────────────────────
+
+export type SubmissionStatus =
+  | "queried"
+  | "partial_requested"
+  | "full_requested"
+  | "offer"
+  | "pass"
+  | "no_response"
+  | "withdrawn";
+
+export interface QuerySubmission {
+  id: number;
+  project_id: number;
+  agent_name: string;
+  agency: string | null;
+  email: string | null;
+  submission_type: string;
+  date_sent: string | null;       // ISO date string
+  response_deadline: string | null;
+  status: SubmissionStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExportProfile {
+  id: number;
+  project_id: number | null;       // null = global built-in
+  name: string;
+  description: string | null;
+  is_builtin: boolean;
+  options_json: string;            // JSON-encoded ExportOptions partial
+  created_at: string;
+  updated_at: string;
 }

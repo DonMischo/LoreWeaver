@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X, Plus } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { X, Plus, EyeOff, Users, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,15 +33,18 @@ const ENTRY_TYPE_LABELS: Record<string, string> = {
   character: "Characters", location: "Locations", item: "Items", lore: "Lore", custom: "Custom",
 };
 
+interface SharingProject { id: number; title: string; }
+
 interface Props {
   open: boolean;
   onClose: () => void;
   selectedEntries: CodexEntry[];
   allEntries: CodexEntry[];
   projectId: number;
+  sharingProjects?: SharingProject[];
 }
 
-export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, projectId }: Props) {
+export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, projectId, sharingProjects = [] }: Props) {
   const qc = useQueryClient();
   const { t } = useLanguage();
   const [entryType, setEntryType]   = useState<EntryType | "__none__">("__none__");
@@ -54,6 +57,9 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
   const [relPreset, setRelPreset]   = useState(PRESET_RELATIONS[0]);
   const [relCustom, setRelCustom]   = useState("");
   const [relationsToAdd, setRelationsToAdd] = useState<{ targetId: number; targetName: string; type: string }[]>([]);
+  const [shareMode, setShareMode]           = useState<"__none__" | "all" | "specific" | "none">("__none__");
+  const [shareFuture, setShareFuture]       = useState(false);
+  const [accessProjectIds, setAccessProjectIds] = useState<number[]>([]);
   const [applying, setApplying]     = useState(false);
 
   const reset = () => {
@@ -67,6 +73,9 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
     setRelPreset(PRESET_RELATIONS[0]);
     setRelCustom("");
     setRelationsToAdd([]);
+    setShareMode("__none__");
+    setShareFuture(false);
+    setAccessProjectIds([]);
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -97,7 +106,7 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
   };
   const groupSuggestions = [...new Set(allEntries.flatMap(e => e.groups ?? []))].filter(g => !groupsToAdd.includes(g)).sort();
 
-  const hasChanges = entryType !== "__none__" || subtype.trim() || tagsToAdd.length > 0 || groupsToAdd.length > 0 || relationsToAdd.length > 0;
+  const hasChanges = entryType !== "__none__" || subtype.trim() || tagsToAdd.length > 0 || groupsToAdd.length > 0 || relationsToAdd.length > 0 || shareMode !== "__none__";
 
   const handleApply = async () => {
     if (!hasChanges) return;
@@ -123,8 +132,19 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
           const merged = [...new Set([...(entry.groups ?? []), ...groupsToAdd])];
           update.groups = merged;
         }
+        // Apply sharing mode
+        if (shareMode !== "__none__") {
+          update.share_mode = shareMode;
+          if (shareMode === "specific") update.share_future = shareFuture;
+        }
         if (Object.keys(update).length > 0) {
           await codexApi.update(entry.id, update as any);
+        }
+        // Apply access list when specific
+        if (shareMode === "specific") {
+          await codexApi.setEntryAccess(entry.id, { project_ids: accessProjectIds });
+        } else if (shareMode === "all" || shareMode === "none") {
+          await codexApi.setEntryAccess(entry.id, { project_ids: [] });
         }
         // Add relations
         for (const rel of relationsToAdd) {
@@ -151,7 +171,7 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md" aria-describedby={undefined}>
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>
             {t("bulk_apply_to")} {selectedEntries.length} {selectedEntries.length === 1 ? t("codex_entry") : t("codex_entries")}
@@ -161,7 +181,7 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
           {t("bulk_note")}
         </p>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto flex-1 pr-0.5">
           {/* Type */}
           <div className="space-y-1.5">
             <Label>{t("bulk_change_type")}</Label>
@@ -318,6 +338,67 @@ export function BulkEditDialog({ open, onClose, selectedEntries, allEntries, pro
               )}
             </div>
           )}
+
+          {/* Sharing */}
+          <div className="space-y-2">
+            <Label>Sharing</Label>
+            <div className="space-y-1.5">
+              {(
+                [
+                  { value: "__none__", label: "No change", icon: null },
+                  { value: "all",      label: "All linked projects", icon: <Globe className="h-3.5 w-3.5" /> },
+                  { value: "specific", label: "Specific projects",   icon: <Users className="h-3.5 w-3.5" /> },
+                  { value: "none",     label: "This project only",   icon: <EyeOff className="h-3.5 w-3.5" /> },
+                ] as { value: string; label: string; icon: ReactNode }[]
+              ).map(opt => (
+                <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    name="bulk-share-mode"
+                    value={opt.value}
+                    checked={shareMode === opt.value}
+                    onChange={() => setShareMode(opt.value as typeof shareMode)}
+                    className="accent-primary"
+                  />
+                  {opt.icon && <span className="text-muted-foreground">{opt.icon}</span>}
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+
+            {/* Project checklist */}
+            {shareMode === "specific" && sharingProjects.length > 0 && (
+              <div className="mt-2 space-y-1.5 pl-5">
+                <p className="text-xs text-muted-foreground mb-1">Grant access to:</p>
+                {sharingProjects.map(p => (
+                  <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={accessProjectIds.includes(p.id)}
+                      onChange={() => setAccessProjectIds(prev =>
+                        prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id]
+                      )}
+                      className="accent-primary"
+                    />
+                    {p.title}
+                  </label>
+                ))}
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer mt-1">
+                  <input
+                    type="checkbox"
+                    checked={shareFuture}
+                    onChange={e => setShareFuture(e.target.checked)}
+                    className="accent-primary"
+                  />
+                  Auto-add future linked projects
+                </label>
+              </div>
+            )}
+
+            {shareMode === "specific" && sharingProjects.length === 0 && (
+              <p className="text-xs text-muted-foreground pl-5">No other projects are linked to this codex.</p>
+            )}
+          </div>
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={handleClose}>{t("common_cancel")}</Button>

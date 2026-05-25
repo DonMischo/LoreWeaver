@@ -3,10 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, Plus, Trash2, Calendar, BookCopy, Sparkles, TriangleAlert, Link2, ImageIcon, Settings, Upload, FileText, BookMarked, FolderOpen, Loader2, Download, Flame, BarChart2 } from "lucide-react";
+import {
+  BookOpen, Plus, Trash2, Calendar, BookCopy, Sparkles, TriangleAlert,
+  Link2, ImageIcon, Settings, Upload, FileText, BookMarked, FolderOpen,
+  Loader2, Download, Flame, BarChart2, BookMarked as SeriesIcon, GripVertical,
+  ChevronUp, ChevronDown, Pencil, Check, X as XIcon,
+} from "lucide-react";
 import { imagesApi, importApi } from "@/lib/api";
-import { useUploadProjectCover, useDeleteProjectCover, useGlobalWritingLog } from "@/store/queries";
-import type { WritingLogEntry } from "@/types";
+import { useUploadProjectCover, useDeleteProjectCover, useGlobalWritingLog, useSeries, useUpdateProjectMeta } from "@/store/queries";
+import type { WritingLogEntry, SeriesBook, SeriesGroup, BookMeta } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +22,345 @@ import {
 import { useProjects, useCreateProject, useDeleteProject } from "@/store/queries";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
+
+// ── Series view ───────────────────────────────────────────────────────────────
+
+function SeriesBookRow({
+  book,
+  onEdit,
+}: {
+  book: SeriesBook;
+  onEdit: (book: SeriesBook) => void;
+}) {
+  return (
+    <Link
+      href={`/projects/${book.id}`}
+      className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-secondary/40 transition-colors"
+      onClick={(e) => {
+        // Don't navigate if clicking the edit button
+        if ((e.target as HTMLElement).closest("[data-edit]")) e.preventDefault();
+      }}
+    >
+      {/* Cover thumbnail */}
+      <div className="w-8 h-10 rounded border border-border overflow-hidden shrink-0 bg-muted/40 flex items-center justify-center">
+        {book.cover_image ? (
+          <img src={imagesApi.url(book.cover_image)} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <BookOpen className="h-4 w-4 text-muted-foreground/40" />
+        )}
+      </div>
+
+      {/* Index + role badge */}
+      <div className="w-12 text-center shrink-0">
+        {book.series_index ? (
+          <span className="text-xs font-mono text-muted-foreground">{book.series_index}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground/40">—</span>
+        )}
+      </div>
+
+      {/* Title + role */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium truncate">{book.title}</span>
+          {book.series_role && (
+            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary/80 font-medium">
+              {book.series_role}
+            </span>
+          )}
+          {book.shared_codex_project_id && (
+            <span className="shrink-0 text-[10px] text-muted-foreground/50 flex items-center gap-0.5">
+              <Link2 className="h-2.5 w-2.5" /> shared
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Edit button */}
+      <button
+        data-edit
+        onClick={() => onEdit(book)}
+        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-opacity shrink-0"
+        title="Edit series info"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+    </Link>
+  );
+}
+
+interface SeriesEditState {
+  book: SeriesBook;
+  series: string;
+  series_index: string;
+  series_role: string;
+}
+
+function SeriesBookEditDialog({
+  state,
+  allSeriesNames,
+  onSave,
+  onClose,
+}: {
+  state: SeriesEditState | null;
+  allSeriesNames: string[];
+  onSave: (bookId: number, meta: Partial<BookMeta>) => void;
+  onClose: () => void;
+}) {
+  const [series, setSeries]       = useState(state?.series ?? "");
+  const [index, setIndex]         = useState(state?.series_index ?? "");
+  const [role, setRole]           = useState(state?.series_role ?? "");
+  const [newSeries, setNewSeries] = useState(false);
+  const { data: projects = [] } = useProjects();
+
+  // Sync from state when it changes
+  if (state && series !== state.series && !newSeries) setSeries(state.series);
+
+  const project = projects.find(p => p.id === state?.book.id);
+
+  const handleSave = () => {
+    if (!state) return;
+    const existingMeta: BookMeta = project?.book_meta ?? {};
+    onSave(state.book.id, {
+      ...existingMeta,
+      series: series.trim() || undefined,
+      series_index: index.trim() || undefined,
+      series_role: role.trim() || undefined,
+    });
+    onClose();
+  };
+
+  return (
+    <Dialog open={!!state} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <SeriesIcon className="h-4 w-4" />
+            Series Info — {state?.book.title}
+          </DialogTitle>
+          <DialogDescription>
+            Set the series, position, and role for this book.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          {/* Series name */}
+          <div className="space-y-1.5">
+            <Label>Series name</Label>
+            {allSeriesNames.length > 0 && !newSeries ? (
+              <div className="flex gap-2">
+                <select
+                  value={series}
+                  onChange={e => { if (e.target.value === "__new__") { setNewSeries(true); setSeries(""); } else setSeries(e.target.value); }}
+                  className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="">— No series —</option>
+                  {allSeriesNames.map(n => <option key={n} value={n}>{n}</option>)}
+                  <option value="__new__">+ New series…</option>
+                </select>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="e.g. The Shadow Chronicles"
+                  value={series}
+                  onChange={e => setSeries(e.target.value)}
+                  autoFocus
+                />
+                {allSeriesNames.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { setNewSeries(false); setSeries(state?.series ?? ""); }}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Back
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Series index */}
+          <div className="space-y-1.5">
+            <Label>
+              Position in series
+              <span className="ml-1 text-xs text-muted-foreground font-normal">(e.g. 0.5, 1, 2)</span>
+            </Label>
+            <Input
+              placeholder="1"
+              value={index}
+              onChange={e => setIndex(e.target.value)}
+              type="text"
+              inputMode="decimal"
+            />
+          </div>
+
+          {/* Series role */}
+          <div className="space-y-1.5">
+            <Label>
+              Role label
+              <span className="ml-1 text-xs text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <div className="flex gap-2 flex-wrap">
+              {["Prequel", "Book 1", "Book 2", "Book 3", "Sequel", "Interlude", "Short Story", "Novella"].map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRole(prev => prev === r ? "" : r)}
+                  className={cn(
+                    "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                    role === r
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <Input
+              placeholder="Custom role…"
+              value={role}
+              onChange={e => setRole(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={handleSave}>Save</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SeriesView() {
+  const { data: seriesData, isLoading } = useSeries();
+  const updateMeta = useUpdateProjectMeta();
+  const [editState, setEditState] = useState<SeriesEditState | null>(null);
+
+  const allSeriesNames = seriesData?.series.map(s => s.name) ?? [];
+
+  const handleEditBook = (book: SeriesBook) => {
+    setEditState({
+      book,
+      series: seriesData?.series.find(s => s.books.some(b => b.id === book.id))?.name ?? "",
+      series_index: book.series_index ?? "",
+      series_role: book.series_role ?? "",
+    });
+  };
+
+  const handleSaveMeta = (bookId: number, meta: Partial<BookMeta>) => {
+    updateMeta.mutate({ id: bookId, data: { book_meta: meta as BookMeta } });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2].map(i => <div key={i} className="h-32 rounded-lg bg-card animate-pulse" />)}
+      </div>
+    );
+  }
+
+  const series = seriesData?.series ?? [];
+  const unserialized = seriesData?.unserialized ?? [];
+
+  return (
+    <div className="space-y-6">
+      {series.length === 0 && unserialized.length === 0 && (
+        <div className="text-center py-20">
+          <SeriesIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h2 className="text-lg font-medium mb-2">No series yet</h2>
+          <p className="text-muted-foreground text-sm">
+            Open a project, go to Project Info, and set a Series name to group books together.
+          </p>
+        </div>
+      )}
+
+      {/* Series groups */}
+      {series.map(group => (
+        <div key={group.name} className="rounded-lg border border-border bg-card overflow-hidden">
+          {/* Series header */}
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-secondary/20">
+            <SeriesIcon className="h-4 w-4 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-sm">{group.name}</h3>
+              <p className="text-[11px] text-muted-foreground">
+                {group.books.length} book{group.books.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+          </div>
+
+          {/* Table header */}
+          <div className="flex items-center gap-3 px-3 py-1.5 text-[10px] text-muted-foreground/60 uppercase tracking-wide border-b border-border/50">
+            <div className="w-8 shrink-0" />
+            <div className="w-12 text-center shrink-0">Index</div>
+            <div className="flex-1">Title · Role</div>
+          </div>
+
+          {/* Books */}
+          <div className="divide-y divide-border/30">
+            {group.books.map(book => (
+              <SeriesBookRow key={book.id} book={book} onEdit={handleEditBook} />
+            ))}
+          </div>
+
+          {/* Add book to this series */}
+          {unserialized.length > 0 && (
+            <div className="px-3 py-2 border-t border-border/50">
+              <select
+                defaultValue=""
+                onChange={e => {
+                  const id = Number(e.target.value);
+                  if (!id) return;
+                  const book = unserialized.find(b => b.id === id);
+                  if (!book) return;
+                  handleEditBook({ ...book, series_index: String(group.books.length + 1) });
+                  e.target.value = "";
+                }}
+                className="w-full h-7 text-xs rounded border border-dashed border-border bg-background px-2 text-muted-foreground hover:text-foreground focus:outline-none cursor-pointer"
+              >
+                <option value="" disabled>+ Add a project to this series…</option>
+                {unserialized.map(b => (
+                  <option key={b.id} value={b.id}>{b.title}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* Unserialized projects */}
+      {unserialized.length > 0 && (
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-secondary/10">
+            <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div>
+              <h3 className="font-semibold text-sm text-muted-foreground">Not in a series</h3>
+              <p className="text-[11px] text-muted-foreground/70">
+                {unserialized.length} project{unserialized.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+          </div>
+          <div className="divide-y divide-border/30">
+            {unserialized.map(book => (
+              <SeriesBookRow key={book.id} book={book} onEdit={handleEditBook} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Edit dialog */}
+      <SeriesBookEditDialog
+        state={editState}
+        allSeriesNames={allSeriesNames}
+        onSave={handleSaveMeta}
+        onClose={() => setEditState(null)}
+      />
+    </div>
+  );
+}
 
 type CodexOption = "fresh" | "copy" | "share";
 
@@ -173,6 +517,8 @@ export default function Dashboard() {
   const { t } = useLanguage();
   const { data: writingLog = [] } = useGlobalWritingLog();
   const streak = computeStreak(writingLog);
+
+  const [dashView, setDashView] = useState<"projects" | "series">("projects");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -333,33 +679,67 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
-        {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-36 rounded-lg bg-card animate-pulse" />
-            ))}
-          </div>
-        ) : projects.length === 0 ? (
-          <div className="text-center py-20">
-            <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-lg font-medium mb-2">{t("dash_no_projects")}</h2>
-            <p className="text-muted-foreground mb-6 text-sm">{t("dash_no_projects_desc")}</p>
-            <Button onClick={handleOpen}>
-              <Plus className="h-4 w-4" />
-              {t("dash_new_project")}
-            </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {projects.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onDelete={(id, title) => { setDeleteTarget({ id, title }); setDeleteConfirm(""); }}
-              />
-            ))}
+        {/* View tabs — only shown once there are projects */}
+        {(projects.length > 0 || !isLoading) && (
+          <div className="flex items-center gap-0 mb-6 border-b border-border">
+            <button
+              onClick={() => setDashView("projects")}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                dashView === "projects"
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <BookOpen className="h-4 w-4" />
+              All Projects
+            </button>
+            <button
+              onClick={() => setDashView("series")}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                dashView === "series"
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <SeriesIcon className="h-4 w-4" />
+              Series
+            </button>
           </div>
         )}
+
+        {dashView === "projects" && (
+          isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-36 rounded-lg bg-card animate-pulse" />
+              ))}
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="text-center py-20">
+              <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-lg font-medium mb-2">{t("dash_no_projects")}</h2>
+              <p className="text-muted-foreground mb-6 text-sm">{t("dash_no_projects_desc")}</p>
+              <Button onClick={handleOpen}>
+                <Plus className="h-4 w-4" />
+                {t("dash_new_project")}
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {projects.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onDelete={(id, title) => { setDeleteTarget({ id, title }); setDeleteConfirm(""); }}
+                />
+              ))}
+            </div>
+          )
+        )}
+
+        {dashView === "series" && <SeriesView />}
       </main>
 
       {/* Mini heatmap strip */}

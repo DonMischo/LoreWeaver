@@ -147,6 +147,8 @@ def update_scene(scene_id: int, body: SceneUpdate, db: Session = Depends(get_db)
         data["pov_character_id"] = body.pov_character_id
     if "beat" in body.model_fields_set:
         data["beat"] = body.beat
+    if "scene_type" in body.model_fields_set:
+        data["scene_type"] = body.scene_type
     # Validate cross-chapter move
     if "chapter_id" in data and not db.get(Chapter, data["chapter_id"]):
         raise HTTPException(404, f"Chapter {data['chapter_id']} not found")

@@ -4,14 +4,25 @@ import { useState, useRef } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { ClipboardList, Plus, X, Check, Trash2 } from "lucide-react";
 import { useScenePlansStore } from "@/store/scenePlans";
+import { scenesApi } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+
+const SCENE_TYPES = [
+  { value: "action",        label: "Action",        color: "#ef4444" },
+  { value: "dialogue",      label: "Dialogue",      color: "#3b82f6" },
+  { value: "introspection", label: "Introspection",  color: "#8b5cf6" },
+  { value: "description",  label: "Description",    color: "#22c55e" },
+  { value: "transition",   label: "Transition",     color: "#94a3b8" },
+] as const;
 
 interface Props {
   sceneId: number;
   sceneTitle: string;
+  sceneType?: string | null;
 }
 
-export function ScenePlanPopover({ sceneId, sceneTitle }: Props) {
+export function ScenePlanPopover({ sceneId, sceneTitle, sceneType: initialSceneType = null }: Props) {
   const { plans, addItem, toggleItem, updateItem, deleteItem, clearDone } =
     useScenePlansStore();
   const items      = plans[sceneId] ?? [];
@@ -23,6 +34,17 @@ export function ScenePlanPopover({ sceneId, sceneTitle }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText]   = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const [sceneType, setSceneTypeState] = useState<string | null>(initialSceneType);
+  const qc = useQueryClient();
+  const handleSceneType = async (val: string | null) => {
+    const next = val === sceneType ? null : val;
+    setSceneTypeState(next);
+    await scenesApi.update(sceneId, { scene_type: next });
+    // Invalidate scenes and analytics
+    qc.invalidateQueries({ queryKey: ["scenes"] });
+    qc.invalidateQueries({ queryKey: ["analytics"] });
+  };
 
   const handleAdd = () => {
     const text = newText.trim();
@@ -111,6 +133,28 @@ export function ScenePlanPopover({ sceneId, sceneTitle }: Props) {
                 <X className="h-3 w-3" />
               </button>
             </Popover.Close>
+          </div>
+
+          {/* Scene type row */}
+          <div className="px-3 py-2 border-b border-border">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">Scene type</p>
+            <div className="flex flex-wrap gap-1">
+              {SCENE_TYPES.map(st => (
+                <button
+                  key={st.value}
+                  onMouseDown={e => { e.preventDefault(); handleSceneType(st.value); }}
+                  className={cn(
+                    "text-[10px] px-2 py-0.5 rounded-full border transition-all",
+                    sceneType === st.value
+                      ? "text-white border-transparent"
+                      : "border-border text-muted-foreground hover:border-muted-foreground/50"
+                  )}
+                  style={sceneType === st.value ? { backgroundColor: st.color } : undefined}
+                >
+                  {st.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Item list */}

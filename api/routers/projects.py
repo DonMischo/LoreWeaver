@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Project, CodexEntry, CodexRelation, Act, Chapter, Scene
+from models import Project, CodexEntry, CodexEntryAccess, CodexRelation, Act, Chapter, Scene
 from schemas import ProjectCreate, ProjectOut, ProjectUpdate
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -64,6 +64,25 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
         if owner and owner.time_config:
             project.time_config = owner.time_config
         db.add(project)
+        db.flush()  # gives project.id
+
+        # Auto-add this new project to entries that have share_future=1 and share_mode='specific'
+        future_entries = (
+            db.query(CodexEntry)
+            .filter(
+                CodexEntry.project_id == owner_id,
+                CodexEntry.share_mode == "specific",
+                CodexEntry.share_future == 1,
+            )
+            .all()
+        )
+        for entry in future_entries:
+            existing = db.query(CodexEntryAccess).filter_by(
+                entry_id=entry.id, project_id=project.id
+            ).first()
+            if not existing:
+                db.add(CodexEntryAccess(entry_id=entry.id, project_id=project.id))
+
         db.commit()
         db.refresh(project)
         parent_title = None
@@ -133,6 +152,59 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
         db.refresh(project)
 
     return _project_to_out(project, None)
+
+
+@router.get("/series")
+def get_series(db: Session = Depends(get_db)):
+    """Return all projects grouped by series name, ordered by series_index.
+    Projects without a series appear in a separate 'unserialized' list."""
+    projects = db.query(Project).order_by(Project.title).all()
+
+    series_map: dict[str, list[dict]] = {}
+    unserialized: list[dict] = []
+
+    for p in projects:
+        meta: dict = {}
+        if p.book_meta:
+            try:
+                meta = json.loads(p.book_meta)
+            except Exception:
+                pass
+        series_name   = meta.get("series")
+        series_index  = meta.get("series_index")
+        series_role   = meta.get("series_role")
+
+        book = {
+            "id":                      p.id,
+            "title":                   p.title,
+            "description":             p.description,
+            "series_index":            series_index,
+            "series_role":             series_role,
+            "cover_image":             p.cover_image,
+            "shared_codex_project_id": p.shared_codex_project_id,
+            "updated_at":              p.updated_at.isoformat() if p.updated_at else None,
+        }
+
+        if series_name:
+            series_map.setdefault(series_name, []).append(book)
+        else:
+            unserialized.append(book)
+
+    def _sort_key(b: dict):
+        idx = b.get("series_index")
+        if idx is None:
+            return (1, float("inf"))
+        try:
+            return (0, float(idx))
+        except (TypeError, ValueError):
+            return (1, float("inf"))
+
+    result = []
+    for name, books in sorted(series_map.items()):
+        books.sort(key=_sort_key)
+        result.append({"name": name, "books": books})
+
+    return {"series": result, "unserialized": unserialized}
 
 
 @router.get("/{project_id}", response_model=ProjectOut)

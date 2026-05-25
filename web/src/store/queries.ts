@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
-import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi, writingLogApi, synopsisApi, timelineTracksApi, timelineEventsApi, grammarApi, fontsApi } from "@/lib/api";
-import type { GrammarCheckResult, PovStats } from "@/lib/api";
+import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi, writingLogApi, synopsisApi, timelineTracksApi, timelineEventsApi, grammarApi, fontsApi, seriesApi, analyticsApi, researchApi, submissionsApi, exportProfilesApi } from "@/lib/api";
+import type { GrammarCheckResult, PovStats, QuerySubmissionCreate, ExportProfileCreate } from "@/lib/api";
 import type { SceneCommandIn, ProjectItemLogEntry, ProjectCurrencyLogEntry, OpenRouterModel } from "@/lib/api";
-import type { AIPrompt, ProjectSceneItem, SceneVersion, SceneVersionDetail, CorkboardAct, CorkboardData } from "@/types";
+import type { AIPrompt, ProjectSceneItem, SceneVersion, SceneVersionDetail, CorkboardAct, CorkboardData, SeriesData, ProjectAnalytics, ResearchItem, QuerySubmission, ExportProfile } from "@/types";
 
 // ── Projects ──────────────────────────────────────────────────────────────────
 
@@ -281,6 +281,43 @@ export const useDeleteRelation = (entryId: number) => {
   return useMutation({
     mutationFn: codexApi.deleteRelation,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["codex-relations", entryId] }),
+  });
+};
+
+export const useEntryAccess = (entryId: number) =>
+  useQuery({
+    queryKey: ["codex-access", entryId],
+    queryFn: () => codexApi.getEntryAccess(entryId),
+    enabled: entryId > 0,
+  });
+
+export const useSetEntryAccess = (entryId: number, projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { project_ids: number[] }) => codexApi.setEntryAccess(entryId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["codex-access", entryId] });
+      qc.invalidateQueries({ queryKey: ["codex", projectId] });
+    },
+  });
+};
+
+export const useSeries = () =>
+  useQuery<SeriesData>({
+    queryKey: ["series"],
+    queryFn: seriesApi.get,
+  });
+
+export const useUpdateProjectMeta = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof projectsApi.update>[1] }) =>
+      projectsApi.update(id, data),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects", id] });
+      qc.invalidateQueries({ queryKey: ["series"] });
+    },
   });
 };
 
@@ -763,5 +800,143 @@ export const useUpdateSceneSynopsis = (projectId: number) => {
       qc.invalidateQueries({ queryKey: ["corkboard", projectId] });
       qc.invalidateQueries({ queryKey: ["structure", projectId] });
     },
+  });
+};
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export const useProjectAnalytics = (projectId: number) =>
+  useQuery<ProjectAnalytics>({
+    queryKey: ["analytics", projectId],
+    queryFn: () => analyticsApi.get(projectId),
+    enabled: projectId > 0,
+    staleTime: 1000 * 60 * 2,  // 2 min cache — recompute is cheap
+  });
+
+// ── Research ──────────────────────────────────────────────────────────────────
+
+export const useResearch = (projectId: number) =>
+  useQuery<ResearchItem[]>({
+    queryKey: ["research", projectId],
+    queryFn: () => researchApi.list(projectId),
+    enabled: projectId > 0,
+  });
+
+export const useCreateResearch = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Parameters<typeof researchApi.create>[1]) =>
+      researchApi.create(projectId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["research", projectId] }),
+  });
+};
+
+export const useUpdateResearch = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof researchApi.update>[1] }) =>
+      researchApi.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["research", projectId] }),
+  });
+};
+
+export const useDeleteResearch = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: researchApi.delete,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["research", projectId] }),
+  });
+};
+
+export const useRefetchResearchUrl = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: researchApi.refetchUrl,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["research", projectId] }),
+  });
+};
+
+export const useUploadResearchImage = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: number; file: File }) =>
+      imagesApi.uploadResearchImage(id, file),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["research", projectId] }),
+  });
+};
+
+export const useDeleteResearchImage = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => imagesApi.deleteResearchImage(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["research", projectId] }),
+  });
+};
+
+// ── Query / Submission tracker ────────────────────────────────────────────────
+
+export const useSubmissions = (projectId: number) =>
+  useQuery<QuerySubmission[]>({
+    queryKey: ["submissions", projectId],
+    queryFn: () => submissionsApi.list(projectId),
+    enabled: projectId > 0,
+  });
+
+export const useCreateSubmission = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: QuerySubmissionCreate) => submissionsApi.create(projectId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["submissions", projectId] }),
+  });
+};
+
+export const useUpdateSubmission = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<QuerySubmissionCreate> }) =>
+      submissionsApi.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["submissions", projectId] }),
+  });
+};
+
+export const useDeleteSubmission = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => submissionsApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["submissions", projectId] }),
+  });
+};
+
+// ── Export profiles ───────────────────────────────────────────────────────────
+
+export const useExportProfiles = (projectId: number) =>
+  useQuery<ExportProfile[]>({
+    queryKey: ["export-profiles", projectId],
+    queryFn: () => exportProfilesApi.list(projectId),
+    enabled: projectId > 0,
+  });
+
+export const useCreateExportProfile = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ExportProfileCreate) => exportProfilesApi.create(projectId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["export-profiles", projectId] }),
+  });
+};
+
+export const useUpdateExportProfile = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<ExportProfileCreate> }) =>
+      exportProfilesApi.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["export-profiles", projectId] }),
+  });
+};
+
+export const useDeleteExportProfile = (projectId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => exportProfilesApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["export-profiles", projectId] }),
   });
 };

@@ -98,6 +98,7 @@ class Scene(Base):
     node_y: Mapped[Optional[float]] = mapped_column(nullable=True)  # canvas y position (React Flow)
     pov_character_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # codex_entries.id — POV character for this scene
     beat: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # plot beat label (e.g. "Inciting Incident")
+    scene_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # action | dialogue | introspection | description | transition
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
@@ -137,6 +138,11 @@ class CodexEntry(Base):
     is_main_char: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     inventory:   Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: CharacterInventory
     image_path:  Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # Sharing: "all" = visible to all linked projects (default)
+    #          "specific" = only projects listed in codex_entry_access
+    #          "none" = private to owner project only
+    share_mode:   Mapped[str] = mapped_column(String(20), nullable=False, default="all")
+    share_future: Mapped[int] = mapped_column(Integer, nullable=False, default=1)  # auto-share with future linked projects
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
@@ -197,6 +203,17 @@ class CodexRelation(Base):
     target: Mapped["CodexEntry"] = relationship(
         "CodexEntry", foreign_keys=[target_id], back_populates="relations_to"
     )
+
+
+class CodexEntryAccess(Base):
+    """Explicit per-project access list for entries with share_mode='specific'."""
+    __tablename__ = "codex_entry_access"
+
+    id:         Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entry_id:   Mapped[int] = mapped_column(Integer, ForeignKey("codex_entries.id", ondelete="CASCADE"))
+    project_id: Mapped[int] = mapped_column(Integer, nullable=False)  # no FK: project may not exist yet
+
+    __table_args__ = (UniqueConstraint("entry_id", "project_id"),)
 
 
 class Fragment(Base):
@@ -315,6 +332,68 @@ class TimelineTrack(Base):
     start_time:   Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON scene_time dict or NULL
     end_time:     Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON scene_time dict or NULL
     created_at:   Mapped[datetime]      = mapped_column(DateTime, default=_now)
+
+
+class ResearchItem(Base):
+    """Per-project research clipping — URL, text excerpt, or image — linkable to scenes/codex."""
+    __tablename__ = "research_items"
+
+    id:               Mapped[int]           = mapped_column(Integer, primary_key=True, index=True)
+    project_id:       Mapped[int]           = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    title:            Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    url:              Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    url_title:        Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    url_description:  Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    url_image:        Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    text_content:     Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    image_path:       Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    linked_scene_id:  Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    linked_codex_id:  Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    tags:             Mapped[str]           = mapped_column(Text, nullable=False, default="[]")
+    created_at:       Mapped[datetime]      = mapped_column(DateTime, default=_now)
+    updated_at:       Mapped[datetime]      = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    project: Mapped["Project"] = relationship("Project")
+
+    def get_tags(self) -> list[str]:
+        try:
+            return json.loads(self.tags or "[]")
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+
+class QuerySubmission(Base):
+    """Literary-agent / publisher query tracking per project."""
+    __tablename__ = "query_submissions"
+
+    id:                Mapped[int]           = mapped_column(Integer, primary_key=True)
+    project_id:        Mapped[int]           = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    agent_name:        Mapped[str]           = mapped_column(Text, default="")
+    agency:            Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    email:             Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # What was submitted: "query" | "partial" | "full" | "synopsis"
+    submission_type:   Mapped[str]           = mapped_column(Text, default="query")
+    date_sent:         Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # ISO date
+    response_deadline: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # ISO date
+    # Pipeline status: queried | partial_requested | full_requested | offer | pass | no_response | withdrawn
+    status:            Mapped[str]           = mapped_column(Text, default="queried")
+    notes:             Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at:        Mapped[datetime]      = mapped_column(DateTime, default=_now)
+    updated_at:        Mapped[datetime]      = mapped_column(DateTime, default=_now, onupdate=_now)
+
+
+class ExportProfile(Base):
+    """Named export configuration (global or per-project)."""
+    __tablename__ = "export_profiles"
+
+    id:           Mapped[int]           = mapped_column(Integer, primary_key=True)
+    project_id:   Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
+    name:         Mapped[str]           = mapped_column(Text)
+    description:  Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_builtin:   Mapped[int]           = mapped_column(Integer, default=0)  # 1 = read-only pre-seeded
+    options_json: Mapped[str]           = mapped_column(Text, default="{}")  # serialised ExportOptions fields
+    created_at:   Mapped[datetime]      = mapped_column(DateTime, default=_now)
+    updated_at:   Mapped[datetime]      = mapped_column(DateTime, default=_now, onupdate=_now)
 
 
 class TimelineEvent(Base):

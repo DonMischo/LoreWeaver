@@ -4,9 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from database import engine, migrate_to_four_level, migrate_new_columns, migrate_entry_groups, migrate_ai_prompts, migrate_scene_versions, migrate_mention_stats, migrate_writing_log, migrate_timeline_tables
+from database import engine, migrate_to_four_level, migrate_new_columns, migrate_entry_groups, migrate_ai_prompts, migrate_scene_versions, migrate_mention_stats, migrate_writing_log, migrate_timeline_tables, migrate_codex_entry_sharing, migrate_research, migrate_publishing
 from models import Base
-from routers import projects, acts, chapters, scenes, codex, settings, ai, export, imports, graph, time, fragments, images, scene_commands, grammar
+from routers import projects, acts, chapters, scenes, codex, settings, ai, export, imports, graph, time, fragments, images, scene_commands, grammar, analytics, research, submissions
 
 # ── Run migrations BEFORE create_all so table renames happen first ────────────
 migrate_to_four_level()
@@ -19,6 +19,9 @@ migrate_scene_versions()
 migrate_mention_stats()
 migrate_writing_log()
 migrate_timeline_tables()
+migrate_codex_entry_sharing()
+migrate_research()
+migrate_publishing()
 
 os.makedirs("uploads", exist_ok=True)
 
@@ -49,6 +52,9 @@ app.include_router(fragments.router)
 app.include_router(images.router)
 app.include_router(scene_commands.router)
 app.include_router(grammar.router)
+app.include_router(analytics.router)
+app.include_router(research.router)
+app.include_router(submissions.router)
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 

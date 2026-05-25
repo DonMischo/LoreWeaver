@@ -114,6 +114,7 @@ def migrate_new_columns():
         ("user_settings", "pandoc_url",               "TEXT DEFAULT 'http://localhost:8082'"),
         ("scenes",        "pov_character_id",           "INTEGER"),
         ("scenes",        "beat",                       "TEXT"),
+        ("scenes",        "scene_type",                 "TEXT"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in new_columns:
@@ -380,6 +381,29 @@ def migrate_scene_versions():
         """))
 
 
+def migrate_codex_entry_sharing():
+    """Add share_mode/share_future columns to codex_entries and create codex_entry_access table."""
+    with engine.connect() as conn:
+        for col, col_type in [
+            ("share_mode",   "TEXT NOT NULL DEFAULT 'all'"),
+            ("share_future", "INTEGER NOT NULL DEFAULT 1"),
+        ]:
+            try:
+                conn.execute(text(f"ALTER TABLE codex_entries ADD COLUMN {col} {col_type}"))
+                conn.commit()
+            except Exception:
+                pass  # already exists
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS codex_entry_access (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                entry_id   INTEGER NOT NULL REFERENCES codex_entries(id) ON DELETE CASCADE,
+                project_id INTEGER NOT NULL,
+                UNIQUE (entry_id, project_id)
+            )
+        """))
+
+
 def migrate_timeline_tables():
     """Create timeline_tracks and timeline_events tables if they don't exist yet."""
     with engine.connect() as conn:
@@ -409,6 +433,113 @@ def migrate_timeline_tables():
             )
         """))
         conn.commit()
+
+
+def migrate_research():
+    """Create the research_items table if it does not yet exist."""
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS research_items (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id        INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                title             TEXT,
+                url               TEXT,
+                url_title         TEXT,
+                url_description   TEXT,
+                url_image         TEXT,
+                text_content      TEXT,
+                image_path        TEXT,
+                linked_scene_id   INTEGER,
+                linked_codex_id   INTEGER,
+                tags              TEXT NOT NULL DEFAULT '[]',
+                created_at        DATETIME DEFAULT (datetime('now')),
+                updated_at        DATETIME DEFAULT (datetime('now'))
+            )
+        """))
+
+
+# ── Standard Manuscript Format export profile options ─────────────────────────
+_SMF_OPTIONS = {
+    "format": "docx",
+    "font": "Times New Roman", "font_size": "12pt", "line_spacing": "2",
+    "paper_size": "letterpaper",
+    "heading_align": "center", "h1_size": "1.5em", "h2_size": "1.25em",
+    "h3_size": "1em", "h3_style": "normal",
+    "paragraph_indent": "1.5em", "text_align": "left",
+    "pdf_margin": "1in", "page_numbers": True, "drop_caps": False,
+    "include_act_headings": False, "include_chapter_headings": True,
+    "include_scene_headings": False,
+}
+_COURIER_OPTIONS = {**_SMF_OPTIONS, "font": "Courier New"}
+
+_BUILTIN_PROFILES = [
+    {
+        "name": "Standard Manuscript Format",
+        "description": (
+            "Industry-standard agent submission format. "
+            "Times New Roman 12pt, double-spaced, 1-inch margins. "
+            "Outputs .docx — the format agents expect."
+        ),
+        "options": _SMF_OPTIONS,
+    },
+    {
+        "name": "Courier Manuscript",
+        "description": (
+            "Traditional Courier New manuscript. "
+            "Some agents and small presses still prefer monospace. "
+            "Same double-spacing and 1-inch margins as SMF."
+        ),
+        "options": _COURIER_OPTIONS,
+    },
+]
+
+
+def migrate_publishing():
+    """Create query_submissions and export_profiles tables; seed built-in profiles."""
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS query_submissions (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id        INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                agent_name        TEXT    NOT NULL DEFAULT '',
+                agency            TEXT,
+                email             TEXT,
+                submission_type   TEXT    NOT NULL DEFAULT 'query',
+                date_sent         TEXT,
+                response_deadline TEXT,
+                status            TEXT    NOT NULL DEFAULT 'queried',
+                notes             TEXT,
+                created_at        DATETIME DEFAULT (datetime('now')),
+                updated_at        DATETIME DEFAULT (datetime('now'))
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS export_profiles (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id   INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+                name         TEXT    NOT NULL DEFAULT '',
+                description  TEXT,
+                is_builtin   INTEGER NOT NULL DEFAULT 0,
+                options_json TEXT    NOT NULL DEFAULT '{}',
+                created_at   DATETIME DEFAULT (datetime('now')),
+                updated_at   DATETIME DEFAULT (datetime('now'))
+            )
+        """))
+        # Seed built-in profiles (idempotent)
+        for p in _BUILTIN_PROFILES:
+            exists = conn.execute(
+                text("SELECT id FROM export_profiles WHERE name = :name AND is_builtin = 1"),
+                {"name": p["name"]},
+            ).fetchone()
+            if not exists:
+                conn.execute(
+                    text("""
+                        INSERT INTO export_profiles
+                            (project_id, name, description, is_builtin, options_json, created_at, updated_at)
+                        VALUES (NULL, :name, :desc, 1, :opts, datetime('now'), datetime('now'))
+                    """),
+                    {"name": p["name"], "desc": p["description"], "opts": json.dumps(p["options"])},
+                )
 
 
 def get_db():

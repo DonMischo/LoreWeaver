@@ -6,7 +6,7 @@ import {
   Plus, Pencil, Trash2, User, MapPin, Package, Scroll, Tag,
   LayoutGrid, LayoutList, FolderOpen, Loader2, CheckCircle2, X,
   ChevronDown, ChevronUp, ChevronsUpDown, CheckSquare, Square,
-  Link2, Link2Off, AlertCircle,
+  Link2, Link2Off, AlertCircle, EyeOff, Users,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { CodexEntryDialog } from "@/components/codex/CodexEntryDialog";
 import { BulkEditDialog } from "@/components/codex/BulkEditDialog";
 import { ImportButton } from "@/components/layout/ImportButton";
-import { useCodexEntries, useCreateCodexEntry, useUpdateCodexEntry, useDeleteCodexEntry, useResyncProjectCommands, useProject, useDetachCodexSharing } from "@/store/queries";
+import { useCodexEntries, useCreateCodexEntry, useUpdateCodexEntry, useDeleteCodexEntry, useResyncProjectCommands, useProject, useDetachCodexSharing, useProjects } from "@/store/queries";
 import { importApi } from "@/lib/api";
 import type { CodexEntry, EntryType } from "@/types";
 import { cn } from "@/lib/utils";
@@ -179,6 +179,15 @@ export default function CodexPage() {
 
   const { data: project } = useProject(projectId);
   const { data: entries = [], isLoading } = useCodexEntries(projectId);
+  const { data: allProjects = [] } = useProjects();
+
+  // Follow the sharing chain to the actual codex owner (this project if it owns its own codex,
+  // or the upstream owner if this project is a consumer).
+  const codexOwnerId = project?.shared_codex_project_id ?? projectId;
+  // All projects that link to that owner — shown in the per-entry sharing checklist.
+  const sharingProjects = allProjects
+    .filter(p => p.shared_codex_project_id === codexOwnerId)
+    .map(p => ({ id: p.id, title: p.title }));
   const createEntry = useCreateCodexEntry(projectId);
   const updateEntry = useUpdateCodexEntry(projectId);
   const deleteEntry = useDeleteCodexEntry(projectId);
@@ -594,6 +603,16 @@ export default function CodexPage() {
                       <div className="flex items-center gap-1.5 mb-1">
                         <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                         <h3 className="font-medium text-sm truncate">{entry.name}</h3>
+                        {sharingProjects.length > 0 && entry.share_mode === "none" && (
+                          <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground" title="Private — not shared with any linked project">
+                            <EyeOff className="h-2.5 w-2.5" /> Private
+                          </span>
+                        )}
+                        {sharingProjects.length > 0 && entry.share_mode === "specific" && (
+                          <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary/70" title="Shared with specific projects only">
+                            <Users className="h-2.5 w-2.5" /> Selected
+                          </span>
+                        )}
                       </div>
                       {entry.aliases.length > 0 && (
                         <p className="text-xs text-muted-foreground mb-1">{entry.aliases.join(", ")}</p>
@@ -665,6 +684,8 @@ export default function CodexPage() {
                   <SortTh col="group" label={t("codex_group")} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-32" />
                   {/* Tags col */}
                   <SortTh col="tag" label={t("codex_tags")} sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="w-48" />
+                  {/* Sharing col */}
+                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-24">Sharing</th>
                   {/* Description col */}
                   <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("codex_col_description")}</th>
                   {/* Actions col */}
@@ -708,7 +729,19 @@ export default function CodexPage() {
 
                       {/* Name */}
                       <td className="px-3 py-2.5 max-w-[180px]">
-                        <div className="font-medium truncate">{entry.name}</div>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-medium truncate">{entry.name}</span>
+                          {sharingProjects.length > 0 && entry.share_mode === "none" && (
+                            <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground" title="Private">
+                              <EyeOff className="h-2.5 w-2.5" />
+                            </span>
+                          )}
+                          {sharingProjects.length > 0 && entry.share_mode === "specific" && (
+                            <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary/70" title="Specific projects only">
+                              <Users className="h-2.5 w-2.5" />
+                            </span>
+                          )}
+                        </div>
                         {entry.aliases.length > 0 && (
                           <div className="text-xs text-muted-foreground truncate">{entry.aliases.join(", ")}</div>
                         )}
@@ -744,6 +777,21 @@ export default function CodexPage() {
                             <span className="text-[10px] text-muted-foreground">+{entry.tags.length - 4}</span>
                           )}
                         </div>
+                      </td>
+
+                      {/* Sharing */}
+                      <td className="px-3 py-2.5 w-24">
+                        {entry.share_mode === "none" ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" title="Private — not shared with linked projects">
+                            <EyeOff className="h-3 w-3" /> Private
+                          </span>
+                        ) : entry.share_mode === "specific" ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-primary/70" title="Shared with specific projects only">
+                            <Users className="h-3 w-3" /> Selected
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground/40">All</span>
+                        )}
                       </td>
 
                       {/* Description */}
@@ -830,6 +878,7 @@ export default function CodexPage() {
         initial={editing ?? undefined}
         title={editing ? t("entry_edit_title") : t("entry_new_title")}
         allEntries={entries}
+        sharingProjects={sharingProjects}
         onOpenEntry={(id) => {
           const entry = entries.find(e => e.id === id);
           if (entry) setEditing(entry);
@@ -846,6 +895,7 @@ export default function CodexPage() {
         selectedEntries={selectedEntries}
         allEntries={entries}
         projectId={projectId}
+        sharingProjects={sharingProjects}
       />
     </div>
   );

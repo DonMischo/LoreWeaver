@@ -1,9 +1,10 @@
 import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import text
 
 from database import get_db
-from models import CodexEntry, CodexRelation, Project
+from models import CodexEntry, CodexEntryAccess, CodexRelation, Project
 from schemas import (
     CodexEntryCreate, CodexEntryOut, CodexEntryUpdate,
     CodexRelationCreate, CodexRelationOut,
@@ -24,7 +25,28 @@ def list_codex(project_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Project not found")
     owner_id = _codex_owner_id(project)
     entries = db.query(CodexEntry).filter(CodexEntry.project_id == owner_id).all()
-    return [CodexEntryOut.from_orm_entry(e) for e in entries]
+
+    # If the requesting project IS the owner, no share filtering needed
+    if project_id == owner_id:
+        return [CodexEntryOut.from_orm_entry(e) for e in entries]
+
+    # For a consumer project, filter by share_mode
+    # Batch-load entry_ids that this project has specific access to
+    access_rows = db.query(CodexEntryAccess).filter(
+        CodexEntryAccess.project_id == project_id,
+        CodexEntryAccess.entry_id.in_([e.id for e in entries]),
+    ).all()
+    accessible_ids = {r.entry_id for r in access_rows}
+
+    result = []
+    for e in entries:
+        mode = getattr(e, "share_mode", "all") or "all"
+        if mode == "all":
+            result.append(e)
+        elif mode == "specific" and e.id in accessible_ids:
+            result.append(e)
+        # mode == "none" → skip
+    return [CodexEntryOut.from_orm_entry(e) for e in result]
 
 
 @router.post("/api/codex", response_model=CodexEntryOut, status_code=201)
@@ -80,6 +102,10 @@ def update_codex_entry(entry_id: int, body: CodexEntryUpdate, db: Session = Depe
         entry.inventory = json.dumps(inv) if inv is not None else None
     if "is_main_char" in data:
         entry.is_main_char = int(data.pop("is_main_char"))
+    if "share_mode" in data:
+        entry.share_mode = data.pop("share_mode") or "all"
+    if "share_future" in data:
+        entry.share_future = int(bool(data.pop("share_future")))
     for k, v in data.items():
         setattr(entry, k, v)
 
@@ -116,6 +142,30 @@ def delete_codex_entry(entry_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Codex entry not found")
     db.delete(entry)
     db.commit()
+
+
+# ── Entry access (per-project sharing) ────────────────────────────────────────
+
+@router.get("/api/codex/{entry_id}/access")
+def get_entry_access(entry_id: int, db: Session = Depends(get_db)):
+    """Return the list of project IDs that have explicit access to this entry."""
+    if not db.get(CodexEntry, entry_id):
+        raise HTTPException(404, "Codex entry not found")
+    rows = db.query(CodexEntryAccess).filter(CodexEntryAccess.entry_id == entry_id).all()
+    return {"project_ids": [r.project_id for r in rows]}
+
+
+@router.put("/api/codex/{entry_id}/access")
+def set_entry_access(entry_id: int, body: dict, db: Session = Depends(get_db)):
+    """Replace the explicit access list for an entry (used with share_mode='specific')."""
+    if not db.get(CodexEntry, entry_id):
+        raise HTTPException(404, "Codex entry not found")
+    project_ids: list[int] = [int(pid) for pid in body.get("project_ids", [])]
+    db.query(CodexEntryAccess).filter(CodexEntryAccess.entry_id == entry_id).delete()
+    for pid in project_ids:
+        db.add(CodexEntryAccess(entry_id=entry_id, project_id=pid))
+    db.commit()
+    return {"project_ids": project_ids}
 
 
 # ── Relations ─────────────────────────────────────────────────────────────────
