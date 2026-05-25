@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  FileText, FileCode2, BookOpen, FileDown,
+  FileText, FileCode2, BookOpen, FileDown, File,
   FolderOpen, Upload, Check, Loader2, ChevronDown, ChevronRight,
+  Lock, Save, Star,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,8 +13,8 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { projectsApi } from "@/lib/api";
 import type { ExportOptions, ExportAct } from "@/lib/api";
-import type { BookMeta } from "@/types";
-import { useSettings, usePandocFonts } from "@/store/queries";
+import type { BookMeta, ExportProfile } from "@/types";
+import { useSettings, usePandocFonts, useExportProfiles, useCreateExportProfile, useDeleteExportProfile } from "@/store/queries";
 import { FontPicker } from "./FontPicker";
 
 // ── Style presets ─────────────────────────────────────────────────────────────
@@ -258,10 +259,36 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
   const [statusMsg, setStatusMsg]             = useState("");
   const [activePreset, setActivePreset]       = useState<string | null>("Classic Novel");
   const [showStyle, setShowStyle]             = useState(false);
+  const [saveProfileName, setSaveProfileName] = useState("");
+  const [showSaveProfile, setShowSaveProfile] = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
 
   // Fetch Pandoc font list when Pandoc is enabled
   const { data: fontsData } = usePandocFonts(pandocEnabled);
+
+  // Export profiles
+  const { data: profiles = [] } = useExportProfiles(projectId);
+  const createProfile = useCreateExportProfile(projectId);
+  const deleteProfile = useDeleteExportProfile(projectId);
+
+  const loadProfile = (profile: ExportProfile) => {
+    try {
+      const saved = JSON.parse(profile.options_json) as Partial<ExportOptions>;
+      setOpts(o => ({ ...o, ...saved }));
+      setActivePreset(profile.name);
+    } catch { /* bad JSON */ }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!saveProfileName.trim()) return;
+    const { format: _fmt, scene_ids: _sc, save_to_disk: _sd, ...styleOpts } = opts;
+    await createProfile.mutateAsync({
+      name: saveProfileName.trim(),
+      options_json: JSON.stringify(styleOpts),
+    });
+    setSaveProfileName("");
+    setShowSaveProfile(false);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -325,7 +352,7 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
   const handleExport = async () => {
     setStatus("busy"); setStatusMsg("");
 
-    const isBinary = opts.format === "pdf" || opts.format === "epub";
+    const isBinary = opts.format === "pdf" || opts.format === "epub" || opts.format === "docx";
     // Use the user-picked folder only for text formats; everything else goes to dataDir
     const useDirHandle = !!dirHandle && !isBinary;
 
@@ -380,7 +407,7 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
   };
 
   const fmtLabel: Record<string, string> = {
-    md: "Markdown", tex: "LaTeX", "epub-style": "EPUB Style", pdf: "PDF", epub: "EPUB",
+    md: "Markdown", tex: "LaTeX", "epub-style": "EPUB Style", pdf: "PDF", epub: "EPUB", docx: "DOCX",
   };
   const fmtLabelStr = fmtLabel[opts.format] ?? opts.format;
 
@@ -412,6 +439,7 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
               ...(pandocEnabled ? [
                 { fmt: "pdf",  Icon: FileDown,  label: "PDF",  sub: "via Pandoc + LaTeX" },
                 { fmt: "epub", Icon: BookOpen,  label: "EPUB", sub: "via Pandoc" },
+                { fmt: "docx", Icon: File,      label: "DOCX", sub: "Word document" },
               ] : []),
             ] as { fmt: string; Icon: LucideIcon; label: string; sub: string }[]).map(({ fmt, Icon, label, sub }) => (
               <button key={fmt} onClick={() => set("format", fmt as ExportOptions["format"])}
@@ -428,6 +456,43 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
               </button>
             ))}
           </div>
+
+          {/* Export profiles */}
+          {profiles.length > 0 && (
+            <>
+              <SectionHeading>Saved Profiles</SectionHeading>
+              <div className="flex flex-wrap gap-1.5">
+                {profiles.map(p => (
+                  <div key={p.id} className="flex items-center gap-0.5 rounded-md border border-border overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => loadProfile(p)}
+                      title={p.description ?? p.name}
+                      className={cn(
+                        "flex items-center gap-1 px-2.5 py-1 text-xs transition-colors",
+                        activePreset === p.name
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                      )}
+                    >
+                      {p.is_builtin ? <Star className="h-3 w-3 shrink-0" /> : <Save className="h-3 w-3 shrink-0" />}
+                      {p.name}
+                      {p.is_builtin && <Lock className="h-2.5 w-2.5 ml-0.5 opacity-50" />}
+                    </button>
+                    {!p.is_builtin && (
+                      <button
+                        onClick={() => deleteProfile.mutate(p.id)}
+                        className="px-1.5 py-1 text-muted-foreground hover:text-destructive hover:bg-secondary/50 transition-colors border-l border-border"
+                        title="Delete profile"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
           {/* Content selection */}
           <SectionHeading>Content</SectionHeading>
@@ -627,10 +692,12 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
                     </div>
                   </div>
 
-                  {/* PDF / LaTeX extras */}
-                  {(opts.format === "pdf" || opts.format === "tex") && (
+                  {/* PDF / LaTeX / DOCX extras */}
+                  {(opts.format === "pdf" || opts.format === "tex" || opts.format === "docx") && (
                     <div className="space-y-2">
-                      <p className="text-[11px] text-muted-foreground font-medium">PDF / LaTeX</p>
+                      <p className="text-[11px] text-muted-foreground font-medium">
+                        {opts.format === "docx" ? "Word / DOCX" : "PDF / LaTeX"}
+                      </p>
                       <div>
                         <Label className="text-xs">Page margin</Label>
                         <Input
@@ -719,7 +786,7 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
 
           {/* Output */}
           <SectionHeading>Output</SectionHeading>
-          {opts.format !== "pdf" && opts.format !== "epub" ? (
+          {opts.format !== "pdf" && opts.format !== "epub" && opts.format !== "docx" ? (
             <div className="space-y-2">
               {hasFolderPicker && (
                 <button onClick={pickFolder}
@@ -757,18 +824,48 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-border shrink-0 flex items-center justify-between gap-3">
-          <div className="flex-1 text-xs min-w-0">
-            {status === "done"  && <span className="text-green-500 flex items-center gap-1 truncate"><Check className="h-3.5 w-3.5 shrink-0" />{statusMsg}</span>}
-            {status === "error" && <span className="text-destructive truncate">{statusMsg}</span>}
+        <div className="px-5 py-3 border-t border-border shrink-0 space-y-2">
+          {/* Save-as-profile row */}
+          {showSaveProfile ? (
+            <div className="flex items-center gap-2">
+              <Input
+                value={saveProfileName}
+                onChange={e => setSaveProfileName(e.target.value)}
+                placeholder="Profile name…"
+                className="h-7 text-xs flex-1"
+                onKeyDown={e => { if (e.key === "Enter") handleSaveProfile(); if (e.key === "Escape") setShowSaveProfile(false); }}
+                autoFocus
+              />
+              <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => setShowSaveProfile(false)}>Cancel</Button>
+              <Button size="sm" className="h-7 text-xs px-2 gap-1" onClick={handleSaveProfile} disabled={!saveProfileName.trim()}>
+                <Save className="h-3 w-3" /> Save
+              </Button>
+            </div>
+          ) : null}
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex-1 text-xs min-w-0">
+              {status === "done"  && <span className="text-green-500 flex items-center gap-1 truncate"><Check className="h-3.5 w-3.5 shrink-0" />{statusMsg}</span>}
+              {status === "error" && <span className="text-destructive truncate">{statusMsg}</span>}
+            </div>
+            {!showSaveProfile && opts.format !== "md" && (
+              <button
+                type="button"
+                onClick={() => setShowSaveProfile(true)}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 shrink-0"
+                title="Save current settings as a profile"
+              >
+                <Save className="h-3 w-3" /> Save profile
+              </button>
+            )}
+            <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+            <Button size="sm" onClick={handleExport} disabled={status === "busy"} className="gap-1.5 shrink-0">
+              {status === "busy"
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <FolderOpen className="h-3.5 w-3.5" />}
+              Export {fmtLabelStr}
+            </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" onClick={handleExport} disabled={status === "busy"} className="gap-1.5 shrink-0">
-            {status === "busy"
-              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              : <FolderOpen className="h-3.5 w-3.5" />}
-            Export {fmtLabelStr}
-          </Button>
         </div>
       </div>
     </div>

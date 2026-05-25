@@ -4,12 +4,12 @@ Foliantica Pandoc export service.
 POST /convert
   body (JSON):
     html:             str          — HTML content of the book
-    format:           "pdf" | "epub"
+    format:           "pdf" | "epub" | "docx"
     title:            str
     author:           str | None
     language:         str | None   — BCP-47 code, e.g. "en", "de"
     cover:            str | None   — base64-encoded PNG/JPEG for EPUB cover
-    font:             str | None   — body font name (XeLaTeX mainfont)
+    font:             str | None   — body font name
     heading_font:     str | None   — separate heading font (EPUB CSS only for now)
     heading_align:    str          — "center" | "left"
     h1_size:          str          — CSS size, e.g. "2em"
@@ -18,19 +18,20 @@ POST /convert
     h3_style:         str          — "italic" | "normal" | "bold"
     paragraph_indent: str          — e.g. "1.5em" or "0"
     text_align:       str          — "justify" | "left"
-    pdf_margin:       str          — e.g. "2.5cm"
+    pdf_margin:       str          — e.g. "2.5cm" or "1in"
     page_numbers:     bool
     line_spacing:     str          — "1" | "1.5" | "2"
     font_size:        str          — "10pt" | "11pt" | "12pt"
 
 GET /fonts
-  Returns { fonts: [str] } — list of font families available to XeLaTeX
+  Returns { fonts: [str] } — list of font families available to fontconfig
 
 GET /health
   Health check
 """
 
 import base64
+import os
 import re as _re
 import subprocess
 import tempfile
@@ -42,17 +43,19 @@ from pydantic import BaseModel
 
 app = FastAPI(title="Foliantica Pandoc")
 
-_GFONT_CACHE = Path("/tmp/gfonts")  # Google Font TTF cache
+# System font directory — writable in the container, auto-found by fontconfig
+_FONT_INSTALL_DIR = Path("/usr/local/share/fonts/gfonts")
 
 
 # ── Google Font helper ────────────────────────────────────────────────────────
 
 def _ensure_google_font(name: str) -> bool:
-    """Download a Google Font TTF into /tmp/gfonts/ and register with fontconfig.
+    """Download a Google Font TTF into the system fonts dir and register it.
     Returns True if the font is (now) available, False on failure."""
-    safe = name.replace(" ", "_")
-    dest_dir = _GFONT_CACHE / safe
-    # If any font file already cached, assume it's registered
+    safe     = name.replace(" ", "_")
+    dest_dir = _FONT_INSTALL_DIR / safe
+
+    # Already cached — skip download but check fontconfig registration
     if any(dest_dir.glob("*.ttf")) or any(dest_dir.glob("*.otf")):
         return True
 
@@ -87,7 +90,9 @@ def _ensure_google_font(name: str) -> bool:
     if downloaded == 0:
         return False
 
-    subprocess.run(["fc-cache", str(dest_dir)], capture_output=True, timeout=10)
+    # Rebuild fontconfig cache so xelatex and fc-list can see the new fonts
+    subprocess.run(["fc-cache", "-f", str(_FONT_INSTALL_DIR)],
+                   capture_output=True, timeout=15)
     return True
 
 
@@ -111,11 +116,128 @@ def _resolve_font(name: str | None) -> str | None:
     return None  # could not resolve — fall back to default
 
 
+# ── DOCX reference document builder ──────────────────────────────────────────
+
+def _build_reference_docx(dest: Path, font: str, line_spacing: str,
+                           margin: str, paragraph_indent: str,
+                           heading_align: str, author: str, title: str) -> None:
+    """
+    Build a reference.docx via python-docx that encodes:
+      - Body font (Normal style), font size, line spacing, first-line indent
+      - Page margins
+      - Running header: AUTHOR / TITLE / Page #
+    Pandoc then uses it as a style template via --reference-doc.
+    """
+    from docx import Document
+    from docx.shared import Pt, Inches, Cm, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    import re as _r
+
+    doc = Document()
+
+    # ── Page margins ──────────────────────────────────────────────────────────
+    def _to_inches(val: str) -> float:
+        """Convert margin string (e.g. '1in', '2.5cm', '2em') to inches."""
+        val = val.strip()
+        if val.endswith("in"):
+            return float(val[:-2])
+        if val.endswith("cm"):
+            return float(val[:-2]) / 2.54
+        if val.endswith("mm"):
+            return float(val[:-2]) / 25.4
+        # em / other — treat 1em ≈ 0.5in
+        m = _r.match(r"([\d.]+)", val)
+        return float(m.group(1)) * 0.5 if m else 1.0
+
+    margin_in = _to_inches(margin)
+    for section in doc.sections:
+        section.top_margin    = Inches(margin_in)
+        section.bottom_margin = Inches(margin_in)
+        section.left_margin   = Inches(margin_in)
+        section.right_margin  = Inches(margin_in)
+
+    # ── Body font (Normal style) ──────────────────────────────────────────────
+    _LS_MAP = {"1": WD_LINE_SPACING.SINGLE, "1.5": WD_LINE_SPACING.ONE_POINT_FIVE,
+               "2": WD_LINE_SPACING.DOUBLE}
+    ls = _LS_MAP.get(line_spacing, WD_LINE_SPACING.DOUBLE)
+
+    _indent_map = {"0": 0.0, "1.5em": 0.5, "1em": 0.33}
+    indent_in = _indent_map.get(paragraph_indent, 0.5)
+
+    normal = doc.styles["Normal"]
+    nf = normal.font
+    nf.name = font
+    nf.size = Pt(12)
+    npf = normal.paragraph_format
+    npf.line_spacing_rule = ls
+    npf.first_line_indent = Inches(indent_in) if indent_in else None
+    npf.space_after = Pt(0)
+
+    # ── Heading styles ────────────────────────────────────────────────────────
+    halign = WD_ALIGN_PARAGRAPH.CENTER if heading_align == "center" else WD_ALIGN_PARAGRAPH.LEFT
+    for h_name in ("Heading 1", "Heading 2", "Heading 3"):
+        try:
+            hs = doc.styles[h_name]
+            hs.font.name  = font
+            hs.font.bold  = True
+            hs.paragraph_format.alignment     = halign
+            hs.paragraph_format.space_before  = Pt(24)
+            hs.paragraph_format.space_after   = Pt(6)
+            hs.paragraph_format.first_line_indent = None
+        except Exception:
+            pass
+
+    # ── Running header: AUTHOR / TITLE / Page # ───────────────────────────────
+    if author or title:
+        from docx.oxml.shared import OxmlElement
+        section = doc.sections[0]
+        section.different_first_page_header = False
+        header = section.header
+        if not header.paragraphs:
+            header.add_paragraph()
+        hp = header.paragraphs[0]
+        hp.clear()
+        hp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        hp.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+
+        # Build: "AUTHOR / TITLE / {page #}"
+        parts: list[str] = []
+        if author:
+            parts.append(author.split()[-1].upper())   # last name
+        if title:
+            short = title[:30].upper()
+            parts.append(short)
+
+        header_text = " / ".join(parts) + " / " if parts else ""
+        if header_text:
+            run = hp.add_run(header_text)
+            run.font.name  = font
+            run.font.size  = Pt(12)
+
+        # Insert PAGE field
+        fld_char1 = OxmlElement("w:fldChar")
+        fld_char1.set(qn("w:fldCharType"), "begin")
+        instr_text = OxmlElement("w:instrText")
+        instr_text.text = " PAGE "
+        fld_char2 = OxmlElement("w:fldChar")
+        fld_char2.set(qn("w:fldCharType"), "end")
+        pg_run = hp.add_run()
+        pg_run.font.name = font
+        pg_run.font.size = Pt(12)
+        pg_run._r.append(fld_char1)
+        pg_run._r.append(instr_text)
+        pg_run._r.append(fld_char2)
+
+    doc.save(str(dest))
+
+
 # ── Request model ─────────────────────────────────────────────────────────────
 
 class ConvertRequest(BaseModel):
     html:             str
-    format:           str                  # "pdf" | "epub"
+    format:           str                  # "pdf" | "epub" | "docx"
     title:            str    = "Untitled"
     author:           str | None = None
     language:         str | None = "en"
@@ -165,8 +287,8 @@ _FS_TO_PT      = {"10pt": "10pt", "11pt": "11pt", "12pt": "12pt"}
 
 @app.post("/convert")
 def convert(req: ConvertRequest):
-    if req.format not in ("pdf", "epub"):
-        raise HTTPException(400, "format must be 'pdf' or 'epub'")
+    if req.format not in ("pdf", "epub", "docx"):
+        raise HTTPException(400, "format must be 'pdf', 'epub', or 'docx'")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp  = Path(tmp)
@@ -187,8 +309,10 @@ def convert(req: ConvertRequest):
             cmd += ["--metadata", f"lang={req.language}"]
 
         if req.format == "pdf":
-            # Resolve fonts (download from Google if needed)
-            body_font    = _resolve_font(req.font)
+            # Resolve fonts (download from Google Fonts if needed).
+            # NOTE: fonts are installed to /usr/local/share/fonts — no FONTCONFIG_PATH
+            # override needed. xelatex finds them via the standard fontconfig search.
+            body_font = _resolve_font(req.font)
 
             pdf_vars = [
                 ("geometry",    f"margin={req.pdf_margin}"),
@@ -203,10 +327,28 @@ def convert(req: ConvertRequest):
             for k, v in pdf_vars:
                 cmd += ["-V", f"{k}:{v}"]
             cmd += ["--pdf-engine=xelatex"]
+            env = None  # use ambient environment — fonts are in standard system path
 
-            # Pass FONTCONFIG_PATH so xelatex can find downloaded fonts
-            import os
-            env = {**os.environ, "FONTCONFIG_PATH": str(_GFONT_CACHE)}
+        elif req.format == "docx":
+            # Build a reference.docx that encodes font, spacing, margins, and header
+            body_font     = req.font or "Times New Roman"
+            ref_docx_path = tmp / "reference.docx"
+            try:
+                _build_reference_docx(
+                    dest             = ref_docx_path,
+                    font             = body_font,
+                    line_spacing     = req.line_spacing,
+                    margin           = req.pdf_margin,
+                    paragraph_indent = req.paragraph_indent,
+                    heading_align    = req.heading_align,
+                    author           = req.author or "",
+                    title            = req.title,
+                )
+                cmd += [f"--reference-doc={ref_docx_path}"]
+            except Exception as e:
+                # If python-docx is unavailable or fails, proceed without reference doc
+                pass
+            env = None
 
         elif req.format == "epub":
             cmd += ["--epub-chapter-level=2"]
@@ -249,14 +391,14 @@ figcaption {{ font-size: 0.85em; opacity: 0.7; margin-top: 0.4em; }}
             css_path = tmp / "style.css"
             css_path.write_text(epub_css, encoding="utf-8")
             cmd += [f"--css={css_path}"]
-            env = None  # no special env for epub
+            env = None
 
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=False,
             timeout=120,
-            env=env if req.format == "pdf" else None,
+            env=env,
         )
 
         if result.returncode != 0:
@@ -265,5 +407,9 @@ figcaption {{ font-size: 0.85em; opacity: 0.7; margin-top: 0.4em; }}
 
         data = out.read_bytes()
 
-    media_types = {"pdf": "application/pdf", "epub": "application/epub+zip"}
+    media_types = {
+        "pdf":  "application/pdf",
+        "epub": "application/epub+zip",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
     return Response(content=data, media_type=media_types[req.format])

@@ -157,7 +157,7 @@ def docker_compose_up(db: Session = Depends(get_db)):
 
     try:
         result = subprocess.run(
-            ["docker", "compose", "up", "-d", "--pull", "missing"],
+            ["docker", "compose", "up", "-d", "--pull", "missing", "--force-recreate"],
             cwd=str(compose_dir),
             capture_output=True,
             text=True,

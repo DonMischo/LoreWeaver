@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronDown, ChevronRight, Plus, Trash2,
-  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors, Info, ListChecks, MoreHorizontal, LayoutGrid, Users,
+  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors, Info, ListChecks, MoreHorizontal, LayoutGrid, Users, BarChart2, Mail,
 } from "lucide-react";
 import {
   DndContext, closestCenter, DragEndEvent,
@@ -95,7 +95,7 @@ function SceneItem({
           <Clock className="h-2.5 w-2.5 shrink-0 text-primary/60" aria-label="Has scene time" />
         )}
       </Link>
-      <ScenePlanPopover sceneId={scene.id} sceneTitle={scene.title || ""} />
+      <ScenePlanPopover sceneId={scene.id} sceneTitle={scene.title || ""} sceneType={scene.scene_type} />
       <button
         className="opacity-0 group-hover:opacity-60 hover:opacity-100 hover:text-destructive"
         onClick={(e) => {
@@ -538,7 +538,22 @@ export function ProjectSidebar({ projectId }: Props) {
                   <Scissors className="h-3.5 w-3.5" />
                   {t("nav_fragments")}
                 </Link>
-
+                <Link
+                  href={`/projects/${projectId}/analytics`}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+                >
+                  <BarChart2 className="h-3.5 w-3.5" />
+                  Analytics
+                </Link>
+                <Link
+                  href={`/projects/${projectId}/queries`}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-foreground"
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  Query Tracker
+                </Link>
                 <div className="border-t border-border/50 my-1" />
 
                 {/* Project config */}

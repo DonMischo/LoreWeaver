@@ -7,8 +7,8 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
-from models import Project, Act, Chapter, UserSettings
-from schemas import ExportOptions
+from models import Project, Act, Chapter, UserSettings, ExportProfile
+from schemas import ExportOptions, ExportProfileCreate, ExportProfileUpdate, ExportProfileOut
 from services.export import export_markdown, export_latex, export_epub_style, export_html
 
 router = APIRouter(prefix="/api/projects", tags=["export"])
@@ -64,10 +64,10 @@ async def export_project(
         filename  = f"{safe_name}-style.css"
         media_type = "text/css"
 
-    elif opts.format in ("pdf", "epub"):
+    elif opts.format in ("pdf", "epub", "docx"):
         s = db.query(UserSettings).first()
         if not s or not s.pandoc_enabled:
-            raise HTTPException(503, "PDF/EPUB export is not enabled in settings")
+            raise HTTPException(503, "PDF/EPUB/DOCX export is not enabled in settings")
         pandoc_url = (s.pandoc_url or "http://localhost:8082").rstrip("/")
 
         import json as _json
@@ -107,8 +107,14 @@ async def export_project(
 
         content    = r.content
         is_binary  = True
-        filename   = f"{safe_name}.{'pdf' if opts.format == 'pdf' else 'epub'}"
-        media_type = "application/pdf" if opts.format == "pdf" else "application/epub+zip"
+        ext_map    = {"pdf": "pdf", "epub": "epub", "docx": "docx"}
+        mime_map   = {
+            "pdf":  "application/pdf",
+            "epub": "application/epub+zip",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }
+        filename   = f"{safe_name}.{ext_map.get(opts.format, opts.format)}"
+        media_type = mime_map.get(opts.format, "application/octet-stream")
 
     else:
         raise HTTPException(400, "Unknown format")
@@ -145,6 +151,48 @@ async def list_pandoc_fonts(db: Session = Depends(get_db)):
         return r.json()
     except Exception:
         return {"fonts": []}
+
+
+@router.get("/{project_id}/export-profiles", response_model=list[ExportProfileOut])
+def list_export_profiles(project_id: int, db: Session = Depends(get_db)):
+    """Return global (built-in) profiles plus any saved for this project."""
+    from sqlalchemy import or_
+    return (
+        db.query(ExportProfile)
+        .filter(or_(ExportProfile.project_id == project_id, ExportProfile.project_id.is_(None)))
+        .order_by(ExportProfile.is_builtin.desc(), ExportProfile.name)
+        .all()
+    )
+
+
+@router.post("/{project_id}/export-profiles", response_model=ExportProfileOut, status_code=201)
+def create_export_profile(project_id: int, data: ExportProfileCreate, db: Session = Depends(get_db)):
+    profile = ExportProfile(project_id=project_id, **data.model_dump())
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+@router.patch("/export-profiles/{profile_id}", response_model=ExportProfileOut)
+def update_export_profile(profile_id: int, data: ExportProfileUpdate, db: Session = Depends(get_db)):
+    profile = db.get(ExportProfile, profile_id)
+    if not profile or profile.is_builtin:
+        raise HTTPException(404, "Profile not found or is read-only")
+    for k, v in data.model_dump(exclude_unset=True).items():
+        setattr(profile, k, v)
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+@router.delete("/export-profiles/{profile_id}", status_code=204)
+def delete_export_profile(profile_id: int, db: Session = Depends(get_db)):
+    profile = db.get(ExportProfile, profile_id)
+    if not profile or profile.is_builtin:
+        raise HTTPException(404, "Profile not found or is read-only")
+    db.delete(profile)
+    db.commit()
 
 
 @router.get("/{project_id}/export/structure")

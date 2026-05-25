@@ -10,7 +10,7 @@ import {
 } from "@xyflow/react";
 import type { Node, Edge, OnNodeDrag } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Plus, X, AlignJustify, ZoomOut, Layers2, LayoutGrid, TreePine, Group, Link2 } from "lucide-react";
+import { Plus, X, AlignJustify, ZoomOut, Layers2, LayoutGrid, TreePine, Group, Link2, BookOpen, GitBranch } from "lucide-react";
 import {
   useCorkboard, useUpdateSceneSynopsis, useGenerateSynopsis,
   useMoveScene, useCodexEntries, useProjectStructure,
@@ -22,6 +22,7 @@ import { ActNode, ChapterNode, GroupFrameNode } from "@/components/corkboard/Hie
 import type { ActNodeType, ChapterNodeType, GroupFrameNodeType } from "@/components/corkboard/HierarchyNodes";
 import { ColorPicker, hexToRgba, MAIN_COLOR, SUBPLOT_PALETTE } from "@/components/corkboard/ColorPicker";
 import type { CorkboardScene, CorkboardAct } from "@/types";
+import { PLOT_TEMPLATES } from "@/lib/plotTemplates";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,15 @@ function saveStoredSubplots(pid: number, sp: string[]) {
   localStorage.setItem(`lw_subplots_${pid}`, JSON.stringify(sp));
 }
 
+function getBeatTemplateId(pid: number): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(`lw_beat_tpl_${pid}`) ?? null;
+}
+function saveBeatTemplateId(pid: number, id: string | null) {
+  if (id) localStorage.setItem(`lw_beat_tpl_${pid}`, id);
+  else localStorage.removeItem(`lw_beat_tpl_${pid}`);
+}
+
 // ── Color helpers ─────────────────────────────────────────────────────────────
 
 function defaultColColor(col: string, allCols: string[]): string {
@@ -86,7 +96,11 @@ function defaultColColor(col: string, allCols: string[]): string {
 }
 
 function resolveColColor(col: string, allCols: string[], stored: Record<string, string>, codexMap: Record<string, string>): string {
-  return stored[col] ?? codexMap[col.toLowerCase()] ?? defaultColColor(col, allCols);
+  // Codex character color takes priority — the codex is the source of truth for character colors.
+  // User-stored overrides only apply for subplots not named after a codex entry.
+  const codexColor = codexMap[col.toLowerCase()];
+  if (codexColor) return codexColor;
+  return stored[col] ?? defaultColColor(col, allCols);
 }
 
 // ── Node group (single scene or a stack) ─────────────────────────────────────
@@ -257,7 +271,36 @@ function chapterBoxSize(nScenes: number, compact: boolean): { w: number; h: numb
   };
 }
 
-type AnyNode = SceneNodeType | ActNodeType | ChapterNodeType | GroupFrameNodeType;
+// ── Beat header node ──────────────────────────────────────────────────────────
+
+interface BeatHeaderNodeData {
+  beatName: string;
+  sceneCount: number;
+  position?: number;
+  isUnassigned?: boolean;
+}
+type BeatHeaderNodeType = Node<BeatHeaderNodeData, "beatHeaderNode">;
+
+function BeatHeaderNodeComponent({ data }: { data: BeatHeaderNodeData }) {
+  return (
+    <div
+      style={{ width: "100%", height: "100%", pointerEvents: "none" }}
+      className="flex flex-col items-center justify-center text-center px-3 rounded-lg border-2 border-dashed border-border/50 bg-muted/20"
+    >
+      <p className={`text-[11px] font-semibold leading-tight truncate w-full text-center ${data.isUnassigned ? "text-muted-foreground/40 italic" : "text-foreground"}`}>
+        {data.isUnassigned ? "— Unassigned —" : data.beatName}
+      </p>
+      {data.position != null && !data.isUnassigned && (
+        <p className="text-[9px] text-muted-foreground/50 mt-0.5">{data.position}%</p>
+      )}
+      <p className="text-[9px] text-muted-foreground/40 mt-1">
+        {data.sceneCount} scene{data.sceneCount !== 1 ? "s" : ""}
+      </p>
+    </div>
+  );
+}
+
+type AnyNode = SceneNodeType | ActNodeType | ChapterNodeType | GroupFrameNodeType | BeatHeaderNodeType;
 
 function buildHierarchyNodes(
   localScenes: CorkboardScene[],
@@ -418,9 +461,102 @@ function buildGroupFrames(
   return frames;
 }
 
+// ── Beat sheet view layout ────────────────────────────────────────────────────
+
+const BEAT_HEADER_H = 84; // height of beat column header node
+
+function buildBeatViewNodes(
+  localScenes: CorkboardScene[],
+  allBeatCols: string[],     // ordered list starting with "__unassigned__"
+  beatPositions: Record<string, number>, // beat name → 0-100 position % from template
+  sceneColors: Record<number, string | null>,
+  resolvedColColors: Record<string, string>,
+  allCols: string[],
+  showSynopsis: boolean,
+  compact: boolean,
+  cascade: boolean,          // when true, stack cards with CDX/CDY offsets
+  generatingId: number | null,
+  availableSubplots: string[],
+  handlers: Pick<SceneNodeData,
+    "onTitleChange" | "onSynopsisChange" | "onGenerateSynopsis" |
+    "onColorChange" | "onSubplotChange" | "onUnstack">,
+  projectId: number,
+): { nodes: AnyNode[]; edges: Edge[] } {
+  const sw = compact ? CARD_W_SM : CARD_W;
+  const colW = sw + COL_GAP;
+
+  // Group scenes by beat
+  const byBeat = new Map<string, CorkboardScene[]>();
+  for (const col of allBeatCols) byBeat.set(col, []);
+
+  for (const scene of localScenes) {
+    const beat = scene.beat;
+    if (!beat || !allBeatCols.includes(beat)) {
+      byBeat.get("__unassigned__")!.push(scene);
+    } else {
+      byBeat.get(beat)!.push(scene);
+    }
+  }
+  for (const [, arr] of byBeat) arr.sort((a, b) => (a.global_order ?? 0) - (b.global_order ?? 0));
+
+  const nodes: AnyNode[] = [];
+
+  for (const col of allBeatCols) {
+    const colIdx = allBeatCols.indexOf(col);
+    const colX = colIdx * colW;
+    const scenes = byBeat.get(col) ?? [];
+    const isUnassigned = col === "__unassigned__";
+
+    // Beat header node
+    nodes.push({
+      id: `beat-header-${col}`,
+      type: "beatHeaderNode",
+      position: { x: colX, y: 0 },
+      style: { width: sw, height: BEAT_HEADER_H },
+      data: {
+        beatName: isUnassigned ? "Unassigned" : col,
+        sceneCount: scenes.length,
+        position: isUnassigned ? undefined : beatPositions[col],
+        isUnassigned,
+      },
+      selectable: false,
+      draggable: false,
+      zIndex: 0,
+    } as unknown as BeatHeaderNodeType);
+
+    // Scene nodes — either spaced (normal) or cascading pile (cascade mode)
+    scenes.forEach((scene, rowIdx) => {
+      const sx = cascade ? colX + rowIdx * CDX : colX;
+      const sy = cascade
+        ? BEAT_HEADER_H + 12 + rowIdx * CDY
+        : BEAT_HEADER_H + 12 + rowIdx * ROW_H;
+      nodes.push({
+        id: `scene-${scene.id}`,
+        type: "sceneNode",
+        position: { x: sx, y: sy },
+        dragHandle: '[data-drag="handle"]',
+        zIndex: 10 + rowIdx,
+        data: {
+          scenes: [scene],
+          projectId,
+          sceneColors,
+          colColor: resolvedColColors[scene.subplot ?? MAIN_COL] ?? defaultColColor(scene.subplot ?? MAIN_COL, allCols),
+          showSynopsis,
+          compact,
+          generatingId,
+          availableSubplots,
+          ...handlers,
+        },
+      } as SceneNodeType);
+    });
+  }
+
+  return { nodes, edges: [] };
+}
+
 // ── Node types registration (stable outside component) ────────────────────────
 
-const nodeTypes = { sceneNode: SceneNode, actNode: ActNode, chapterNode: ChapterNode, groupFrameNode: GroupFrameNode };
+const nodeTypes = { sceneNode: SceneNode, actNode: ActNode, chapterNode: ChapterNode, groupFrameNode: GroupFrameNode, beatHeaderNode: BeatHeaderNodeComponent };
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -465,9 +601,13 @@ export default function CorkboardPage() {
   const [showSynopsis, setShowSynopsis]     = useState(true);
   const [compact, setCompact]               = useState(false);
   const [showHierarchy, setShowHierarchy]   = useState(false);
+  const [showBeatView, setShowBeatView]     = useState(false);
+  const [beatTemplateId, setBeatTemplateId] = useState<string | null>(null);
+  const [beatCascade, setBeatCascade]       = useState(false);
   const [generatingId, setGeneratingId]     = useState<number | null>(null);
   const [showFrames, setShowFrames]         = useState(true);
   const [scratchMode, setScratchMode]       = useState(false);
+  const [plotChain, setPlotChain]           = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -490,6 +630,11 @@ export default function CorkboardPage() {
     for (const col of allCols) cc[col] = resolveColColor(col, allCols, stored, codexColorByName);
     setColColors(cc);
   }, [serverData, projectId, codexColorByName]);
+
+  // Restore beat template from localStorage on mount
+  useEffect(() => {
+    setBeatTemplateId(getBeatTemplateId(projectId));
+  }, [projectId]);
 
   // ── Stable callbacks (all use mutateRef.current so deps stay empty) ─────────
 
@@ -574,6 +719,31 @@ export default function CorkboardPage() {
     [allCols],
   );
 
+  // Beat-view column ordering — derived from active template or from scene data
+  const beatCols = useMemo(() => {
+    if (beatTemplateId) {
+      const tpl = PLOT_TEMPLATES.find((t) => t.id === beatTemplateId);
+      if (tpl) return tpl.beats.map((b) => b.name);
+    }
+    // Fallback: unique beat values from scenes in narrative order
+    const seen = new Set<string>();
+    for (const s of [...localScenes].sort((a, b) => (a.global_order ?? 0) - (b.global_order ?? 0)))
+      if (s.beat) seen.add(s.beat);
+    return [...seen];
+  }, [beatTemplateId, localScenes]);
+
+  const allBeatCols = useMemo(() => ["__unassigned__", ...beatCols], [beatCols]);
+
+  // Map beat name → position% (from template, for header display)
+  const beatPositions = useMemo(() => {
+    const m: Record<string, number> = {};
+    if (beatTemplateId) {
+      const tpl = PLOT_TEMPLATES.find((t) => t.id === beatTemplateId);
+      if (tpl) for (const b of tpl.beats) m[b.name] = b.position;
+    }
+    return m;
+  }, [beatTemplateId]);
+
   const resolvedColColors = useMemo(
     () => Object.fromEntries(allCols.map((col) => [col, resolveColColor(col, allCols, colColors, codexColorByName)])),
     [allCols, colColors, codexColorByName],
@@ -582,7 +752,15 @@ export default function CorkboardPage() {
   useEffect(() => {
     if (localScenes.length === 0) return;
 
-    if (showHierarchy && structure?.length) {
+    if (showBeatView) {
+      const { nodes: bn, edges: be } = buildBeatViewNodes(
+        localScenes, allBeatCols, beatPositions, sceneColors,
+        resolvedColColors, allCols,
+        showSynopsis, compact, beatCascade, generatingId, availableSubplots, handlers, projectId,
+      );
+      setNodes(bn);
+      setEdges(be);
+    } else if (showHierarchy && structure?.length) {
       const { nodes: hn, edges: he } = buildHierarchyNodes(
         localScenes, structure, sceneColors,
         resolvedColColors, allCols,
@@ -611,8 +789,8 @@ export default function CorkboardPage() {
       setEdges(newEdges);
     }
   }, [
-    localScenes, structure, showHierarchy, showFrames,
-    allCols, sceneColors, resolvedColColors,
+    localScenes, structure, showHierarchy, showBeatView, showFrames,
+    allCols, allBeatCols, beatPositions, beatCascade, sceneColors, resolvedColColors,
     showSynopsis, compact, generatingId, availableSubplots,
     handlers, projectId, setNodes, setEdges,
   ]);
@@ -651,13 +829,19 @@ export default function CorkboardPage() {
   showFramesRef.current  = showFrames;
   const scratchModeRef   = useRef(scratchMode);
   scratchModeRef.current = scratchMode;
+  const plotChainRef     = useRef(plotChain);
+  plotChainRef.current   = plotChain;
   const showHierarchyRef    = useRef(showHierarchy);
   showHierarchyRef.current  = showHierarchy;
+  const showBeatViewRef     = useRef(showBeatView);
+  showBeatViewRef.current   = showBeatView;
+  const allBeatColsRef      = useRef(allBeatCols);
+  allBeatColsRef.current    = allBeatCols;
 
   // Drag-state tracking (frame drag and scratch drag)
   const dragStartRef = useRef<{
     nodeId: string;
-    nodeType: "frame" | "scratch";
+    nodeType: "frame" | "scratch" | "plot";
     startPos: { x: number; y: number };
     followers: Array<{ id: string; startPos: { x: number; y: number } }>;
   } | null>(null);
@@ -680,6 +864,26 @@ export default function CorkboardPage() {
         .filter((n) => n.id.startsWith("scene-") && chapterSceneIds.has(parseInt(n.id.replace("scene-", ""), 10)))
         .map((n) => ({ id: n.id, startPos: { ...n.position } }));
       dragStartRef.current = { nodeId, nodeType: "frame", startPos: { ...node.position }, followers };
+      return;
+    }
+
+    // Plot-chain drag: identify all scene nodes in the SAME subplot that come after the dragged one
+    if (plotChainRef.current && nodeId.startsWith("scene-")) {
+      const sceneId = parseInt(nodeId.replace("scene-", ""), 10);
+      const dragged = localScenesRef.current.find((s) => s.id === sceneId);
+      if (dragged) {
+        const sameSubplot = dragged.subplot ?? null;
+        const draggedOrder = dragged.global_order ?? 0;
+        const followerIds = new Set(
+          localScenesRef.current
+            .filter((s) => (s.subplot ?? null) === sameSubplot && (s.global_order ?? 0) > draggedOrder)
+            .map((s) => s.id),
+        );
+        const followers = nodesRef.current
+          .filter((n) => n.id.startsWith("scene-") && followerIds.has(parseInt(n.id.replace("scene-", ""), 10)))
+          .map((n) => ({ id: n.id, startPos: { ...n.position } }));
+        dragStartRef.current = { nodeId, nodeType: "plot", startPos: { ...node.position }, followers };
+      }
       return;
     }
 
@@ -794,6 +998,32 @@ export default function CorkboardPage() {
       return;
     }
 
+    // ── Case 2.5: plot-chain drag — save dragged scene + same-subplot followers ─
+    if (drag && drag.nodeType === "plot" && drag.nodeId === node.id) {
+      dragStartRef.current = null;
+      const dx = node.position.x - drag.startPos.x;
+      const dy = node.position.y - drag.startPos.y;
+      const droppedSceneId = parseInt(node.id.replace("scene-", ""), 10);
+      const allUpdates = [
+        { sceneId: droppedSceneId, nx: node.position.x, ny: node.position.y },
+        ...drag.followers.map(({ id, startPos }) => ({
+          sceneId: parseInt(id.replace("scene-", ""), 10),
+          nx: startPos.x + dx,
+          ny: startPos.y + dy,
+        })),
+      ];
+      setLocalScenes((prev) =>
+        prev.map((s) => {
+          const u = allUpdates.find((up) => up.sceneId === s.id);
+          return u ? { ...s, node_x: u.nx, node_y: u.ny } : s;
+        })
+      );
+      allUpdates.forEach(({ sceneId, nx, ny }) =>
+        mutateRef.current.move({ sceneId, data: { node_x: nx, node_y: ny } })
+      );
+      return;
+    }
+
     // ── Case 3: normal drag ──────────────────────────────────────────────────
     dragStartRef.current = null;
     const { x, y } = node.position;
@@ -808,6 +1038,21 @@ export default function CorkboardPage() {
       sceneIds = isNaN(sid) ? [] : [sid];
     }
     if (sceneIds.length === 0) return;
+
+    // ── Beat view: assign beat by x-position column ──────────────────────────
+    if (showBeatViewRef.current) {
+      const sw = compactRef.current ? CARD_W_SM : CARD_W;
+      const colW = sw + COL_GAP;
+      const cols = allBeatColsRef.current;
+      const colIdx = Math.max(0, Math.min(cols.length - 1, Math.round(x / colW)));
+      const beatCol = cols[colIdx];
+      const newBeat = beatCol === "__unassigned__" ? null : beatCol;
+      setLocalScenes((prev) =>
+        prev.map((s) => sceneIds.includes(s.id) ? { ...s, beat: newBeat } : s)
+      );
+      sceneIds.forEach((sid) => mutateRef.current.move({ sceneId: sid, data: { beat: newBeat } }));
+      return;
+    }
 
     // Detect cross-chapter drop via bounding-box hit-test.
     // Tree view → chapterNode boxes; free-form with frames → groupFrameNode boxes.
@@ -946,69 +1191,140 @@ export default function CorkboardPage() {
             Compact
           </button>
 
-          {/* Tree (hierarchy) toggle */}
+          {/* Tree (hierarchy) toggle — not available in beat view */}
+          {!showBeatView && (
+            <button
+              onClick={() => setShowHierarchy((v) => !v)}
+              title={showHierarchy ? "Free-form canvas" : "Tree view — acts → chapters → scenes"}
+              className={[
+                "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
+                showHierarchy ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
+              ].join(" ")}
+            >
+              <TreePine className="h-3.5 w-3.5" />
+              Tree
+            </button>
+          )}
+
+          {/* Beat sheet view toggle */}
           <button
-            onClick={() => setShowHierarchy((v) => !v)}
-            title={showHierarchy ? "Free-form canvas" : "Tree view — acts → chapters → scenes"}
+            onClick={() => {
+              setShowBeatView((v) => {
+                if (!v) setShowHierarchy(false);
+                else setBeatCascade(false); // reset cascade state when leaving beat view
+                return !v;
+              });
+            }}
+            title={showBeatView ? "Exit beat sheet view" : "Beat sheet view — organize scenes by story beat"}
             className={[
               "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
-              showHierarchy ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
+              showBeatView ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
             ].join(" ")}
           >
-            <TreePine className="h-3.5 w-3.5" />
-            Tree
+            <BookOpen className="h-3.5 w-3.5" />
+            Beat
           </button>
 
-          {/* Cascade / Frames — free-form only */}
+          {/* Template selector — only in beat view */}
+          {showBeatView && (
+            <select
+              value={beatTemplateId ?? ""}
+              onChange={(e) => {
+                const id = e.target.value || null;
+                setBeatTemplateId(id);
+                saveBeatTemplateId(projectId, id);
+              }}
+              className="text-xs bg-background border border-border rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-primary text-foreground"
+            >
+              <option value="">Auto-detect beats</option>
+              {PLOT_TEMPLATES.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Cascade — free-form and beat view; Frames — free-form only */}
           {!showHierarchy && (
             <>
               <button
-                onClick={handleCascade}
-                title="Stack all scenes in cascading piles"
-                className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border border-transparent text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                onClick={() => showBeatView ? setBeatCascade((v) => !v) : handleCascade()}
+                title={showBeatView
+                  ? beatCascade ? "Spread beat columns" : "Pile scenes in each beat column"
+                  : "Stack all scenes in cascading piles"}
+                className={[
+                  "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
+                  showBeatView && beatCascade ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
+                ].join(" ")}
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
                 Cascade
               </button>
-              <button
-                onClick={() => setShowFrames((v) => !v)}
-                title={showFrames ? "Hide chapter frames" : "Show chapter frames — drag a frame to move all its scenes"}
-                className={[
-                  "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
-                  showFrames ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
-                ].join(" ")}
-              >
-                <Group className="h-3.5 w-3.5" />
-                Frames
-              </button>
+              {!showBeatView && (
+                <button
+                  onClick={() => setShowFrames((v) => !v)}
+                  title={showFrames ? "Hide chapter frames" : "Show chapter frames — drag a frame to move all its scenes"}
+                  className={[
+                    "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
+                    showFrames ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
+                  ].join(" ")}
+                >
+                  <Group className="h-3.5 w-3.5" />
+                  Frames
+                </button>
+              )}
             </>
           )}
 
-          {/* Chain — available in all modes */}
-          <button
-            onClick={() => setScratchMode((v) => !v)}
-            title={scratchMode ? "Switch to normal drag" : "Chain drag — grab a scene to pull all later scenes with it"}
-            className={[
-              "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
-              scratchMode ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
-            ].join(" ")}
-          >
-            <Link2 className="h-3.5 w-3.5" />
-            Chain
-          </button>
+          {/* Chain modes — not applicable in beat view */}
+          {!showBeatView && (
+            <>
+              <button
+                onClick={() => { setPlotChain(false); setScratchMode((v) => !v); }}
+                title={scratchMode ? "Switch to normal drag" : "Chain drag — grab a scene to pull all later scenes with it"}
+                className={[
+                  "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
+                  scratchMode ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
+                ].join(" ")}
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                Chain
+              </button>
+              <button
+                onClick={() => { setScratchMode(false); setPlotChain((v) => !v); }}
+                title={plotChain ? "Switch to normal drag" : "Plot chain — drag a scene to pull later scenes in the same subplot only"}
+                className={[
+                  "flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors",
+                  plotChain ? "border-border bg-muted text-foreground" : "border-transparent text-muted-foreground/50 hover:text-muted-foreground",
+                ].join(" ")}
+              >
+                <GitBranch className="h-3.5 w-3.5" />
+                Plot
+              </button>
+            </>
+          )}
 
           <div className="w-px h-4 bg-border" />
 
           {/* Subplot legend + management */}
           {allCols.map((col) => {
             const color = resolvedColColors[col];
+            const isCodexLocked = col !== MAIN_COL && !!codexColorByName[col.toLowerCase()];
             return (
               <div key={col} className="flex items-center gap-1">
-                <ColorPicker
-                  color={color}
-                  onChange={(hex) => handleColColorChange(col, hex ?? MAIN_COLOR)}
-                  alignLeft={col === MAIN_COL}
-                />
+                {isCodexLocked ? (
+                  // Color is driven by the codex — show a plain dot instead of the picker
+                  <div
+                    className="h-3.5 w-3.5 rounded-full shrink-0 ring-1 ring-border/40"
+                    style={{ background: color }}
+                    title={`Color from codex entry "${col}" — change it in the Codex`}
+                  />
+                ) : (
+                  <ColorPicker
+                    color={color}
+                    onChange={(hex) => handleColColorChange(col, hex ?? MAIN_COLOR)}
+                    alignLeft={col === MAIN_COL}
+                  />
+                )}
                 <span className="text-xs font-medium" style={{ color }}>
                   {col === MAIN_COL ? "Main" : col}
                 </span>
@@ -1057,10 +1373,13 @@ export default function CorkboardPage() {
         <Panel position="bottom-center">
           <div className="text-[10px] text-muted-foreground/40 flex items-center gap-1 bg-card/70 px-2 py-1 rounded-md border border-border/30">
             <Layers2 className="h-3 w-3" />
-            {showHierarchy
+            {showBeatView
+              ? "Beat view — drag a scene into a different column to reassign its beat · pick a template to order columns"
+              : showHierarchy
               ? scratchMode
                   ? "Tree · Chain mode — drag a scene to pull all later scenes · drop in another chapter box to reassign"
                   : "Tree view — drag scenes into chapter boxes to reassign · cables follow sidebar order"
+              : plotChain ? "Plot Chain — drag a scene to pull all later scenes in the same subplot · other subplots stay put"
               : scratchMode ? "Chain mode — drag a scene to pull all later scenes · drop in a frame to reassign chapter"
               : showFrames ? "Frames on — drag a frame to move its chapter · drop a scene into another frame to reassign"
               : "Drag to reposition · subplot via card footer · Cascade to pile scenes · scroll to zoom"}
