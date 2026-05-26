@@ -396,6 +396,25 @@ class ExportProfile(Base):
     updated_at:   Mapped[datetime]      = mapped_column(DateTime, default=_now, onupdate=_now)
 
 
+class PublisherProfile(Base):
+    """Read-only reference profiles for publisher/agent manuscript requirements."""
+    __tablename__ = "publisher_profiles"
+
+    id:               Mapped[int]           = mapped_column(Integer, primary_key=True)
+    short_name:       Mapped[str]           = mapped_column(String(100))  # filename prefix, e.g. "CurtisBrown_AU"
+    name:             Mapped[str]           = mapped_column(Text)          # display name
+    category:         Mapped[str]           = mapped_column(String(50))   # standard | us_trade | uk_trade | agency | genre | selfpub
+    description:      Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    word_count_min:   Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    word_count_max:   Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    accepts_unagented: Mapped[int]          = mapped_column(Integer, default=0)   # 1 = yes
+    submission_url:   Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    options_json:     Mapped[str]           = mapped_column(Text, default="{}")   # ExportOptions fields
+    is_active:        Mapped[int]           = mapped_column(Integer, default=1)
+    created_at:       Mapped[datetime]      = mapped_column(DateTime, default=_now)
+    updated_at:       Mapped[datetime]      = mapped_column(DateTime, default=_now, onupdate=_now)
+
+
 class TimelineEvent(Base):
     __tablename__ = "timeline_events"
     id:           Mapped[int]           = mapped_column(Integer, primary_key=True)

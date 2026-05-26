@@ -1,14 +1,18 @@
+import io
+import json as _json
 import os
 import re
+import zipfile
 import httpx
 from pathlib import Path
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
-from models import Project, Act, Chapter, UserSettings, ExportProfile
-from schemas import ExportOptions, ExportProfileCreate, ExportProfileUpdate, ExportProfileOut
+from models import Project, Act, Chapter, UserSettings, ExportProfile, PublisherProfile
+from schemas import ExportOptions, ExportProfileCreate, ExportProfileUpdate, ExportProfileOut, PublisherProfileOut, BatchExportRequest
 from services.export import export_markdown, export_latex, export_epub_style, export_html
 
 router = APIRouter(prefix="/api/projects", tags=["export"])
@@ -234,3 +238,120 @@ def export_structure(project_id: int, db: Session = Depends(get_db)):
             for act in sorted(project.acts, key=lambda a: a.order_index)
         ],
     }
+
+
+# ── Publisher profiles ────────────────────────────────────────────────────────
+
+# Separate router with /api prefix so the route doesn't clash with /{project_id}
+from fastapi import APIRouter as _AR
+_pub_router = _AR(prefix="/api", tags=["export"])
+
+@_pub_router.get("/export/publishers", response_model=list[PublisherProfileOut])
+def list_publisher_profiles(db: Session = Depends(get_db)):
+    """Return all seeded publisher/agent formatting profiles."""
+    return (
+        db.query(PublisherProfile)
+        .filter(PublisherProfile.is_active == 1)
+        .order_by(PublisherProfile.category, PublisherProfile.name)
+        .all()
+    )
+
+# ── Batch export ──────────────────────────────────────────────────────────────
+
+@router.post("/{project_id}/export/batch")
+async def batch_export(
+    project_id: int,
+    req: BatchExportRequest,
+    db: Session = Depends(get_db),
+):
+    """Generate one file per selected publisher and return them as a ZIP archive."""
+    project = _load_project(project_id, db)
+    safe_name = _safe_filename(project.title)
+
+    s = db.query(UserSettings).first()
+    if not s or not s.pandoc_enabled:
+        raise HTTPException(503, "PDF/EPUB/DOCX export requires the Pandoc service — enable it in Settings.")
+    pandoc_url = (s.pandoc_url or "http://localhost:8082").rstrip("/")
+
+    publishers = (
+        db.query(PublisherProfile)
+        .filter(PublisherProfile.id.in_(req.publisher_ids), PublisherProfile.is_active == 1)
+        .all()
+    )
+    if not publishers:
+        raise HTTPException(400, "No valid publisher profiles found for the given IDs.")
+
+    meta = _json.loads(project.book_meta) if project.book_meta else {}
+
+    zip_buf = io.BytesIO()
+    failed: list[dict] = []
+
+    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for pub in publishers:
+            try:
+                opts_dict: dict = _json.loads(pub.options_json)
+                fmt = opts_dict.get("format", "docx")
+                if fmt not in ("pdf", "epub", "docx"):
+                    continue
+
+                # Build ExportOptions for HTML generation
+                export_opts = ExportOptions(
+                    format=fmt,
+                    scene_ids=req.scene_ids,
+                    include_act_headings=req.include_act_headings,
+                    include_chapter_headings=req.include_chapter_headings,
+                    include_scene_headings=req.include_scene_headings,
+                    font=opts_dict.get("font"),
+                    font_size=opts_dict.get("font_size", "12pt"),
+                    line_spacing=opts_dict.get("line_spacing", "2"),
+                    text_align=opts_dict.get("text_align", "left"),
+                    heading_align=opts_dict.get("heading_align", "center"),
+                    paragraph_indent=opts_dict.get("paragraph_indent", "1.5em"),
+                    pdf_margin=opts_dict.get("pdf_margin", "1in"),
+                    page_numbers=opts_dict.get("page_numbers", True),
+                    h1_size=opts_dict.get("h1_size", "1.5em"),
+                    h2_size=opts_dict.get("h2_size", "1.25em"),
+                    h3_size=opts_dict.get("h3_size", "1em"),
+                    h3_style=opts_dict.get("h3_style", "normal"),
+                )
+
+                html = export_html(project, export_opts)
+                payload = {
+                    "html":             html,
+                    "format":           fmt,
+                    "title":            project.title or "",
+                    "author":           meta.get("author", ""),
+                    "language":         meta.get("language", "en"),
+                    "font":             export_opts.font,
+                    "heading_font":     None,
+                    "heading_align":    export_opts.heading_align,
+                    "h1_size":          export_opts.h1_size,
+                    "h2_size":          export_opts.h2_size,
+                    "h3_size":          export_opts.h3_size,
+                    "h3_style":         export_opts.h3_style,
+                    "paragraph_indent": export_opts.paragraph_indent,
+                    "text_align":       export_opts.text_align,
+                    "pdf_margin":       export_opts.pdf_margin,
+                    "page_numbers":     export_opts.page_numbers,
+                    "line_spacing":     export_opts.line_spacing,
+                    "font_size":        export_opts.font_size,
+                }
+                if project.cover_image and fmt == "epub":
+                    payload["cover"] = project.cover_image
+
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    r = await client.post(f"{pandoc_url}/convert", json=payload)
+                r.raise_for_status()
+
+                ext = {"pdf": "pdf", "epub": "epub", "docx": "docx"}[fmt]
+                filename = f"{pub.short_name}_{safe_name}.{ext}"
+                zf.writestr(filename, r.content)
+
+            except Exception as exc:
+                failed.append({"publisher": pub.name, "error": str(exc)[:120]})
+
+    zip_buf.seek(0)
+    headers = {"Content-Disposition": f'attachment; filename="{safe_name}_submissions.zip"'}
+    if failed:
+        headers["X-Failed-Publishers"] = _json.dumps(failed)
+    return Response(content=zip_buf.read(), media_type="application/zip", headers=headers)

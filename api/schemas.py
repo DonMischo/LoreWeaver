@@ -725,6 +725,31 @@ class ExportProfileOut(BaseModel):
     updated_at:   datetime
 
 
+# ── Publisher profiles ────────────────────────────────────────────────────────
+
+class PublisherProfileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id:                int
+    short_name:        str
+    name:              str
+    category:          str
+    description:       Optional[str]
+    word_count_min:    Optional[int]
+    word_count_max:    Optional[int]
+    accepts_unagented: int
+    submission_url:    Optional[str]
+    options_json:      str
+    is_active:         int
+
+
+class BatchExportRequest(BaseModel):
+    publisher_ids:           list[int]
+    include_act_headings:    bool = False
+    include_chapter_headings: bool = True
+    include_scene_headings:  bool = False
+    scene_ids:               Optional[list[int]] = None
+
+
 # ── Analytics ─────────────────────────────────────────────────────────────────
 
 class SceneAnalytics(BaseModel):

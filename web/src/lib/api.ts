@@ -5,7 +5,7 @@ import type {
   SceneVersion, SceneVersionDetail, MentionStat, SceneMentionStat,
   WritingLogEntry, GhostTextScene, CorkboardAct, CorkboardData,
   TimelineTrack, TimelineEventItem, SeriesData,
-  ProjectAnalytics, ResearchItem, QuerySubmission, ExportProfile,
+  ProjectAnalytics, ResearchItem, QuerySubmission, ExportProfile, PublisherProfile,
 } from "@/types";
 
 const BASE = "/api";
@@ -670,6 +670,26 @@ export const submissionsApi = {
       body: JSON.stringify(data),
     }),
   delete: (id: number) => req<void>(`/submissions/${id}`, { method: "DELETE" }),
+};
+
+// ── Publisher profiles + batch export ────────────────────────────────────────
+
+export interface BatchExportRequest {
+  publisher_ids: number[];
+  include_act_headings?: boolean;
+  include_chapter_headings?: boolean;
+  include_scene_headings?: boolean;
+  scene_ids?: number[] | null;
+}
+
+export const publishersApi = {
+  list: () => req<PublisherProfile[]>("/export/publishers"),
+  batchExport: (projectId: number, body: BatchExportRequest): Promise<Response> =>
+    fetch(`${BASE}/projects/${projectId}/export/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 };
 
 // ── Export profiles ───────────────────────────────────────────────────────────

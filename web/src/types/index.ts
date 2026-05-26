@@ -469,3 +469,19 @@ export interface ExportProfile {
   created_at: string;
   updated_at: string;
 }
+
+export type PublisherCategory = "standard" | "us_trade" | "uk_trade" | "agency" | "genre" | "selfpub" | "de_trade" | "fr_trade" | "es_trade";
+
+export interface PublisherProfile {
+  id: number;
+  short_name: string;              // filename prefix, e.g. "CurtisBrown_AU"
+  name: string;
+  category: PublisherCategory;
+  description: string | null;
+  word_count_min: number | null;
+  word_count_max: number | null;
+  accepts_unagented: number;       // 1 = yes
+  submission_url: string | null;
+  options_json: string;            // JSON-encoded ExportOptions fields
+  is_active: number;
+}
