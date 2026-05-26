@@ -60,14 +60,25 @@ def _log_writing(project_id: int, delta: int, db: Session) -> None:
     db.flush()
 
 
-def _update_mention_stats(scene_id: int, content: str, db: Session) -> None:
-    """Rescan a scene and upsert mention_stats rows. Called after every content save."""
-    # Resolve project_id via scene→chapter→act chain
-    project_id = _get_project_id(scene_id, db)
+def _update_mention_stats(
+    scene_id: int,
+    content: str,
+    db: Session,
+    project_id: int | None = None,
+    entries: list[CodexEntry] | None = None,
+) -> None:
+    """Rescan a scene and upsert mention_stats rows. Called after every content save.
+
+    Pass ``project_id`` and/or ``entries`` when already known to avoid redundant queries.
+    """
+    if project_id is None:
+        project_id = _get_project_id(scene_id, db)
     if project_id is None:
         return
 
-    entries = db.query(CodexEntry).filter(CodexEntry.project_id == project_id).all()
+    if entries is None:
+        entries = db.query(CodexEntry).filter(CodexEntry.project_id == project_id).all()
+
     counts = _scan_mentions(content, entries)
 
     # Replace all existing stats for this scene
@@ -158,7 +169,8 @@ def update_scene(scene_id: int, body: SceneUpdate, db: Session = Depends(get_db)
         project_id = _get_project_id(scene_id, db)
         if project_id:
             _log_writing(project_id, wc_delta, db)
-        _update_mention_stats(scene_id, data["content"], db)
+        # Pass project_id so _update_mention_stats skips the redundant lookup
+        _update_mention_stats(scene_id, data["content"], db, project_id=project_id)
     db.commit()
     db.refresh(scene)
     return scene
@@ -328,6 +340,8 @@ def get_project_mention_stats(project_id: int, db: Session = Depends(get_db)):
 def rescan_project_mentions(project_id: int, db: Session = Depends(get_db)):
     """Rebuild mention_stats for every scene in the project.
     Safe to call at any time — replaces all existing stats for affected scenes."""
+    # Load codex entries once for the whole project (not once per scene)
+    entries = db.query(CodexEntry).filter(CodexEntry.project_id == project_id).all()
     rows = db.execute(
         text("""
             SELECT s.id, s.content
@@ -339,7 +353,10 @@ def rescan_project_mentions(project_id: int, db: Session = Depends(get_db)):
         {"pid": project_id},
     ).fetchall()
     for scene_id, content in rows:
-        _update_mention_stats(scene_id, content or "", db)
+        _update_mention_stats(
+            scene_id, content or "", db,
+            project_id=project_id, entries=entries,
+        )
     db.commit()
     return {"scanned": len(rows)}
 

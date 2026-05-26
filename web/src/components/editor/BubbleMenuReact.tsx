@@ -1,36 +1,32 @@
 "use client";
 
 /**
- * Thin React wrapper around TipTap v3's BubbleMenuPlugin.
+ * Pure-React bubble menu for TipTap v3.
  *
- * In TipTap v2 the BubbleMenu React component lived in @tiptap/react.
- * In v3 it was removed — only the low-level BubbleMenuPlugin remains.
- * This component re-implements the React wrapper so existing JSX usage
- * (<BubbleMenu editor={editor} shouldShow={…} options={…}>) keeps working.
- *
- * Positioning is handled by Floating UI (built into BubbleMenuPlugin in v3).
- * The `options` prop maps directly to Floating UI options (placement, offset…).
- * The old `tippyOptions` prop from v2 is no longer supported.
+ * TipTap v3 removed the BubbleMenu React component and BubbleMenuPlugin no
+ * longer manages element visibility (Tippy.js did that in v2).  This
+ * re-implementation tracks selection changes via editor events, evaluates
+ * shouldShow itself, computes pixel coordinates from the ProseMirror view,
+ * and renders the menu into a portal so it floats above everything without
+ * worrying about overflow:hidden on ancestor elements.
  */
 
-import { useRef, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
-import { BubbleMenuPlugin } from "@tiptap/extension-bubble-menu";
-import { PluginKey } from "@tiptap/pm/state";
-
-let _uid = 0;
+import type { EditorState } from "@tiptap/pm/state";
+import { isTextSelection } from "@tiptap/core";
 
 interface BubbleMenuProps {
   editor: Editor;
-  /** Return true to show the menu for the given selection. */
   shouldShow?: (props: {
     editor: Editor;
-    view: any;
-    state: any;
+    view: unknown;
+    state: EditorState;
     from: number;
     to: number;
   }) => boolean;
-  /** Floating UI options (placement, offset, strategy, …). */
+  /** Ignored — kept for API compatibility with old callers. */
   options?: Record<string, unknown>;
   className?: string;
   children: ReactNode;
@@ -39,38 +35,81 @@ interface BubbleMenuProps {
 export function BubbleMenu({
   editor,
   shouldShow,
-  options,
   className,
   children,
 }: BubbleMenuProps) {
-  const ref    = useRef<HTMLDivElement>(null);
-  const keyRef = useRef<PluginKey | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!ref.current) return;
+    const update = () => {
+      const { state, view } = editor;
+      const { selection } = state;
+      const { from, to } = selection;
 
-    keyRef.current = new PluginKey(`bubbleMenuReact_${++_uid}`);
+      // Evaluate visibility
+      const visible = shouldShow
+        ? shouldShow({ editor, view, state, from, to })
+        : isTextSelection(selection) && !selection.empty;
 
-    const plugin = BubbleMenuPlugin({
-      pluginKey: keyRef.current,
-      editor,
-      element:   ref.current,
-      shouldShow: shouldShow ?? null,
-      options,
-    } as any);
+      if (!visible || !view.dom.isConnected) {
+        setCoords(null);
+        return;
+      }
 
-    editor.registerPlugin(plugin);
+      // Compute bounding rect of the selection
+      try {
+        const start  = view.coordsAtPos(from);
+        const end    = view.coordsAtPos(to);
+        const midX   = (start.left + end.left) / 2;
+        const topY   = Math.min(start.top, end.top);
+        setCoords({ top: topY, left: midX });
+      } catch {
+        setCoords(null);
+      }
+    };
+
+    editor.on("selectionUpdate", update);
+    editor.on("update", update);
+    editor.on("blur",  () => setCoords(null));
+    editor.on("focus", update);
 
     return () => {
-      if (keyRef.current) editor.unregisterPlugin(keyRef.current);
+      editor.off("selectionUpdate", update);
+      editor.off("update", update);
+      editor.off("blur",  () => setCoords(null));
+      editor.off("focus", update);
     };
-    // editor identity is stable for the component lifetime
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor]);
+  }, [editor, shouldShow]);
 
-  return (
-    <div ref={ref} className={className}>
+  if (!coords || typeof document === "undefined") return null;
+
+  const menuHeight = menuRef.current?.offsetHeight ?? 40;
+  const menuWidth  = menuRef.current?.offsetWidth  ?? 300;
+
+  // Position above the selection, clamped inside the viewport
+  const top  = Math.max(4, coords.top + window.scrollY - menuHeight - 8);
+  const left = Math.min(
+    window.innerWidth - menuWidth / 2 - 8,
+    Math.max(menuWidth / 2 + 8, coords.left + window.scrollX),
+  );
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className={className}
+      style={{
+        position:  "absolute",
+        top,
+        left,
+        transform: "translateX(-50%)",
+        zIndex:    9999,
+      }}
+      // Prevent clicks from stealing editor focus
+      onMouseDown={(e) => e.preventDefault()}
+    >
       {children}
-    </div>
+    </div>,
+    document.body,
   );
 }

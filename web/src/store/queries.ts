@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import { projectsApi, actsApi, chaptersApi, scenesApi, codexApi, settingsApi, timeApi, fragmentsApi, imagesApi, sceneCommandsApi, promptsApi, versionsApi, mentionStatsApi, writingLogApi, synopsisApi, timelineTracksApi, timelineEventsApi, grammarApi, fontsApi, seriesApi, analyticsApi, researchApi, submissionsApi, exportProfilesApi, publishersApi } from "@/lib/api";
 import type { GrammarCheckResult, PovStats, QuerySubmissionCreate, ExportProfileCreate } from "@/lib/api";
@@ -28,6 +29,7 @@ export const useUpdateProject = () => {
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["projects", id] });
+      qc.invalidateQueries({ queryKey: ["series"] });
     },
   });
 };
@@ -66,6 +68,7 @@ export const useActs = (projectId: number) =>
     queryKey: ["acts", projectId],
     queryFn: () => actsApi.list(projectId),
     enabled: !!projectId,
+    staleTime: 1000 * 30,
   });
 
 export const useCreateAct = (projectId: number) => {
@@ -115,6 +118,7 @@ export const useChapters = (actId: number) =>
     queryKey: ["chapters", actId],
     queryFn: () => chaptersApi.list(actId),
     enabled: !!actId,
+    staleTime: 1000 * 30,
   });
 
 export const useCreateChapter = (actId: number) => {
@@ -167,6 +171,7 @@ export const useScenes = (chapterId: number) =>
     queryKey: ["scenes", chapterId],
     queryFn: () => scenesApi.list(chapterId),
     enabled: !!chapterId,
+    staleTime: 1000 * 30,
   });
 
 export const useScene = (sceneId: number) =>
@@ -184,14 +189,19 @@ export const useCreateScene = (chapterId: number) => {
   });
 };
 
-export const useUpdateScene = (sceneId: number) => {
+export const useUpdateScene = (sceneId: number, chapterId?: number) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ data }: { data: Parameters<typeof scenesApi.update>[1] }) =>
       scenesApi.update(sceneId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["scene", sceneId] });
-      qc.invalidateQueries({ queryKey: ["scenes"] }); // update title in sidebar lists
+      // Narrow to the owning chapter when known; fall back to broad sweep otherwise
+      if (chapterId) {
+        qc.invalidateQueries({ queryKey: ["scenes", chapterId] });
+      } else {
+        qc.invalidateQueries({ queryKey: ["scenes"] });
+      }
     },
   });
 };
@@ -308,18 +318,8 @@ export const useSeries = () =>
     queryFn: seriesApi.get,
   });
 
-export const useUpdateProjectMeta = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof projectsApi.update>[1] }) =>
-      projectsApi.update(id, data),
-    onSuccess: (_, { id }) => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["projects", id] });
-      qc.invalidateQueries({ queryKey: ["series"] });
-    },
-  });
-};
+/** @deprecated Use {@link useUpdateProject} — identical behaviour since merge. */
+export const useUpdateProjectMeta = useUpdateProject;
 
 // ── Time Config ───────────────────────────────────────────────────────────────
 
@@ -372,11 +372,11 @@ export function useTimelineEvents(projectId: number) {
 
 export function useInvalidateTimeline(projectId: number) {
   const qc = useQueryClient();
-  return () => {
+  return useCallback(() => {
     qc.invalidateQueries({ queryKey: ["timeline-v2", projectId] });
     qc.invalidateQueries({ queryKey: ["timeline-tracks", projectId] });
     qc.invalidateQueries({ queryKey: ["timeline-events", projectId] });
-  };
+  }, [qc, projectId]);
 }
 
 // ── Fragments ─────────────────────────────────────────────────────────────────

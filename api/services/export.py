@@ -1,4 +1,5 @@
 import base64 as _b64
+import html as _html
 import json
 import re
 from pathlib import Path
@@ -110,8 +111,9 @@ def _img_html(src: str, cap: str) -> str:
     mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png",
             "webp": "webp", "gif": "gif"}.get(ext, "jpeg")
     b64 = _b64.b64encode(data).decode()
-    fig = f"<figcaption>{cap}</figcaption>" if cap else ""
-    return f'<figure><img src="data:image/{mime};base64,{b64}" alt="{cap}"/>{fig}</figure>\n'
+    cap_e = _html.escape(cap)
+    fig = f"<figcaption>{cap_e}</figcaption>" if cap else ""
+    return f'<figure><img src="data:image/{mime};base64,{b64}" alt="{cap_e}"/>{fig}</figure>\n'
 
 
 # ── Style helpers (LaTeX) ─────────────────────────────────────────────────────
@@ -516,13 +518,13 @@ def export_html(project: Project, opts) -> str:
                     continue
 
                 if opts.include_act_headings and not act_written:
-                    parts.append(f"<h1>{act.title}</h1>")
+                    parts.append(f"<h1>{_html.escape(act.title)}</h1>")
                     act_written = True
                 if opts.include_chapter_headings and not chap_written:
-                    parts.append(f"<h2>{chapter.title}</h2>")
+                    parts.append(f"<h2>{_html.escape(chapter.title)}</h2>")
                     chap_written = True
                 if opts.include_scene_headings and scene.title:
-                    parts.append(f"<h3>{scene.title}</h3>")
+                    parts.append(f"<h3>{_html.escape(scene.title)}</h3>")
                 parts.append(content)
 
     body     = "\n".join(parts)
@@ -531,8 +533,12 @@ def export_html(project: Project, opts) -> str:
     author   = meta.get("author", "")
     subtitle = meta.get("subtitle", "")
 
-    subtitle_tag = f'<p class="subtitle">{subtitle}</p>' if subtitle else ""
-    author_tag   = f'<p class="author">{author}</p>'   if author   else ""
+    title_e    = _html.escape(title)
+    subtitle_e = _html.escape(subtitle)
+    author_e   = _html.escape(author)
+
+    subtitle_tag = f'<p class="subtitle">{subtitle_e}</p>' if subtitle else ""
+    author_tag   = f'<p class="author">{author_e}</p>'     if author   else ""
 
     # Embed Google Fonts import + basic font-family rule so PDF/EPUB renderers
     # (wkhtmltopdf, WeasyPrint, headless Chrome) can actually fetch and apply the
@@ -562,13 +568,13 @@ h1, h2, h3, h4, h5, h6 {{ font-family: {h_family}; }}
 </style>"""
 
     return f"""<!DOCTYPE html>
-<html lang="{lang}">
+<html lang="{_html.escape(lang)}">
 <head>
 <meta charset="utf-8">
-<title>{title}</title>{font_style_block}
+<title>{title_e}</title>{font_style_block}
 </head>
 <body>
-<h1 class="title">{title}</h1>
+<h1 class="title">{title_e}</h1>
 {subtitle_tag}
 {author_tag}
 {body}

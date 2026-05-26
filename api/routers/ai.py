@@ -2,7 +2,8 @@ import json
 import re
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy import text
+from sqlalchemy.orm import Session, selectinload
 import httpx
 
 from crypto import decrypt
@@ -28,18 +29,33 @@ LANGUAGE_NAMES: dict[str, str] = {
 }
 
 
+def _resolve_project_id(scene: Scene, db: Session) -> int | None:
+    """Resolve scene → project_id in a single SQL join (avoids 3 chained db.get calls)."""
+    row = db.execute(
+        text("""
+            SELECT a.project_id FROM chapters c
+            JOIN acts a ON a.id = c.act_id
+            WHERE c.id = :cid
+        """),
+        {"cid": scene.chapter_id},
+    ).first()
+    return row[0] if row else None
+
+
 def _project_language(scene: Scene, db: Session) -> str:
     """Return the full language name for the project this scene belongs to."""
-    chapter = db.get(Chapter, scene.chapter_id)
-    act = db.get(Act, chapter.act_id) if chapter else None
-    project = db.get(Project, act.project_id) if act else None
+    project_id = _resolve_project_id(scene, db)
     lang_code = "en"
-    if project and project.book_meta:
-        try:
-            meta = json.loads(project.book_meta)
-            lang_code = meta.get("language") or "en"
-        except (json.JSONDecodeError, TypeError):
-            pass
+    if project_id:
+        row = db.execute(
+            text("SELECT book_meta FROM projects WHERE id = :pid"),
+            {"pid": project_id},
+        ).first()
+        if row and row[0]:
+            try:
+                lang_code = json.loads(row[0]).get("language") or "en"
+            except (json.JSONDecodeError, TypeError):
+                pass
     base = lang_code.split("-")[0].lower()
     return LANGUAGE_NAMES.get(base, lang_code)
 
@@ -53,11 +69,13 @@ MODE_SYSTEM_PROMPTS = {
 
 
 def _build_context(scene: Scene, db: Session) -> str:
-    chapter = db.get(Chapter, scene.chapter_id)
-    act = db.get(Act, chapter.act_id)
-    project = db.get(Project, act.project_id)
+    # Single join to get project_id — avoids 3 chained db.get calls
+    project_id = _resolve_project_id(scene, db)
+    if not project_id:
+        return f"## Current Scene: {scene.title or 'Scene'}\n\n{re.sub(r'<[^>]+>', '', scene.content or '')}"
+    project = db.get(Project, project_id)
 
-    codex_entries = db.query(CodexEntry).filter(CodexEntry.project_id == project.id).all()
+    codex_entries = db.query(CodexEntry).filter(CodexEntry.project_id == project_id).all()
     codex_text = ""
     if codex_entries:
         lines = ["## World Information (Codex)"]
@@ -67,7 +85,14 @@ def _build_context(scene: Scene, db: Session) -> str:
             lines.append(f"**{entry.name}** [{entry.entry_type}]{alias_str}: {entry.description or ''}")
         codex_text = "\n".join(lines)
 
-    all_acts = db.query(Act).filter(Act.project_id == project.id).order_by(Act.order_index).all()
+    # Load all acts + chapters + scenes in 3 queries (selectinload) instead of N+1
+    all_acts = (
+        db.query(Act)
+        .filter(Act.project_id == project_id)
+        .options(selectinload(Act.chapters).selectinload(Chapter.scenes))
+        .order_by(Act.order_index)
+        .all()
+    )
     all_chapters = [
         ch
         for a in all_acts

@@ -286,69 +286,76 @@ async def batch_export(
     zip_buf = io.BytesIO()
     failed: list[dict] = []
 
+    # Pre-flight: verify Pandoc is reachable before generating all documents
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as probe:
+            await probe.get(f"{pandoc_url}/fonts")
+    except httpx.ConnectError:
+        raise HTTPException(503, "Pandoc service is not reachable. Is the container running?")
+
     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for pub in publishers:
-            try:
-                opts_dict: dict = _json.loads(pub.options_json)
-                fmt = opts_dict.get("format", "docx")
-                if fmt not in ("pdf", "epub", "docx"):
-                    continue
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            for pub in publishers:
+                try:
+                    opts_dict: dict = _json.loads(pub.options_json)
+                    fmt = opts_dict.get("format", "docx")
+                    if fmt not in ("pdf", "epub", "docx"):
+                        continue
 
-                # Build ExportOptions for HTML generation
-                export_opts = ExportOptions(
-                    format=fmt,
-                    scene_ids=req.scene_ids,
-                    include_act_headings=req.include_act_headings,
-                    include_chapter_headings=req.include_chapter_headings,
-                    include_scene_headings=req.include_scene_headings,
-                    font=opts_dict.get("font"),
-                    font_size=opts_dict.get("font_size", "12pt"),
-                    line_spacing=opts_dict.get("line_spacing", "2"),
-                    text_align=opts_dict.get("text_align", "left"),
-                    heading_align=opts_dict.get("heading_align", "center"),
-                    paragraph_indent=opts_dict.get("paragraph_indent", "1.5em"),
-                    pdf_margin=opts_dict.get("pdf_margin", "1in"),
-                    page_numbers=opts_dict.get("page_numbers", True),
-                    h1_size=opts_dict.get("h1_size", "1.5em"),
-                    h2_size=opts_dict.get("h2_size", "1.25em"),
-                    h3_size=opts_dict.get("h3_size", "1em"),
-                    h3_style=opts_dict.get("h3_style", "normal"),
-                )
+                    # Build ExportOptions for HTML generation
+                    export_opts = ExportOptions(
+                        format=fmt,
+                        scene_ids=req.scene_ids,
+                        include_act_headings=req.include_act_headings,
+                        include_chapter_headings=req.include_chapter_headings,
+                        include_scene_headings=req.include_scene_headings,
+                        font=opts_dict.get("font"),
+                        font_size=opts_dict.get("font_size", "12pt"),
+                        line_spacing=opts_dict.get("line_spacing", "2"),
+                        text_align=opts_dict.get("text_align", "left"),
+                        heading_align=opts_dict.get("heading_align", "center"),
+                        paragraph_indent=opts_dict.get("paragraph_indent", "1.5em"),
+                        pdf_margin=opts_dict.get("pdf_margin", "1in"),
+                        page_numbers=opts_dict.get("page_numbers", True),
+                        h1_size=opts_dict.get("h1_size", "1.5em"),
+                        h2_size=opts_dict.get("h2_size", "1.25em"),
+                        h3_size=opts_dict.get("h3_size", "1em"),
+                        h3_style=opts_dict.get("h3_style", "normal"),
+                    )
 
-                html = export_html(project, export_opts)
-                payload = {
-                    "html":             html,
-                    "format":           fmt,
-                    "title":            project.title or "",
-                    "author":           meta.get("author", ""),
-                    "language":         meta.get("language", "en"),
-                    "font":             export_opts.font,
-                    "heading_font":     None,
-                    "heading_align":    export_opts.heading_align,
-                    "h1_size":          export_opts.h1_size,
-                    "h2_size":          export_opts.h2_size,
-                    "h3_size":          export_opts.h3_size,
-                    "h3_style":         export_opts.h3_style,
-                    "paragraph_indent": export_opts.paragraph_indent,
-                    "text_align":       export_opts.text_align,
-                    "pdf_margin":       export_opts.pdf_margin,
-                    "page_numbers":     export_opts.page_numbers,
-                    "line_spacing":     export_opts.line_spacing,
-                    "font_size":        export_opts.font_size,
-                }
-                if project.cover_image and fmt == "epub":
-                    payload["cover"] = project.cover_image
+                    html = export_html(project, export_opts)
+                    payload = {
+                        "html":             html,
+                        "format":           fmt,
+                        "title":            project.title or "",
+                        "author":           meta.get("author", ""),
+                        "language":         meta.get("language", "en"),
+                        "font":             export_opts.font,
+                        "heading_font":     None,
+                        "heading_align":    export_opts.heading_align,
+                        "h1_size":          export_opts.h1_size,
+                        "h2_size":          export_opts.h2_size,
+                        "h3_size":          export_opts.h3_size,
+                        "h3_style":         export_opts.h3_style,
+                        "paragraph_indent": export_opts.paragraph_indent,
+                        "text_align":       export_opts.text_align,
+                        "pdf_margin":       export_opts.pdf_margin,
+                        "page_numbers":     export_opts.page_numbers,
+                        "line_spacing":     export_opts.line_spacing,
+                        "font_size":        export_opts.font_size,
+                    }
+                    if project.cover_image and fmt == "epub":
+                        payload["cover"] = project.cover_image
 
-                async with httpx.AsyncClient(timeout=120.0) as client:
                     r = await client.post(f"{pandoc_url}/convert", json=payload)
-                r.raise_for_status()
+                    r.raise_for_status()
 
-                ext = {"pdf": "pdf", "epub": "epub", "docx": "docx"}[fmt]
-                filename = f"{pub.short_name}_{safe_name}.{ext}"
-                zf.writestr(filename, r.content)
+                    ext = {"pdf": "pdf", "epub": "epub", "docx": "docx"}[fmt]
+                    filename = f"{pub.short_name}_{safe_name}.{ext}"
+                    zf.writestr(filename, r.content)
 
-            except Exception as exc:
-                failed.append({"publisher": pub.name, "error": str(exc)[:120]})
+                except Exception as exc:
+                    failed.append({"publisher": pub.name, "error": str(exc)[:120]})
 
     zip_buf.seek(0)
     headers = {"Content-Disposition": f'attachment; filename="{safe_name}_submissions.zip"'}

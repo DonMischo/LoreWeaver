@@ -1,6 +1,7 @@
 import json
 import os
 from sqlalchemy import create_engine, event, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 DATABASE_URL = "sqlite:///./foliantica.db"
@@ -115,14 +116,47 @@ def migrate_new_columns():
         ("scenes",        "pov_character_id",           "INTEGER"),
         ("scenes",        "beat",                       "TEXT"),
         ("scenes",        "scene_type",                 "TEXT"),
+        ("projects",      "main_plot_color",             "TEXT"),
     ]
-    with engine.connect() as conn:
-        for table, col, col_type in new_columns:
-            try:
+    for table, col, col_type in new_columns:
+        try:
+            with engine.begin() as conn:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
-                conn.commit()
+        except OperationalError:
+            pass  # column already exists
+
+
+def migrate_indexes():
+    """Create FK indexes on existing databases. Idempotent — uses IF NOT EXISTS."""
+    indexes = [
+        ("idx_acts_project_id",              "acts",              "project_id"),
+        ("idx_chapters_act_id",              "chapters",          "act_id"),
+        ("idx_scenes_chapter_id",            "scenes",            "chapter_id"),
+        ("idx_codex_entries_project_id",     "codex_entries",     "project_id"),
+        ("idx_codex_relations_source_id",    "codex_relations",   "source_id"),
+        ("idx_codex_relations_target_id",    "codex_relations",   "target_id"),
+        ("idx_codex_entry_access_entry_id",  "codex_entry_access", "entry_id"),
+        ("idx_fragments_project_id",         "fragments",         "project_id"),
+        ("idx_scene_commands_scene_id",      "scene_commands",    "scene_id"),
+        ("idx_mention_stats_scene_id",       "mention_stats",     "scene_id"),
+        ("idx_mention_stats_codex_id",       "mention_stats",     "codex_id"),
+        ("idx_writing_log_project_id",       "writing_log",       "project_id"),
+        ("idx_scene_versions_scene_id",      "scene_versions",    "scene_id"),
+        ("idx_timeline_tracks_project_id",   "timeline_tracks",   "project_id"),
+        ("idx_research_items_project_id",    "research_items",    "project_id"),
+        ("idx_query_submissions_project_id", "query_submissions", "project_id"),
+        ("idx_export_profiles_project_id",   "export_profiles",   "project_id"),
+        ("idx_timeline_events_project_id",   "timeline_events",   "project_id"),
+        ("idx_timeline_events_track_id",     "timeline_events",   "track_id"),
+    ]
+    with engine.begin() as conn:
+        for idx_name, table, col in indexes:
+            try:
+                conn.execute(text(
+                    f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({col})"
+                ))
             except Exception:
-                pass  # column already exists
+                pass  # table may not exist yet on first run
 
 
 def migrate_mention_stats():
@@ -383,16 +417,15 @@ def migrate_scene_versions():
 
 def migrate_codex_entry_sharing():
     """Add share_mode/share_future columns to codex_entries and create codex_entry_access table."""
-    with engine.connect() as conn:
-        for col, col_type in [
-            ("share_mode",   "TEXT NOT NULL DEFAULT 'all'"),
-            ("share_future", "INTEGER NOT NULL DEFAULT 1"),
-        ]:
-            try:
+    for col, col_type in [
+        ("share_mode",   "TEXT NOT NULL DEFAULT 'all'"),
+        ("share_future", "INTEGER NOT NULL DEFAULT 1"),
+    ]:
+        try:
+            with engine.begin() as conn:
                 conn.execute(text(f"ALTER TABLE codex_entries ADD COLUMN {col} {col_type}"))
-                conn.commit()
-            except Exception:
-                pass  # already exists
+        except OperationalError:
+            pass  # already exists
     with engine.begin() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS codex_entry_access (
@@ -406,7 +439,7 @@ def migrate_codex_entry_sharing():
 
 def migrate_timeline_tables():
     """Create timeline_tracks and timeline_events tables if they don't exist yet."""
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS timeline_tracks (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -431,8 +464,8 @@ def migrate_timeline_tables():
                 color        TEXT    NOT NULL DEFAULT '#6b7280',
                 created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
-        """))
-        conn.commit()
+        """
+        ))
 
 
 def migrate_research():
@@ -987,6 +1020,17 @@ def migrate_publisher_profiles():
                 text("SELECT id FROM publisher_profiles WHERE short_name = :sn"),
                 {"sn": p["short_name"]},
             ).fetchone()
+            params = {
+                "sn":   p["short_name"],
+                "name": p["name"],
+                "cat":  p["category"],
+                "desc": p["description"],
+                "wmin": p["word_count_min"],
+                "wmax": p["word_count_max"],
+                "unag": p["accepts_unagented"],
+                "url":  p["submission_url"],
+                "opts": json.dumps(p["options"]),
+            }
             if not exists:
                 conn.execute(text("""
                     INSERT INTO publisher_profiles
@@ -999,17 +1043,16 @@ def migrate_publisher_profiles():
                          :wmin, :wmax, :unag,
                          :url, :opts, 1,
                          datetime('now'), datetime('now'))
-                """), {
-                    "sn":   p["short_name"],
-                    "name": p["name"],
-                    "cat":  p["category"],
-                    "desc": p["description"],
-                    "wmin": p["word_count_min"],
-                    "wmax": p["word_count_max"],
-                    "unag": p["accepts_unagented"],
-                    "url":  p["submission_url"],
-                    "opts": json.dumps(p["options"]),
-                })
+                """), params)
+            else:
+                conn.execute(text("""
+                    UPDATE publisher_profiles
+                    SET name=:name, category=:cat, description=:desc,
+                        word_count_min=:wmin, word_count_max=:wmax,
+                        accepts_unagented=:unag, submission_url=:url,
+                        options_json=:opts, updated_at=datetime('now')
+                    WHERE short_name=:sn
+                """), params)
 
 
 def get_db():

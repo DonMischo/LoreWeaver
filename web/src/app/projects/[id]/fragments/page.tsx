@@ -537,7 +537,7 @@ function FragmentCard({
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
             {showMove && (
-              <div className="absolute right-0 top-6 z-20 bg-card border border-border rounded-md shadow-lg py-1 min-w-[130px]">
+              <div className="absolute right-0 top-6 z-20 bg-popover border border-border rounded-md shadow-lg py-1 min-w-[130px]">
                 {allTabs
                   .filter((t) => t !== fragment.tab)
                   .map((t) => (
@@ -726,7 +726,7 @@ function FragmentRow({
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
               {showMove && (
-                <div className="absolute right-0 top-7 z-20 bg-card border border-border rounded-md shadow-lg py-1 min-w-[130px]">
+                <div className="absolute right-0 top-7 z-20 bg-popover border border-border rounded-md shadow-lg py-1 min-w-[130px]">
                   {allTabs
                     .filter((t) => t !== fragment.tab)
                     .map((t) => (
