@@ -233,6 +233,177 @@ function ContentTree({
   );
 }
 
+// ── Publisher Pack section (extracted from ExportDialog to avoid IIFE) ────────
+
+interface PublisherPackSectionProps {
+  publishers: PublisherProfile[];
+  selectedPublishers: Set<number>;
+  collapsedCats: Set<string>;
+  setCollapsedCats: (value: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
+  togglePublisher: (id: number) => void;
+  toggleCategory: (ids: number[]) => void;
+  allContent: boolean;
+  setAllContent: (v: boolean) => void;
+  selectedSceneIds: Set<number>;
+  acts: ExportAct[];
+  toggleAll: () => void;
+  toggleGroup: (ids: number[]) => void;
+  toggleScene: (id: number) => void;
+}
+
+function PublisherPackSection({
+  publishers, selectedPublishers, collapsedCats, setCollapsedCats,
+  togglePublisher, toggleCategory, allContent, setAllContent,
+  selectedSceneIds, acts, toggleAll, toggleGroup, toggleScene,
+}: PublisherPackSectionProps) {
+  const activeCats = (Object.keys(CATEGORY_LABELS) as PublisherCategory[])
+    .filter(cat => publishers.some(p => p.category === cat));
+  const allCollapsed = activeCats.length > 0 && activeCats.every(c => collapsedCats.has(c));
+
+  const toggleAllCats = () =>
+    setCollapsedCats(allCollapsed ? new Set<string>() : new Set<string>(activeCats));
+
+  const toggleCollapse = (cat: PublisherCategory) =>
+    setCollapsedCats(prev => {
+      const n = new Set(prev);
+      n.has(cat) ? n.delete(cat) : n.add(cat);
+      return n;
+    });
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Files named <span className="font-mono text-foreground/70">Publisher_Title.ext</span>, downloaded as ZIP.
+        </p>
+        <button
+          type="button"
+          onClick={toggleAllCats}
+          className="text-[11px] text-muted-foreground hover:text-foreground shrink-0 ml-3 flex items-center gap-1 transition-colors"
+        >
+          {allCollapsed
+            ? <><ChevronRight className="h-3 w-3" />Expand all</>
+            : <><ChevronDown className="h-3 w-3" />Collapse all</>}
+        </button>
+      </div>
+
+      {(Object.entries(CATEGORY_LABELS) as [PublisherCategory, string][]).map(([cat, catLabel]) => {
+        const catPubs = publishers.filter(p => p.category === cat);
+        if (catPubs.length === 0) return null;
+        const catIds = catPubs.map(p => p.id);
+        const catSel = catIds.filter(id => selectedPublishers.has(id)).length;
+        const catState: CheckState = catSel === 0 ? "none" : catSel === catIds.length ? "all" : "partial";
+        const isCollapsed = collapsedCats.has(cat);
+        return (
+          <div key={cat} className="mb-3 last:mb-1">
+            {/* Category header */}
+            <div
+              className="flex items-center gap-2 mb-1 py-1 border-b border-border/50 cursor-pointer group"
+              onClick={() => toggleCollapse(cat)}
+            >
+              <span
+                className="text-muted-foreground group-hover:text-foreground transition-colors shrink-0"
+                onClick={e => { e.stopPropagation(); toggleCollapse(cat); }}
+              >
+                {isCollapsed
+                  ? <ChevronRight className="h-3.5 w-3.5" />
+                  : <ChevronDown className="h-3.5 w-3.5" />}
+              </span>
+              <span
+                className="shrink-0"
+                onClick={e => { e.stopPropagation(); toggleCategory(catIds); }}
+              >
+                <TriCheckbox state={catState} onChange={() => toggleCategory(catIds)} />
+              </span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex-1 group-hover:text-foreground transition-colors">
+                {catLabel}
+              </span>
+              <span className="text-[10px] text-muted-foreground/50 shrink-0">
+                {catSel}/{catIds.length}
+              </span>
+            </div>
+
+            {/* Publisher rows */}
+            {!isCollapsed && <div className="space-y-0.5 ml-5">
+              {catPubs.map(pub => {
+                const pubOpts = (() => { try { return JSON.parse(pub.options_json) as Record<string, unknown>; } catch { return {}; } })();
+                const fmt = ((pubOpts.format ?? "docx") as string).toUpperCase();
+                const fmtColor =
+                  fmt === "DOCX" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" :
+                  fmt === "EPUB" ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" :
+                  "bg-red-500/10 text-red-600 dark:text-red-400";
+                const wMin = pub.word_count_min;
+                const wMax = pub.word_count_max;
+                return (
+                  <label
+                    key={pub.id}
+                    className="flex items-center gap-2 py-1 px-2 rounded-md hover:bg-secondary/40 cursor-pointer group transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedPublishers.has(pub.id)}
+                      onChange={() => togglePublisher(pub.id)}
+                      className="h-3.5 w-3.5 rounded accent-primary shrink-0 cursor-pointer"
+                    />
+                    <span className="text-sm flex-1 truncate">{pub.name}</span>
+                    <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0", fmtColor)}>
+                      {fmt}
+                    </span>
+                    {(wMin || wMax) && (
+                      <span className="text-[10px] text-muted-foreground/60 shrink-0 font-mono">
+                        {wMin ? `${Math.round(wMin / 1000)}K` : ""}
+                        {wMin && wMax ? "–" : ""}
+                        {wMax ? `${Math.round(wMax / 1000)}K` : "+"}
+                      </span>
+                    )}
+                    {pub.accepts_unagented === 1 ? (
+                      <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">Open</span>
+                    ) : (
+                      <span className="text-[10px] px-1 py-0.5 rounded bg-secondary text-muted-foreground/70 shrink-0">Agented</span>
+                    )}
+                    {pub.submission_url && (
+                      <a
+                        href={pub.submission_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="text-muted-foreground hover:text-primary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Submission guidelines"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </label>
+                );
+              })}
+            </div>}
+          </div>
+        );
+      })}
+
+      {/* Content selection for pack */}
+      <SectionHeading>Content</SectionHeading>
+      <div className="mb-2">
+        <ToggleGroup
+          value={allContent ? "all" : "custom"}
+          onChange={v => setAllContent(v === "all")}
+          options={[{ value: "all", label: "All content" }, { value: "custom", label: "Select scenes" }]}
+        />
+      </div>
+      {!allContent && acts.length > 0 && (
+        <ContentTree
+          acts={acts}
+          selected={selectedSceneIds}
+          onToggleAll={toggleAll}
+          onToggleAct={toggleGroup}
+          onToggleChapter={toggleGroup}
+          onToggleScene={toggleScene}
+        />
+      )}
+    </>
+  );
+}
+
 // ── Main dialog ───────────────────────────────────────────────────────────────
 
 interface Props {
@@ -347,20 +518,23 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
       URL.revokeObjectURL(url);
       setPackStatus("done");
       setPackMsg(`ZIP downloaded — ${selectedPublishers.size} manuscript${selectedPublishers.size > 1 ? "s" : ""}`);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setPackStatus("error");
-      setPackMsg(e.message ?? "Batch export failed");
+      setPackMsg(e instanceof Error ? e.message : "Batch export failed");
     }
   };
 
   useEffect(() => {
     if (!open) return;
     setStatus("idle"); setStatusMsg("");
+    let mounted = true;
     projectsApi.exportStructure(projectId).then(s => {
+      if (!mounted) return;
       setActs(s.acts);
       const allIds = new Set(s.acts.flatMap(a => a.chapters.flatMap(c => c.scenes.map(sc => sc.id))));
       setSelectedSceneIds(allIds);
     });
+    return () => { mounted = false; };
   }, [open, projectId]);
 
   if (!open) return null;
@@ -463,9 +637,9 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
 
       setStatus("done");
       setStatusMsg(`Saved to "${dirHandle!.name}/" — ${filename}${opts.format === "epub-style" && coverFile ? " + cover" : ""}`);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setStatus("error");
-      setStatusMsg(e.message ?? "Export failed");
+      setStatusMsg(e instanceof Error ? e.message : "Export failed");
     }
   };
 
@@ -513,151 +687,23 @@ export function ExportDialog({ projectId, projectTitle, bookMeta, open, onClose 
         <div className="flex-1 overflow-y-auto px-5 py-4">
 
           {/* ── Publisher Pack mode ─────────────────────────────────────────── */}
-          {mode === "pack" && (() => {
-            const activeCats = (Object.keys(CATEGORY_LABELS) as PublisherCategory[])
-              .filter(cat => publishers.some(p => p.category === cat));
-            const allCollapsed = activeCats.length > 0 && activeCats.every(c => collapsedCats.has(c));
-            const toggleAllCats = () =>
-              setCollapsedCats(allCollapsed ? new Set() : new Set(activeCats));
-            return (
-            <>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Files named <span className="font-mono text-foreground/70">Publisher_Title.ext</span>, downloaded as ZIP.
-                </p>
-                <button
-                  type="button"
-                  onClick={toggleAllCats}
-                  className="text-[11px] text-muted-foreground hover:text-foreground shrink-0 ml-3 flex items-center gap-1 transition-colors"
-                >
-                  {allCollapsed
-                    ? <><ChevronRight className="h-3 w-3" />Expand all</>
-                    : <><ChevronDown className="h-3 w-3" />Collapse all</>}
-                </button>
-              </div>
-
-              {(Object.entries(CATEGORY_LABELS) as [PublisherCategory, string][]).map(([cat, catLabel]) => {
-                const catPubs = publishers.filter(p => p.category === cat);
-                if (catPubs.length === 0) return null;
-                const catIds = catPubs.map(p => p.id);
-                const catSel = catIds.filter(id => selectedPublishers.has(id)).length;
-                const catState: CheckState = catSel === 0 ? "none" : catSel === catIds.length ? "all" : "partial";
-                const isCollapsed = collapsedCats.has(cat);
-                const toggleCollapse = () =>
-                  setCollapsedCats(prev => {
-                    const n = new Set(prev);
-                    n.has(cat) ? n.delete(cat) : n.add(cat);
-                    return n;
-                  });
-                return (
-                  <div key={cat} className="mb-3 last:mb-1">
-                    {/* Category header */}
-                    <div
-                      className="flex items-center gap-2 mb-1 py-1 border-b border-border/50 cursor-pointer group"
-                      onClick={toggleCollapse}
-                    >
-                      <span
-                        className="text-muted-foreground group-hover:text-foreground transition-colors shrink-0"
-                        onClick={e => { e.stopPropagation(); toggleCollapse(); }}
-                      >
-                        {isCollapsed
-                          ? <ChevronRight className="h-3.5 w-3.5" />
-                          : <ChevronDown className="h-3.5 w-3.5" />}
-                      </span>
-                      <span
-                        className="shrink-0"
-                        onClick={e => { e.stopPropagation(); toggleCategory(catIds); }}
-                      >
-                        <TriCheckbox state={catState} onChange={() => toggleCategory(catIds)} />
-                      </span>
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex-1 group-hover:text-foreground transition-colors">
-                        {catLabel}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground/50 shrink-0">
-                        {catSel}/{catIds.length}
-                      </span>
-                    </div>
-
-                    {/* Publisher rows */}
-                    {!isCollapsed && <div className="space-y-0.5 ml-5">
-                      {catPubs.map(pub => {
-                        const pubOpts = (() => { try { return JSON.parse(pub.options_json) as Record<string, any>; } catch { return {}; } })();
-                        const fmt = ((pubOpts.format ?? "docx") as string).toUpperCase();
-                        const fmtColor =
-                          fmt === "DOCX" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" :
-                          fmt === "EPUB" ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" :
-                          "bg-red-500/10 text-red-600 dark:text-red-400";
-                        const wMin = pub.word_count_min;
-                        const wMax = pub.word_count_max;
-                        return (
-                          <label
-                            key={pub.id}
-                            className="flex items-center gap-2 py-1 px-2 rounded-md hover:bg-secondary/40 cursor-pointer group transition-colors"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedPublishers.has(pub.id)}
-                              onChange={() => togglePublisher(pub.id)}
-                              className="h-3.5 w-3.5 rounded accent-primary shrink-0 cursor-pointer"
-                            />
-                            <span className="text-sm flex-1 truncate">{pub.name}</span>
-                            <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0", fmtColor)}>
-                              {fmt}
-                            </span>
-                            {(wMin || wMax) && (
-                              <span className="text-[10px] text-muted-foreground/60 shrink-0 font-mono">
-                                {wMin ? `${Math.round(wMin / 1000)}K` : ""}
-                                {wMin && wMax ? "–" : ""}
-                                {wMax ? `${Math.round(wMax / 1000)}K` : "+"}
-                              </span>
-                            )}
-                            {pub.accepts_unagented === 1 ? (
-                              <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">Open</span>
-                            ) : (
-                              <span className="text-[10px] px-1 py-0.5 rounded bg-secondary text-muted-foreground/70 shrink-0">Agented</span>
-                            )}
-                            {pub.submission_url && (
-                              <a
-                                href={pub.submission_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={e => e.stopPropagation()}
-                                className="text-muted-foreground hover:text-primary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="Submission guidelines"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            )}
-                          </label>
-                        );
-                      })}
-                    </div>}
-                  </div>
-                );
-              })}
-
-              {/* Content selection for pack */}
-              <SectionHeading>Content</SectionHeading>
-              <div className="mb-2">
-                <ToggleGroup
-                  value={allContent ? "all" : "custom"}
-                  onChange={v => setAllContent(v === "all")}
-                  options={[{ value: "all", label: "All content" }, { value: "custom", label: "Select scenes" }]}
-                />
-              </div>
-              {!allContent && acts.length > 0 && (
-                <ContentTree
-                  acts={acts}
-                  selected={selectedSceneIds}
-                  onToggleAll={toggleAll}
-                  onToggleAct={toggleGroup}
-                  onToggleChapter={toggleGroup}
-                  onToggleScene={toggleScene}
-                />
-              )}
-            </>
-            );
-          })()}
+          {mode === "pack" && (
+            <PublisherPackSection
+              publishers={publishers}
+              selectedPublishers={selectedPublishers}
+              collapsedCats={collapsedCats}
+              setCollapsedCats={setCollapsedCats}
+              togglePublisher={togglePublisher}
+              toggleCategory={toggleCategory}
+              allContent={allContent}
+              setAllContent={setAllContent}
+              selectedSceneIds={selectedSceneIds}
+              acts={acts}
+              toggleAll={toggleAll}
+              toggleGroup={toggleGroup}
+              toggleScene={toggleScene}
+            />
+          )}
 
           {/* ── Single export mode ──────────────────────────────────────────── */}
           {mode === "single" && (<>

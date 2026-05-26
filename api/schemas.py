@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import Optional, Any
+from typing import Optional, Any, Literal
 from pydantic import BaseModel, Field, model_validator, ConfigDict
 from models import EntryType
 
@@ -209,7 +209,7 @@ class CodexEntryBase(BaseModel):
     inventory: Optional[Any] = None  # CharacterInventory JSON or None
     image_path: Optional[str] = None
     name_type: Optional[str] = None  # name generation style (NameType key)
-    share_mode: str = "all"           # "all" | "specific" | "none"
+    share_mode: Literal["all", "specific", "none"] = "all"
     share_future: bool = True         # auto-share with future linked projects
 
 
@@ -231,7 +231,7 @@ class CodexEntryUpdate(BaseModel):
     is_main_char: Optional[bool] = None
     inventory: Optional[Any] = None
     name_type: Optional[str] = None
-    share_mode: Optional[str] = None
+    share_mode: Optional[Literal["all", "specific", "none"]] = None
     share_future: Optional[bool] = None
 
 
@@ -618,8 +618,6 @@ class TimelineEventOut(BaseModel):
 
 # ── Export ────────────────────────────────────────────────────────────────────
 
-from typing import Literal
-
 class ExportOptions(BaseModel):
     format: Literal["md", "tex", "epub-style", "pdf", "epub", "docx"] = "md"
     # Content selection — None means "all"
@@ -630,8 +628,8 @@ class ExportOptions(BaseModel):
     include_scene_headings: bool = True
     # Typography (LaTeX + EPUB)
     font: Optional[str] = None          # e.g. "EB Garamond"
-    font_size: str = "12pt"             # "10pt" | "11pt" | "12pt"
-    line_spacing: str = "1.5"           # "1" | "1.5" | "2"
+    font_size: Literal["10pt", "11pt", "12pt"] = "12pt"
+    line_spacing: Literal["1", "1.5", "2"] = "1.5"
     # LaTeX only
     paper_size: str = "a4paper"         # "a4paper" | "letterpaper"
     # EPUB style only
@@ -665,25 +663,28 @@ class ExportOptions(BaseModel):
 
 # ── Query / Submission tracker ────────────────────────────────────────────────
 
+_SUBMISSION_STATUS  = Literal["queried", "partial_requested", "full_requested", "offer", "pass", "no_response", "withdrawn"]
+_SUBMISSION_TYPE    = Literal["query", "partial", "full", "unsolicited", "synopsis"]
+
 class QuerySubmissionCreate(BaseModel):
-    agent_name:        str            = ""
-    agency:            Optional[str]  = None
-    email:             Optional[str]  = None
-    submission_type:   str            = "query"   # query | partial | full | synopsis
-    date_sent:         Optional[str]  = None       # ISO date string
-    response_deadline: Optional[str]  = None
-    status:            str            = "queried"  # queried | partial_requested | full_requested | offer | pass | no_response | withdrawn
-    notes:             Optional[str]  = None
+    agent_name:        str                         = ""
+    agency:            Optional[str]               = None
+    email:             Optional[str]               = None
+    submission_type:   _SUBMISSION_TYPE            = "query"
+    date_sent:         Optional[str]               = None   # ISO date string
+    response_deadline: Optional[str]               = None
+    status:            _SUBMISSION_STATUS          = "queried"
+    notes:             Optional[str]               = None
 
 class QuerySubmissionUpdate(BaseModel):
-    agent_name:        Optional[str] = None
-    agency:            Optional[str] = None
-    email:             Optional[str] = None
-    submission_type:   Optional[str] = None
-    date_sent:         Optional[str] = None
-    response_deadline: Optional[str] = None
-    status:            Optional[str] = None
-    notes:             Optional[str] = None
+    agent_name:        Optional[str]               = None
+    agency:            Optional[str]               = None
+    email:             Optional[str]               = None
+    submission_type:   Optional[_SUBMISSION_TYPE]  = None
+    date_sent:         Optional[str]               = None
+    response_deadline: Optional[str]               = None
+    status:            Optional[_SUBMISSION_STATUS] = None
+    notes:             Optional[str]               = None
 
 class QuerySubmissionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
