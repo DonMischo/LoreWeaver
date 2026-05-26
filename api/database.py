@@ -116,6 +116,7 @@ def migrate_new_columns():
         ("scenes",        "pov_character_id",           "INTEGER"),
         ("scenes",        "beat",                       "TEXT"),
         ("scenes",        "scene_type",                 "TEXT"),
+        ("projects",      "main_plot_color",             "TEXT"),
     ]
     for table, col, col_type in new_columns:
         try:

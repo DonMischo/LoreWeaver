@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   ChevronDown, ChevronRight, Plus, Trash2,
-  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors, Info, ListChecks, MoreHorizontal, LayoutGrid, Users, BarChart2, Mail,
+  GripVertical, Settings, Book, Download, Network, Calendar, Clock, Scissors, Info, ListChecks, MoreHorizontal, LayoutGrid, Users, BarChart2, Mail, Layers2, User,
 } from "lucide-react";
 import {
   DndContext, closestCenter, DragEndEvent,
@@ -30,15 +30,25 @@ import {
   useReorderActs, useReorderChapters, useReorderScenes,
   useReorderScenesGlobal, useAllScenesForChapters,
   useUpdateAct, useUpdateChapter, useProject, useUpdateProject,
-  useTimeConfig, useUpdateTimeConfig,
+  useTimeConfig, useUpdateTimeConfig, useCodexEntries,
 } from "@/store/queries";
 import { ImportButton } from "@/components/layout/ImportButton";
 import { TimeConfigDialog } from "@/components/time/TimeConfigDialog";
 import { ExportDialog } from "@/components/export/ExportDialog";
 import { BookMetaDialog } from "@/components/project/BookMetaDialog";
+import { MAIN_COLOR, SUBPLOT_PALETTE } from "@/components/corkboard/ColorPicker";
 import { DEFAULT_TIME_CONFIG } from "@/types";
 import type { Act, Chapter, Scene } from "@/types";
 import { useLanguage } from "@/contexts/LanguageContext";
+
+// ── Bar color helpers ─────────────────────────────────────────────────────────
+
+/** Stable palette index for a subplot name not in codex — consistent across renders */
+function subplotPaletteColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0x7fffffff;
+  return SUBPLOT_PALETTE[h % SUBPLOT_PALETTE.length];
+}
 
 interface Props { projectId: number }
 
@@ -62,8 +72,8 @@ function SceneDivider({ onInsert }: { onInsert: () => void }) {
 // ── Scene item ────────────────────────────────────────────────────────────────
 
 function SceneItem({
-  scene, projectId, currentSceneId, index,
-}: { scene: Scene; projectId: number; currentSceneId?: number; index: number }) {
+  scene, projectId, currentSceneId, index, barColor,
+}: { scene: Scene; projectId: number; currentSceneId?: number; index: number; barColor: string | null }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: scene.id, data: { type: "scene", chapterId: scene.chapter_id } });
   const deleteScene = useDeleteScene(scene.chapter_id);
@@ -76,11 +86,18 @@ function SceneItem({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group flex items-center gap-1 pl-12 pr-2 py-1 rounded hover:bg-secondary/50 text-sm",
+        "relative group flex items-center gap-1 pl-12 pr-2 py-1 rounded hover:bg-secondary/50 text-sm",
         isDragging && "opacity-50",
         currentSceneId === scene.id && "bg-secondary text-foreground font-medium"
       )}
     >
+      {/* Subplot / POV color bar */}
+      {barColor && (
+        <div
+          className="absolute left-[40px] top-[3px] bottom-[3px] w-[3px] rounded-full"
+          style={{ backgroundColor: barColor }}
+        />
+      )}
       <button {...attributes} {...listeners} className="opacity-0 group-hover:opacity-40 cursor-grab">
         <GripVertical className="h-3 w-3" />
       </button>
@@ -115,8 +132,8 @@ function SceneItem({
 // ── Chapter item ──────────────────────────────────────────────────────────────
 
 function ChapterItem({
-  chapter, projectId, currentSceneId, scenes,
-}: { chapter: Chapter; projectId: number; currentSceneId?: number; scenes: Scene[] }) {
+  chapter, projectId, currentSceneId, scenes, getBarColor,
+}: { chapter: Chapter; projectId: number; currentSceneId?: number; scenes: Scene[]; getBarColor: (s: Scene) => string | null }) {
   const [expanded, setExpanded] = useState(true);
   const [renaming, setRenaming] = useState(false);
   const [newTitle, setNewTitle] = useState(chapter.title);
@@ -208,7 +225,7 @@ function ChapterItem({
         <SortableContext items={scenes.map((s) => s.id)} strategy={verticalListSortingStrategy}>
           {scenes.map((scene, idx) => (
             <div key={scene.id}>
-              <SceneItem scene={scene} projectId={projectId} currentSceneId={currentSceneId} index={idx + 1} />
+              <SceneItem scene={scene} projectId={projectId} currentSceneId={currentSceneId} index={idx + 1} barColor={getBarColor(scene)} />
               {idx < scenes.length - 1 && (
                 <SceneDivider onInsert={() => handleInsertAfter(idx)} />
               )}
@@ -223,8 +240,8 @@ function ChapterItem({
 // ── Act item ──────────────────────────────────────────────────────────────────
 
 function ActItem({
-  act, projectId, currentSceneId,
-}: { act: Act; projectId: number; currentSceneId?: number }) {
+  act, projectId, currentSceneId, getBarColor,
+}: { act: Act; projectId: number; currentSceneId?: number; getBarColor: (s: Scene) => string | null }) {
   const [expanded, setExpanded] = useState(true);
   const [renaming, setRenaming] = useState(false);
   const [newTitle, setNewTitle] = useState(act.title);
@@ -378,6 +395,7 @@ function ActItem({
                 scenes={allScenesData[idx] ?? []}
                 projectId={projectId}
                 currentSceneId={currentSceneId}
+                getBarColor={getBarColor}
               />
             ))}
           </SortableContext>
@@ -394,8 +412,43 @@ export function ProjectSidebar({ projectId }: Props) {
   const currentSceneId = params?.sceneId ? Number(params.sceneId) : undefined;
 
   const { t } = useLanguage();
-  const { data: project } = useProject(projectId);
-  const { data: acts = [] } = useActs(projectId);
+  const { data: project }        = useProject(projectId);
+  const { data: acts = [] }      = useActs(projectId);
+  const { data: codexEntries = [] } = useCodexEntries(projectId);
+
+  // ── Sidebar bar mode ──────────────────────────────────────────────────────
+  const [barMode, setBarMode] = useState<"subplot" | "pov">(() => {
+    if (typeof window === "undefined") return "subplot";
+    return (localStorage.getItem("lw_sidebar_bar_mode") as "subplot" | "pov") ?? "subplot";
+  });
+  const toggleBarMode = () => setBarMode((prev) => {
+    const next = prev === "subplot" ? "pov" : "subplot";
+    localStorage.setItem("lw_sidebar_bar_mode", next);
+    return next;
+  });
+
+  // Codex lookup maps (stable across renders if entries don't change)
+  const codexColorById = useMemo(() => {
+    const m: Record<number, string> = {};
+    for (const e of codexEntries as { id: number; color: string }[]) m[e.id] = e.color;
+    return m;
+  }, [codexEntries]);
+  const codexColorByName = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const e of codexEntries as { name: string; color: string }[]) m[e.name.toLowerCase()] = e.color;
+    return m;
+  }, [codexEntries]);
+
+  // Returns the accent color for a scene in the sidebar list
+  const getBarColor = useMemo(() => (scene: Scene): string | null => {
+    if (barMode === "pov") {
+      if (!scene.pov_character_id) return null;
+      return codexColorById[scene.pov_character_id] ?? null;
+    }
+    // subplot mode
+    if (!scene.subplot) return project?.main_plot_color ?? MAIN_COLOR;
+    return codexColorByName[scene.subplot.toLowerCase()] ?? subplotPaletteColor(scene.subplot);
+  }, [barMode, codexColorById, codexColorByName, project?.main_plot_color]);
   const createAct = useCreateAct(projectId);
   const reorderActs = useReorderActs(projectId);
   const updateProject = useUpdateProject();
@@ -433,17 +486,27 @@ export function ProjectSidebar({ projectId }: Props) {
 
       <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground uppercase tracking-wider">
         <span>{t("nav_story")}</span>
-        <button
-          className="hover:text-foreground"
-          title="Add act"
-          onClick={() => createAct.mutate({
-            project_id: projectId,
-            title: `Act ${acts.length + 1}`,
-            order_index: acts.length,
-          })}
-        >
-          <Plus className="h-3 w-3" />
-        </button>
+        <div className="flex items-center gap-1">
+          {/* Bar mode toggle: subplot ↔ POV character */}
+          <button
+            onClick={toggleBarMode}
+            title={barMode === "subplot" ? "Color bars: subplot — click for POV" : "Color bars: POV — click for subplot"}
+            className="hover:text-foreground"
+          >
+            {barMode === "subplot" ? <Layers2 className="h-3 w-3" /> : <User className="h-3 w-3" />}
+          </button>
+          <button
+            className="hover:text-foreground"
+            title="Add act"
+            onClick={() => createAct.mutate({
+              project_id: projectId,
+              title: `Act ${acts.length + 1}`,
+              order_index: acts.length,
+            })}
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-1 pb-2">
@@ -455,6 +518,7 @@ export function ProjectSidebar({ projectId }: Props) {
                 act={act}
                 projectId={projectId}
                 currentSceneId={currentSceneId}
+                getBarColor={getBarColor}
               />
             ))}
           </SortableContext>

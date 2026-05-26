@@ -46,6 +46,7 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
     book_meta: Optional[BookMeta] = None
     shared_codex_project_id: Optional[int] = None
+    main_plot_color: Optional[str] = None
 
 
 class ProjectOut(ProjectBase):
@@ -56,6 +57,7 @@ class ProjectOut(ProjectBase):
     shared_codex_project_id: Optional[int] = None
     shared_codex_project_title: Optional[str] = None  # resolved title of the parent codex project
     cover_image: Optional[str] = None
+    main_plot_color: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
