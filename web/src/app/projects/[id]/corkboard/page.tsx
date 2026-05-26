@@ -13,7 +13,7 @@ import "@xyflow/react/dist/style.css";
 import { Plus, X, AlignJustify, ZoomOut, Layers2, LayoutGrid, TreePine, Group, Link2, BookOpen, GitBranch } from "lucide-react";
 import {
   useCorkboard, useUpdateSceneSynopsis, useGenerateSynopsis,
-  useMoveScene, useCodexEntries, useProjectStructure,
+  useMoveScene, useCodexEntries, useProjectStructure, useProject, useUpdateProject,
 } from "@/store/queries";
 import { projectsApi } from "@/lib/api";
 import { SceneNode } from "@/components/corkboard/SceneNode";
@@ -23,6 +23,7 @@ import type { ActNodeType, ChapterNodeType, GroupFrameNodeType } from "@/compone
 import { ColorPicker, hexToRgba, MAIN_COLOR, SUBPLOT_PALETTE } from "@/components/corkboard/ColorPicker";
 import type { CorkboardScene, CorkboardAct } from "@/types";
 import { PLOT_TEMPLATES } from "@/lib/plotTemplates";
+import { useColColorsStore } from "@/store/colColors";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -567,6 +568,8 @@ export default function CorkboardPage() {
   const { data: serverData, isLoading } = useCorkboard(projectId);
   const { data: structure }             = useProjectStructure(projectId);
   const { data: codexEntries }          = useCodexEntries(projectId);
+  const { data: project }               = useProject(projectId);
+  const updateProject                   = useUpdateProject();
   const updateSynopsis   = useUpdateSceneSynopsis(projectId);
   const generateSynopsis = useGenerateSynopsis(projectId);
   const moveScene        = useMoveScene(projectId);
@@ -575,13 +578,15 @@ export default function CorkboardPage() {
   // Mutation objects are new references every render; store .mutate in refs so
   // useCallback deps stay empty and the handlers never force a re-render.
   const mutateRef = useRef({
-    move:      moveScene.mutate,
-    updateSyn: updateSynopsis.mutate,
-    genSyn:    generateSynopsis.mutateAsync,
+    move:          moveScene.mutate,
+    updateSyn:     updateSynopsis.mutate,
+    genSyn:        generateSynopsis.mutateAsync,
+    updateProject: updateProject.mutate,
   });
-  mutateRef.current.move      = moveScene.mutate;
-  mutateRef.current.updateSyn = updateSynopsis.mutate;
-  mutateRef.current.genSyn    = generateSynopsis.mutateAsync;
+  mutateRef.current.move          = moveScene.mutate;
+  mutateRef.current.updateSyn     = updateSynopsis.mutate;
+  mutateRef.current.genSyn        = generateSynopsis.mutateAsync;
+  mutateRef.current.updateProject = updateProject.mutate;
 
   // Codex name → color map for subplot auto-coloring
   const codexColorByName = useMemo(() => {
@@ -598,6 +603,8 @@ export default function CorkboardPage() {
   const [addingSubplot, setAddingSubplot]   = useState(false);
   const [sceneColors, setSceneColors]       = useState<Record<number, string | null>>({});
   const [colColors, setColColors]           = useState<Record<string, string>>({});
+  const storeSetColor  = useColColorsStore((s) => s.setColor);
+  const storeSetColors = useColColorsStore((s) => s.setColors);
   const [showSynopsis, setShowSynopsis]     = useState(true);
   const [compact, setCompact]               = useState(false);
   const [showHierarchy, setShowHierarchy]   = useState(false);
@@ -629,7 +636,20 @@ export default function CorkboardPage() {
     const cc: Record<string, string> = {};
     for (const col of allCols) cc[col] = resolveColColor(col, allCols, stored, codexColorByName);
     setColColors(cc);
-  }, [serverData, projectId, codexColorByName]);
+    storeSetColors(projectId, cc);
+  }, [serverData, projectId, codexColorByName, storeSetColors]);
+
+  // Keep main plot color in sync with the project field (authoritative source).
+  // Runs whenever the project loads or main_plot_color changes on the server.
+  useEffect(() => {
+    if (!project) return;
+    const mainColor = project.main_plot_color ?? MAIN_COLOR;
+    setColColors((prev) => {
+      if (prev[MAIN_COL] === mainColor) return prev; // no-op guard
+      return { ...prev, [MAIN_COL]: mainColor };
+    });
+    storeSetColor(projectId, MAIN_COL, mainColor);
+  }, [project?.main_plot_color, projectId, storeSetColor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore beat template from localStorage on mount
   useEffect(() => {
@@ -687,10 +707,15 @@ export default function CorkboardPage() {
   const handleColColorChange = useCallback((col: string, color: string) => {
     setColColors((prev) => {
       const next = { ...prev, [col]: color };
-      saveColColors(projectId, next);
+      saveColColors(projectId, next); // localStorage backup (subplots + fallback)
       return next;
     });
-  }, [projectId]); // projectId is stable for lifetime of page
+    storeSetColor(projectId, col, color); // keep sidebar in sync
+    if (col === MAIN_COL) {
+      // Main plot color is stored on the project — no more localStorage-only storage
+      mutateRef.current.updateProject({ id: projectId, data: { main_plot_color: color } });
+    }
+  }, [projectId, storeSetColor]);
 
   // ── Stable handlers object — all callbacks above are stable so this never
   //    changes, breaking the useEffect → setNodes → re-render loop ───────────
@@ -1108,7 +1133,7 @@ export default function CorkboardPage() {
 
   const handleRemoveSubplot = (subplot: string) => {
     const affected = localScenes.filter((s) => s.subplot === subplot);
-    affected.forEach((s) => moveScene.mutate({ sceneId: s.id, data: { subplot: null } }));
+    affected.forEach((s) => mutateRef.current.move({ sceneId: s.id, data: { subplot: null } }));
     setLocalScenes((prev) => prev.map((s) => s.subplot === subplot ? { ...s, subplot: null } : s));
     const next = extraSubplots.filter((x) => x !== subplot);
     setExtraSubplots(next);

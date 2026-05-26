@@ -50,6 +50,7 @@ export interface Project {
   shared_codex_project_id: number | null;
   shared_codex_project_title: string | null;
   cover_image: string | null;
+  main_plot_color: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -81,6 +82,7 @@ export interface Scene {
   order_index: number;
   word_count: number;
   scene_time: SceneTime | null;
+  subplot: string | null;
   pov_character_id: number | null;
   beat: string | null;
   scene_type: string | null;

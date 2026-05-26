@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { HexColorPicker } from "react-colorful";
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -31,6 +32,12 @@ export const SUBPLOT_PALETTE = [
   "#f59e0b", "#ec4899", "#06b6d4",
 ];
 
+// ── HEX validation ────────────────────────────────────────────────────────────
+
+function isValidHex(v: string): boolean {
+  return /^#[0-9a-f]{6}$/i.test(v);
+}
+
 // ── ColorPicker component ─────────────────────────────────────────────────────
 
 interface Props {
@@ -44,18 +51,48 @@ interface Props {
 }
 
 export function ColorPicker({ color, onChange, large = false, alignLeft = false }: Props) {
-  const [open, setOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen]     = useState(false);
+  const [hexInput, setHexInput] = useState(color ?? "#94a3b8");
+  const containerRef        = useRef<HTMLDivElement>(null);
 
-  const dotSize   = large ? "h-4 w-4" : "h-3 w-3";
-  const popoverX  = alignLeft ? "left-0" : "right-0";
+  // Keep hex input in sync when color prop changes externally
+  useEffect(() => {
+    if (color && isValidHex(color)) setHexInput(color);
+  }, [color]);
+
+  // Click-outside closes the popover
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const handleWheelChange = useCallback((hex: string) => {
+    setHexInput(hex);
+    onChange(hex);
+  }, [onChange]);
+
+  const handleHexInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setHexInput(v);
+    const normalized = v.startsWith("#") ? v : `#${v}`;
+    if (isValidHex(normalized)) onChange(normalized);
+  }, [onChange]);
+
+  const dotSize  = large ? "h-4 w-4" : "h-3 w-3";
+  const popoverX = alignLeft ? "left-0" : "right-0";
 
   const triggerStyle = color
     ? { backgroundColor: color }
     : { backgroundColor: "transparent", border: "1.5px dashed #71717a" };
 
   return (
-    <div className="relative flex-shrink-0">
+    <div ref={containerRef} className="relative flex-shrink-0">
       <button
         onClick={() => setOpen((v) => !v)}
         className={`${dotSize} rounded-full transition-transform hover:scale-110`}
@@ -65,16 +102,24 @@ export function ColorPicker({ color, onChange, large = false, alignLeft = false 
 
       {open && (
         <div
-          className={`absolute ${popoverX} top-5 z-50 bg-popover border border-border rounded-xl shadow-xl p-2.5 w-[148px]`}
-          onMouseLeave={() => setOpen(false)}
+          className={`absolute ${popoverX} top-5 z-50 bg-popover border border-border rounded-xl shadow-xl p-2.5`}
+          style={{ width: 200 }}
         >
+          {/* Color wheel */}
+          <div className="mb-2 [&_.react-colorful]:w-full [&_.react-colorful__saturation]:rounded-lg [&_.react-colorful__hue]:rounded-full [&_.react-colorful__hue]:mt-2 [&_.react-colorful__hue]:h-2.5">
+            <HexColorPicker
+              color={color ?? "#94a3b8"}
+              onChange={handleWheelChange}
+            />
+          </div>
+
           {/* Preset swatches */}
-          <div className="grid grid-cols-4 gap-1.5 mb-2">
+          <div className="grid grid-cols-8 gap-1 mb-2">
             {SCENE_PRESETS.map((hex, i) => (
               <button
                 key={i}
-                onClick={() => { onChange(hex); setOpen(false); }}
-                className="h-5 w-5 rounded-full ring-1 ring-border hover:scale-110 transition-transform"
+                onClick={() => { onChange(hex); if (hex) setHexInput(hex); setOpen(false); }}
+                className="h-4 w-4 rounded-full ring-1 ring-border hover:scale-110 transition-transform"
                 style={
                   hex
                     ? { backgroundColor: hex }
@@ -85,18 +130,21 @@ export function ColorPicker({ color, onChange, large = false, alignLeft = false 
             ))}
           </div>
 
-          {/* Custom color input */}
+          {/* Hex text input */}
           <div className="flex items-center gap-1.5">
-            <input
-              ref={inputRef}
-              type="color"
-              value={color ?? "#94a3b8"}
-              onChange={(e) => onChange(e.target.value)}
-              className="h-6 w-6 cursor-pointer rounded border-none bg-transparent flex-shrink-0"
-              title="Custom color"
+            <div
+              className="h-4 w-4 rounded-full ring-1 ring-border flex-shrink-0"
+              style={{ backgroundColor: color ?? "transparent" }}
             />
-            <span className="text-[10px] text-muted-foreground/60">Custom</span>
-            <code className="text-[9px] text-muted-foreground ml-auto">{color ?? "—"}</code>
+            <input
+              type="text"
+              value={hexInput}
+              onChange={handleHexInput}
+              spellCheck={false}
+              maxLength={7}
+              className="flex-1 min-w-0 bg-transparent text-[11px] font-mono text-foreground border border-border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder="#rrggbb"
+            />
           </div>
         </div>
       )}

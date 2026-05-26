@@ -1,7 +1,7 @@
 import json
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
 from models import Project, CodexEntry, CodexEntryAccess, CodexRelation, Act, Chapter, Scene
@@ -27,6 +27,7 @@ def _project_to_out(p: Project, parent_title: Optional[str] = None) -> dict:
         "shared_codex_project_id": p.shared_codex_project_id,
         "shared_codex_project_title": parent_title,
         "cover_image": p.cover_image,
+        "main_plot_color": p.main_plot_color,
         "created_at": p.created_at,
         "updated_at": p.updated_at,
     }
@@ -270,6 +271,7 @@ def get_corkboard(project_id: int, db: Session = Depends(get_db)):
     acts = (
         db.query(Act)
         .filter(Act.project_id == project_id)
+        .options(selectinload(Act.chapters).selectinload(Chapter.scenes))
         .order_by(Act.order_index)
         .all()
     )
@@ -346,6 +348,7 @@ def get_project_structure(project_id: int, db: Session = Depends(get_db)):
     acts = (
         db.query(Act)
         .filter(Act.project_id == project_id)
+        .options(selectinload(Act.chapters).selectinload(Chapter.scenes))
         .order_by(Act.order_index)
         .all()
     )
@@ -385,6 +388,7 @@ def list_project_scenes(project_id: int, db: Session = Depends(get_db)):
     acts = (
         db.query(Act)
         .filter(Act.project_id == project_id)
+        .options(selectinload(Act.chapters).selectinload(Chapter.scenes))
         .order_by(Act.order_index)
         .all()
     )
@@ -461,7 +465,13 @@ def get_pov_stats(project_id: int, db: Session = Depends(get_db)):
     if not project:
         raise HTTPException(404, "Project not found")
 
-    acts = db.query(Act).filter(Act.project_id == project_id).order_by(Act.order_index).all()
+    acts = (
+        db.query(Act)
+        .filter(Act.project_id == project_id)
+        .options(selectinload(Act.chapters).selectinload(Chapter.scenes))
+        .order_by(Act.order_index)
+        .all()
+    )
     all_scenes: list[Scene] = []
     for act in sorted(acts, key=lambda a: a.order_index):
         for ch in sorted(act.chapters, key=lambda c: c.order_index):

@@ -99,7 +99,7 @@ function ContextMenu({ menu, onClose, onDeleteRelation, onSetCenter, onEditEntry
       />
 
       <div
-        className="fixed z-50 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[11rem] select-none"
+        className="fixed z-50 bg-popover border border-border rounded-lg shadow-xl py-1 min-w-[11rem] select-none"
         style={{ left: menu.x, top: menu.y }}
       >
         {menu.kind === "node" && (
@@ -136,7 +136,7 @@ function ContextMenu({ menu, onClose, onDeleteRelation, onSetCenter, onEditEntry
                   </div>
 
                   {subOpen && (
-                    <div className="absolute left-full top-0 ml-0.5 bg-card border border-border rounded-lg shadow-xl py-1 min-w-[13rem]">
+                    <div className="absolute left-full top-0 ml-0.5 bg-popover border border-border rounded-lg shadow-xl py-1 min-w-[13rem]">
                       {menu.relations.map(rel => (
                         <button
                           key={rel.relation_id}

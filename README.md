@@ -16,6 +16,8 @@ Foliantica is a **local-first, all-in-one writing studio** — manuscript editor
 - ☁️ **Optional sync.** Point the data folder at Dropbox, Google Drive, or OneDrive — that's all it takes.
 - 💬 **A second opinion when everyone else is busy.** Chat about your plot, ask if a scene lands, brainstorm a name — the AI knows your characters and your world, but the story is still yours to write.
 
+→ [See the full feature list](#features)
+
 Available as a **standalone desktop app** (Windows, macOS, Linux) or run directly from source.
 
 ---

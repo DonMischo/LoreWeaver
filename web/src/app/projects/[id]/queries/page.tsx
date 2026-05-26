@@ -246,6 +246,22 @@ function StatsStrip({ items }: { items: QuerySubmission[] }) {
 
 type SortKey = "date_sent" | "agent_name" | "status" | "response_deadline";
 
+function SortTh({ col, label, sortKey, onSort }: {
+  col: SortKey; label: string; sortKey: SortKey; onSort: (k: SortKey) => void;
+}) {
+  return (
+    <th
+      className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground select-none whitespace-nowrap"
+      onClick={() => onSort(col)}
+    >
+      <span className="flex items-center gap-1">
+        {label}
+        <ArrowUpDown className={cn("h-3 w-3 shrink-0", sortKey === col ? "opacity-100" : "opacity-30")} />
+      </span>
+    </th>
+  );
+}
+
 export default function QueriesPage() {
   const { id } = useParams<{ id: string }>();
   const projectId = Number(id);
@@ -291,18 +307,6 @@ export default function QueriesPage() {
     if (!confirm(`Delete submission to ${item.agent_name}?`)) return;
     await remove.mutateAsync(item.id);
   };
-
-  const SortTh = ({ col, label }: { col: SortKey; label: string }) => (
-    <th
-      className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground select-none whitespace-nowrap"
-      onClick={() => toggleSort(col)}
-    >
-      <span className="flex items-center gap-1">
-        {label}
-        <ArrowUpDown className={cn("h-3 w-3 shrink-0", sortKey === col ? "opacity-100" : "opacity-30")} />
-      </span>
-    </th>
-  );
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 max-w-5xl mx-auto w-full">
@@ -368,11 +372,11 @@ export default function QueriesPage() {
           <table className="w-full text-sm">
             <thead className="bg-secondary/30 border-b border-border">
               <tr>
-                <SortTh col="agent_name" label="Agent" />
+                <SortTh col="agent_name" label="Agent" sortKey={sortKey} onSort={toggleSort} />
                 <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Agency</th>
-                <SortTh col="status" label="Status" />
-                <SortTh col="date_sent" label="Date sent" />
-                <SortTh col="response_deadline" label="Deadline" />
+                <SortTh col="status" label="Status" sortKey={sortKey} onSort={toggleSort} />
+                <SortTh col="date_sent" label="Date sent" sortKey={sortKey} onSort={toggleSort} />
+                <SortTh col="response_deadline" label="Deadline" sortKey={sortKey} onSort={toggleSort} />
                 <th className="px-3 py-2 w-16" />
               </tr>
             </thead>

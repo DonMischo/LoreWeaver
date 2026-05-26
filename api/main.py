@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from database import engine, migrate_to_four_level, migrate_new_columns, migrate_entry_groups, migrate_ai_prompts, migrate_scene_versions, migrate_mention_stats, migrate_writing_log, migrate_timeline_tables, migrate_codex_entry_sharing, migrate_research, migrate_publishing, migrate_publisher_profiles
+from database import engine, migrate_to_four_level, migrate_new_columns, migrate_indexes, migrate_entry_groups, migrate_ai_prompts, migrate_scene_versions, migrate_mention_stats, migrate_writing_log, migrate_timeline_tables, migrate_codex_entry_sharing, migrate_research, migrate_publishing, migrate_publisher_profiles
 from models import Base
 from routers import projects, acts, chapters, scenes, codex, settings, ai, export, imports, graph, time, fragments, images, scene_commands, grammar, analytics, research, submissions
 
@@ -13,6 +13,7 @@ migrate_to_four_level()
 
 Base.metadata.create_all(bind=engine)
 migrate_new_columns()
+migrate_indexes()
 migrate_entry_groups()
 migrate_ai_prompts()
 migrate_scene_versions()

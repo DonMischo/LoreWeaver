@@ -106,7 +106,7 @@ export function ScenePlanPopover({ sceneId, sceneTitle, sceneType: initialSceneT
           sideOffset={10}
           onOpenAutoFocus={(e) => { e.preventDefault(); inputRef.current?.focus(); }}
           className={cn(
-            "z-50 w-64 rounded-lg border border-border bg-card shadow-xl",
+            "z-50 w-64 rounded-lg border border-border bg-popover shadow-xl",
             "outline-none",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
