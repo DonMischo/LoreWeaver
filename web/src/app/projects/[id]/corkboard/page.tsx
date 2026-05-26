@@ -1108,7 +1108,7 @@ export default function CorkboardPage() {
 
   const handleRemoveSubplot = (subplot: string) => {
     const affected = localScenes.filter((s) => s.subplot === subplot);
-    affected.forEach((s) => moveScene.mutate({ sceneId: s.id, data: { subplot: null } }));
+    affected.forEach((s) => mutateRef.current.move({ sceneId: s.id, data: { subplot: null } }));
     setLocalScenes((prev) => prev.map((s) => s.subplot === subplot ? { ...s, subplot: null } : s));
     const next = extraSubplots.filter((x) => x !== subplot);
     setExtraSubplots(next);
