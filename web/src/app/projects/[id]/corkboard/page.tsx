@@ -273,7 +273,7 @@ function chapterBoxSize(nScenes: number, compact: boolean): { w: number; h: numb
 
 // ── Beat header node ──────────────────────────────────────────────────────────
 
-interface BeatHeaderNodeData {
+interface BeatHeaderNodeData extends Record<string, unknown> {
   beatName: string;
   sceneCount: number;
   position?: number;
