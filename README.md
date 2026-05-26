@@ -14,7 +14,7 @@ Foliantica is a **local-first, all-in-one writing studio** — manuscript editor
 - 🌍 **World-builder native.** Codex, relations graph, configurable time system, and timeline — built in, not bolted on.
 - 📤 **Submission-ready.** One click generates manuscripts formatted for 38+ publishers and agents, downloaded as a ZIP.
 - ☁️ **Optional sync.** Point the data folder at Dropbox, Google Drive, or OneDrive — that's all it takes.
-- 🛠️ **AI as a tool, not a ghostwriter.** Grammar check, synopsis drafts, brainstorming prompts — when you want a hand, it's there. Your story remains yours.
+- 💬 **A second opinion when everyone else is busy.** Chat about your plot, ask if a scene lands, brainstorm a name — the AI knows your characters and your world, but the story is still yours to write.
 
 Available as a **standalone desktop app** (Windows, macOS, Linux) or run directly from source.
 
