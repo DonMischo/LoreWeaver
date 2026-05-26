@@ -2,10 +2,14 @@
 # Foliantica — release helper  (Windows PowerShell)
 #
 # Usage:
-#   .\release.ps1           # bump patch  (1.2.3 → 1.2.4)
-#   .\release.ps1 minor     # bump minor  (1.2.3 → 1.3.0)
-#   .\release.ps1 major     # bump major  (1.2.3 → 2.0.0)
+#   .\release.ps1           # bump patch  (1.2.3 -> 1.2.4)
+#   .\release.ps1 minor     # bump minor  (1.2.3 -> 1.3.0)
+#   .\release.ps1 major     # bump major  (1.2.3 -> 2.0.0)
 # ─────────────────────────────────────────────────────────────────────────────
+# Ensure Unicode output doesn't get mangled on Windows terminals (cp1252 default)
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding            = [System.Text.Encoding]::UTF8
+
 param(
     [ValidateSet("patch","minor","major")]
     [string]$Bump = "patch"
@@ -80,7 +84,7 @@ fs.writeFileSync('$($pkgPath.Replace('\','\\\\'))', JSON.stringify(p, null, 2) +
 "
 if ($LASTEXITCODE -ne 0) { Die "Failed to update package.json" }
 
-Ok "package.json → $next"
+Ok "package.json -> $next"
 
 # ── Commit + tag + push ───────────────────────────────────────────────────────
 Step "Creating git commit and tag"

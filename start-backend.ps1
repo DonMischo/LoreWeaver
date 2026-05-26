@@ -1,4 +1,6 @@
 # Start Foliantica backend
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding            = [System.Text.Encoding]::UTF8
 
 # Add uv's install location to PATH for this session (works for any user)
 $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"

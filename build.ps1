@@ -2,6 +2,10 @@
 # Foliantica — single build script  (Windows PowerShell)
 # Run from the project root:  .\build.ps1
 # ─────────────────────────────────────────────────────────────────────────────
+# Ensure Unicode output (e.g. box-drawing chars) doesn't mangle on cp1252 terminals
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding            = [System.Text.Encoding]::UTF8
+
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
 
