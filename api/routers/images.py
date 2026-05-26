@@ -13,10 +13,19 @@ router = APIRouter(tags=["images"])
 UPLOAD_DIR = "uploads"
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
+# Derive file extension from the validated MIME type — never from the client filename.
+# This prevents a file named "evil.php" from being stored with a .php extension.
+_MIME_TO_EXT: dict[str, str] = {
+    "image/jpeg": ".jpg",
+    "image/png":  ".png",
+    "image/webp": ".webp",
+    "image/gif":  ".gif",
+}
+
 
 def _save_upload(file: UploadFile, subdir: str, stem: str) -> str:
     """Save uploaded file and return the relative path stored in DB."""
-    ext = os.path.splitext(file.filename or "")[1].lower() or ".jpg"
+    ext = _MIME_TO_EXT.get(file.content_type or "", ".jpg")
     dest_dir = os.path.join(UPLOAD_DIR, subdir)
     os.makedirs(dest_dir, exist_ok=True)
     rel_path = f"{UPLOAD_DIR}/{subdir}/{stem}{ext}"

@@ -125,6 +125,39 @@ def migrate_new_columns():
                 pass  # column already exists
 
 
+def migrate_indexes():
+    """Create FK indexes on existing databases. Idempotent — uses IF NOT EXISTS."""
+    indexes = [
+        ("idx_acts_project_id",              "acts",              "project_id"),
+        ("idx_chapters_act_id",              "chapters",          "act_id"),
+        ("idx_scenes_chapter_id",            "scenes",            "chapter_id"),
+        ("idx_codex_entries_project_id",     "codex_entries",     "project_id"),
+        ("idx_codex_relations_source_id",    "codex_relations",   "source_id"),
+        ("idx_codex_relations_target_id",    "codex_relations",   "target_id"),
+        ("idx_codex_entry_access_entry_id",  "codex_entry_access", "entry_id"),
+        ("idx_fragments_project_id",         "fragments",         "project_id"),
+        ("idx_scene_commands_scene_id",      "scene_commands",    "scene_id"),
+        ("idx_mention_stats_scene_id",       "mention_stats",     "scene_id"),
+        ("idx_mention_stats_codex_id",       "mention_stats",     "codex_id"),
+        ("idx_writing_log_project_id",       "writing_log",       "project_id"),
+        ("idx_scene_versions_scene_id",      "scene_versions",    "scene_id"),
+        ("idx_timeline_tracks_project_id",   "timeline_tracks",   "project_id"),
+        ("idx_research_items_project_id",    "research_items",    "project_id"),
+        ("idx_query_submissions_project_id", "query_submissions", "project_id"),
+        ("idx_export_profiles_project_id",   "export_profiles",   "project_id"),
+        ("idx_timeline_events_project_id",   "timeline_events",   "project_id"),
+        ("idx_timeline_events_track_id",     "timeline_events",   "track_id"),
+    ]
+    with engine.begin() as conn:
+        for idx_name, table, col in indexes:
+            try:
+                conn.execute(text(
+                    f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({col})"
+                ))
+            except Exception:
+                pass  # table may not exist yet on first run
+
+
 def migrate_mention_stats():
     """Create the mention_stats table if it does not yet exist."""
     with engine.begin() as conn:

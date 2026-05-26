@@ -6,7 +6,7 @@ no extra dependencies beyond the stdlib.
 import re
 from collections import Counter
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
 from models import Project, Act, Chapter, Scene
@@ -75,7 +75,12 @@ def _flesch(plain: str) -> tuple[float, float]:
 
 @router.get("/projects/{project_id}/analytics", response_model=ProjectAnalytics)
 def get_analytics(project_id: int, db: Session = Depends(get_db)):
-    project = db.get(Project, project_id)
+    project = (
+        db.query(Project)
+        .options(selectinload(Project.acts).selectinload(Act.chapters).selectinload(Chapter.scenes))
+        .filter(Project.id == project_id)
+        .first()
+    )
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 

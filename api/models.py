@@ -3,7 +3,7 @@ from typing import Optional
 import json
 
 from sqlalchemy import (
-    Integer, String, Text, DateTime, ForeignKey, Enum, JSON, event, UniqueConstraint
+    Integer, String, Text, DateTime, ForeignKey, Enum, JSON, event, Index, UniqueConstraint
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 import enum
@@ -43,6 +43,15 @@ class Project(Base):
     fragments: Mapped[list["Fragment"]] = relationship(
         "Fragment", back_populates="project", cascade="all, delete-orphan"
     )
+    timeline_tracks: Mapped[list["TimelineTrack"]] = relationship(
+        "TimelineTrack", cascade="all, delete-orphan"
+    )
+    research_items: Mapped[list["ResearchItem"]] = relationship(
+        "ResearchItem", back_populates="project", cascade="all, delete-orphan"
+    )
+    query_submissions: Mapped[list["QuerySubmission"]] = relationship(
+        "QuerySubmission", cascade="all, delete-orphan"
+    )
 
 
 class Act(Base):
@@ -50,7 +59,7 @@ class Act(Base):
     __tablename__ = "acts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    project_id: Mapped[int] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    project_id: Mapped[int] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
@@ -67,7 +76,7 @@ class Chapter(Base):
     __tablename__ = "chapters"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    act_id: Mapped[int] = mapped_column(Integer, ForeignKey("acts.id", ondelete="CASCADE"))
+    act_id: Mapped[int] = mapped_column(Integer, ForeignKey("acts.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
@@ -84,7 +93,7 @@ class Scene(Base):
     __tablename__ = "scenes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    chapter_id: Mapped[int] = mapped_column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"))
+    chapter_id: Mapped[int] = mapped_column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), index=True)
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="")
     synopsis: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -121,7 +130,7 @@ class CodexEntry(Base):
     __tablename__ = "codex_entries"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    project_id: Mapped[int] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    project_id: Mapped[int] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     aliases: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="[]")
     entry_type: Mapped[str] = mapped_column(
@@ -192,8 +201,8 @@ class CodexRelation(Base):
     __tablename__ = "codex_relations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    source_id: Mapped[int] = mapped_column(Integer, ForeignKey("codex_entries.id", ondelete="CASCADE"))
-    target_id: Mapped[int] = mapped_column(Integer, ForeignKey("codex_entries.id", ondelete="CASCADE"))
+    source_id: Mapped[int] = mapped_column(Integer, ForeignKey("codex_entries.id", ondelete="CASCADE"), index=True)
+    target_id: Mapped[int] = mapped_column(Integer, ForeignKey("codex_entries.id", ondelete="CASCADE"), index=True)
     relation_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
@@ -210,7 +219,7 @@ class CodexEntryAccess(Base):
     __tablename__ = "codex_entry_access"
 
     id:         Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    entry_id:   Mapped[int] = mapped_column(Integer, ForeignKey("codex_entries.id", ondelete="CASCADE"))
+    entry_id:   Mapped[int] = mapped_column(Integer, ForeignKey("codex_entries.id", ondelete="CASCADE"), index=True)
     project_id: Mapped[int] = mapped_column(Integer, nullable=False)  # no FK: project may not exist yet
 
     __table_args__ = (UniqueConstraint("entry_id", "project_id"),)
@@ -221,7 +230,7 @@ class Fragment(Base):
     __tablename__ = "fragments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    project_id: Mapped[int] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    project_id: Mapped[int] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     tab: Mapped[str] = mapped_column(String(100), default="snippets")
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="")
@@ -238,7 +247,7 @@ class SceneCommand(Base):
     __tablename__ = "scene_commands"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    scene_id: Mapped[int] = mapped_column(Integer, ForeignKey("scenes.id", ondelete="CASCADE"))
+    scene_id: Mapped[int] = mapped_column(Integer, ForeignKey("scenes.id", ondelete="CASCADE"), index=True)
     command_type: Mapped[str] = mapped_column(String(50))   # "currency" | "item"
     character_id: Mapped[int] = mapped_column(Integer)       # codex_entries.id
     item_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # codex_entries.id (item type)
@@ -294,8 +303,8 @@ class MentionStat(Base):
     __tablename__ = "mention_stats"
 
     id:       Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    scene_id: Mapped[int] = mapped_column(Integer, ForeignKey("scenes.id", ondelete="CASCADE"))
-    codex_id: Mapped[int] = mapped_column(Integer, ForeignKey("codex_entries.id", ondelete="CASCADE"))
+    scene_id: Mapped[int] = mapped_column(Integer, ForeignKey("scenes.id", ondelete="CASCADE"), index=True)
+    codex_id: Mapped[int] = mapped_column(Integer, ForeignKey("codex_entries.id", ondelete="CASCADE"), index=True)
     count:    Mapped[int] = mapped_column(Integer, default=0)
 
 
@@ -304,7 +313,7 @@ class WritingLog(Base):
     __tablename__ = "writing_log"
 
     id:          Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    project_id:  Mapped[int] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    project_id:  Mapped[int] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     date:        Mapped[str] = mapped_column(String(10), nullable=False)  # YYYY-MM-DD
     words_added: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -315,7 +324,7 @@ class SceneVersion(Base):
     __tablename__ = "scene_versions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    scene_id: Mapped[int] = mapped_column(Integer, ForeignKey("scenes.id", ondelete="CASCADE"))
+    scene_id: Mapped[int] = mapped_column(Integer, ForeignKey("scenes.id", ondelete="CASCADE"), index=True)
     content: Mapped[str] = mapped_column(Text, default="")
     content_hash: Mapped[str] = mapped_column(String(64))   # sha256 hex for dedup
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
@@ -324,7 +333,7 @@ class SceneVersion(Base):
 class TimelineTrack(Base):
     __tablename__ = "timeline_tracks"
     id:           Mapped[int]           = mapped_column(Integer, primary_key=True)
-    project_id:   Mapped[int]           = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    project_id:   Mapped[int]           = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     name:         Mapped[str]           = mapped_column(String(200), default="Timeline")
     color:        Mapped[str]           = mapped_column(String(20),  default="#6b7280")
     track_type:   Mapped[str]           = mapped_column(String(20),  default="parallel")   # "parallel" | anything
@@ -339,7 +348,7 @@ class ResearchItem(Base):
     __tablename__ = "research_items"
 
     id:               Mapped[int]           = mapped_column(Integer, primary_key=True, index=True)
-    project_id:       Mapped[int]           = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    project_id:       Mapped[int]           = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     title:            Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     url:              Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     url_title:        Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -353,7 +362,7 @@ class ResearchItem(Base):
     created_at:       Mapped[datetime]      = mapped_column(DateTime, default=_now)
     updated_at:       Mapped[datetime]      = mapped_column(DateTime, default=_now, onupdate=_now)
 
-    project: Mapped["Project"] = relationship("Project")
+    project: Mapped["Project"] = relationship("Project", back_populates="research_items")
 
     def get_tags(self) -> list[str]:
         try:
@@ -367,7 +376,7 @@ class QuerySubmission(Base):
     __tablename__ = "query_submissions"
 
     id:                Mapped[int]           = mapped_column(Integer, primary_key=True)
-    project_id:        Mapped[int]           = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
+    project_id:        Mapped[int]           = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     agent_name:        Mapped[str]           = mapped_column(Text, default="")
     agency:            Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     email:             Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -387,7 +396,7 @@ class ExportProfile(Base):
     __tablename__ = "export_profiles"
 
     id:           Mapped[int]           = mapped_column(Integer, primary_key=True)
-    project_id:   Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
+    project_id:   Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)
     name:         Mapped[str]           = mapped_column(Text)
     description:  Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_builtin:   Mapped[int]           = mapped_column(Integer, default=0)  # 1 = read-only pre-seeded
@@ -418,8 +427,8 @@ class PublisherProfile(Base):
 class TimelineEvent(Base):
     __tablename__ = "timeline_events"
     id:           Mapped[int]           = mapped_column(Integer, primary_key=True)
-    project_id:   Mapped[int]           = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
-    track_id:     Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("timeline_tracks.id", ondelete="SET NULL"), nullable=True)
+    project_id:   Mapped[int]           = mapped_column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    track_id:     Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("timeline_tracks.id", ondelete="SET NULL"), nullable=True, index=True)
     title:        Mapped[str]           = mapped_column(String(500), default="Untitled Event")
     description:  Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     scene_time:   Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
