@@ -4,17 +4,17 @@
 
 **The writing studio built for novelists who build worlds.**
 
-You open the app. Your manuscript is there, exactly where you left it. The world-bible is a sidebar click away. The AI knows your characters and speaks your language. The timeline remembers every hour of every day you mapped. Thirty-eight publisher formatting profiles are waiting for submission day. Nothing lives in someone else's cloud.
+You open the app. Your manuscript is there, exactly where you left it. The world-bible is a sidebar click away. The timeline remembers every hour of every day you mapped. Thirty-eight publisher formatting profiles are waiting for submission day. Nothing lives in someone else's cloud.
 
-Foliantica is a **local-first, all-in-one writing studio** — manuscript editor, codex, timeline, corkboard, AI assistant, analytics, and submission tracker in a single desktop app. Offline by default. No subscriptions. No accounts. No telemetry. Your words stay yours.
+Foliantica is a **local-first, all-in-one writing studio** — manuscript editor, codex, timeline, corkboard, analytics, and submission tracker in a single desktop app. Offline by default. No subscriptions. No accounts. No telemetry. Your words stay yours.
 
 ---
 
 - 🔒 **Fully offline.** Nothing leaves your machine without your say-so.
 - 🌍 **World-builder native.** Codex, relations graph, configurable time system, and timeline — built in, not bolted on.
-- 🤖 **AI that knows your cast.** Inject any codex entry or extra scene as context before generating.
 - 📤 **Submission-ready.** One click generates manuscripts formatted for 38+ publishers and agents, downloaded as a ZIP.
 - ☁️ **Optional sync.** Point the data folder at Dropbox, Google Drive, or OneDrive — that's all it takes.
+- 🛠️ **AI as a tool, not a ghostwriter.** Grammar check, synopsis drafts, brainstorming prompts — when you want a hand, it's there. Your story remains yours.
 
 Available as a **standalone desktop app** (Windows, macOS, Linux) or run directly from source.
 
