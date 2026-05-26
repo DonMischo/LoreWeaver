@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -37,6 +37,7 @@ import { TimeConfigDialog } from "@/components/time/TimeConfigDialog";
 import { ExportDialog } from "@/components/export/ExportDialog";
 import { BookMetaDialog } from "@/components/project/BookMetaDialog";
 import { MAIN_COLOR, SUBPLOT_PALETTE } from "@/components/corkboard/ColorPicker";
+import { useColColorsStore } from "@/store/colColors";
 import { DEFAULT_TIME_CONFIG } from "@/types";
 import type { Act, Chapter, Scene } from "@/types";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -427,6 +428,11 @@ export function ProjectSidebar({ projectId }: Props) {
     return next;
   });
 
+  // Shared column colors (written by corkboard, read here for live sync)
+  const ensureColColorsLoaded = useColColorsStore((s) => s.ensureLoaded);
+  const storedColColors       = useColColorsStore((s) => s.byProject[projectId] ?? {});
+  useEffect(() => { ensureColColorsLoaded(projectId); }, [projectId, ensureColColorsLoaded]);
+
   // Codex lookup maps (stable across renders if entries don't change)
   const codexColorById = useMemo(() => {
     const m: Record<number, string> = {};
@@ -445,10 +451,14 @@ export function ProjectSidebar({ projectId }: Props) {
       if (!scene.pov_character_id) return null;
       return codexColorById[scene.pov_character_id] ?? null;
     }
-    // subplot mode
-    if (!scene.subplot) return project?.main_plot_color ?? MAIN_COLOR;
-    return codexColorByName[scene.subplot.toLowerCase()] ?? subplotPaletteColor(scene.subplot);
-  }, [barMode, codexColorById, codexColorByName, project?.main_plot_color]);
+    // subplot mode — priority: codex entry color → custom picker color → hash palette
+    if (!scene.subplot) return storedColColors["__main__"] ?? project?.main_plot_color ?? MAIN_COLOR;
+    return (
+      codexColorByName[scene.subplot.toLowerCase()] ??
+      storedColColors[scene.subplot] ??
+      subplotPaletteColor(scene.subplot)
+    );
+  }, [barMode, codexColorById, codexColorByName, project?.main_plot_color, storedColColors]);
   const createAct = useCreateAct(projectId);
   const reorderActs = useReorderActs(projectId);
   const updateProject = useUpdateProject();

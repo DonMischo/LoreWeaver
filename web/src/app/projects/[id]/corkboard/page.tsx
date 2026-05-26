@@ -23,6 +23,7 @@ import type { ActNodeType, ChapterNodeType, GroupFrameNodeType } from "@/compone
 import { ColorPicker, hexToRgba, MAIN_COLOR, SUBPLOT_PALETTE } from "@/components/corkboard/ColorPicker";
 import type { CorkboardScene, CorkboardAct } from "@/types";
 import { PLOT_TEMPLATES } from "@/lib/plotTemplates";
+import { useColColorsStore } from "@/store/colColors";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -602,6 +603,8 @@ export default function CorkboardPage() {
   const [addingSubplot, setAddingSubplot]   = useState(false);
   const [sceneColors, setSceneColors]       = useState<Record<number, string | null>>({});
   const [colColors, setColColors]           = useState<Record<string, string>>({});
+  const storeSetColor  = useColColorsStore((s) => s.setColor);
+  const storeSetColors = useColColorsStore((s) => s.setColors);
   const [showSynopsis, setShowSynopsis]     = useState(true);
   const [compact, setCompact]               = useState(false);
   const [showHierarchy, setShowHierarchy]   = useState(false);
@@ -633,7 +636,8 @@ export default function CorkboardPage() {
     const cc: Record<string, string> = {};
     for (const col of allCols) cc[col] = resolveColColor(col, allCols, stored, codexColorByName);
     setColColors(cc);
-  }, [serverData, projectId, codexColorByName]);
+    storeSetColors(projectId, cc);
+  }, [serverData, projectId, codexColorByName, storeSetColors]);
 
   // Keep main plot color in sync with the project field (authoritative source).
   // Runs whenever the project loads or main_plot_color changes on the server.
@@ -644,7 +648,8 @@ export default function CorkboardPage() {
       if (prev[MAIN_COL] === mainColor) return prev; // no-op guard
       return { ...prev, [MAIN_COL]: mainColor };
     });
-  }, [project?.main_plot_color]); // eslint-disable-line react-hooks/exhaustive-deps
+    storeSetColor(projectId, MAIN_COL, mainColor);
+  }, [project?.main_plot_color, projectId, storeSetColor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore beat template from localStorage on mount
   useEffect(() => {
@@ -705,11 +710,12 @@ export default function CorkboardPage() {
       saveColColors(projectId, next); // localStorage backup (subplots + fallback)
       return next;
     });
+    storeSetColor(projectId, col, color); // keep sidebar in sync
     if (col === MAIN_COL) {
       // Main plot color is stored on the project — no more localStorage-only storage
       mutateRef.current.updateProject({ id: projectId, data: { main_plot_color: color } });
     }
-  }, [projectId]); // projectId is stable for lifetime of page
+  }, [projectId, storeSetColor]);
 
   // ── Stable handlers object — all callbacks above are stable so this never
   //    changes, breaking the useEffect → setNodes → re-render loop ───────────
