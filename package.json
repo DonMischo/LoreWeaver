@@ -1,6 +1,6 @@
 {
   "name": "foliantica",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Foliantica Personal Studio — local-first novel writing app",
   "author": "Foliantica",
   "main": "electron/main.js",
