@@ -27,6 +27,7 @@ def _project_to_out(p: Project, parent_title: Optional[str] = None) -> dict:
         "shared_codex_project_id": p.shared_codex_project_id,
         "shared_codex_project_title": parent_title,
         "cover_image": p.cover_image,
+        "main_plot_color": p.main_plot_color,
         "created_at": p.created_at,
         "updated_at": p.updated_at,
     }
