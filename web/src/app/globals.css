@@ -196,6 +196,44 @@
   }
 }
 
+/* ── Scrollbars ──────────────────────────────────────────────────────────────
+   Slim, overlay-style scrollbars that fade in when a scrollable area is
+   hovered and disappear when the cursor leaves.
+   Firefox gets thin + subtle-on-hover (no CSS-only fade mechanism exists).
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover {
+  scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
+}
+
+/* WebKit / Blink (Chrome, Edge, Safari) */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Hidden by default — slow fade-out so the bar lingers briefly after leave */
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 99px;
+  transition: background 0.6s ease;
+}
+
+/* Fade in when the scrollable container is hovered */
+*:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.28);
+  transition: background 0.15s ease;
+}
+
+/* Brighten when the thumb itself is hovered */
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.52);
+}
+
 /* ── Story typography ────────────────────────────────────────────────────────
    Applied to both the TipTap editor (.ProseMirror) and the read views
    (.story-prose).  Selector list keeps the rules in one place.
