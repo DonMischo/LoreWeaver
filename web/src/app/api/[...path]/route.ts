@@ -18,7 +18,11 @@ async function handler(req: NextRequest, { params }: { params: Promise<{ path: s
     (init as RequestInit & { duplex?: string }).duplex = "half";
   }
 
-  return fetch(target, init);
+  try {
+    return fetch(target, init);
+  } catch {
+    return new Response("Backend unavailable", { status: 503 });
+  }
 }
 
 export const GET     = handler;

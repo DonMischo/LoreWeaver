@@ -51,8 +51,19 @@ if not exist "%UV_PROJECT_ENVIRONMENT%" (
     uv venv --python 3.11 "%UV_PROJECT_ENVIRONMENT%"
 )
 
-echo Installing dependencies...
-uv pip install -e .
+set "STAMP=%UV_PROJECT_ENVIRONMENT%\.install_stamp"
+set "NEED_INSTALL=1"
+if exist "%STAMP%" (
+    powershell -NoProfile -Command "if ((Get-Item 'pyproject.toml').LastWriteTime -le (Get-Item '%STAMP%').LastWriteTime) { exit 0 } else { exit 1 }" >nul 2>&1
+    if not errorlevel 1 set "NEED_INSTALL=0"
+)
+if "%NEED_INSTALL%"=="1" (
+    echo Installing dependencies...
+    uv pip install -e .
+    echo. > "%STAMP%"
+) else (
+    echo Dependencies up to date.
+)
 
 echo Freeing port 8765...
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8765 " ^| findstr "LISTENING" 2^>nul') do taskkill /PID %%p /F >nul 2>&1
