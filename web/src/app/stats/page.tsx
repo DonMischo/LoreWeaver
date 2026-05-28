@@ -1,10 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Flame, Trophy, PenLine, Braces } from "lucide-react";
-import { useGlobalWritingLog, useProjects, useProjectGhostTexts } from "@/store/queries";
-import type { WritingLogEntry } from "@/types";
+import {
+  ArrowLeft, Flame, Trophy, PenLine, Braces,
+  BookOpen, Layers, Send, Search, Star,
+} from "lucide-react";
+import { AchievementIcon } from "@/components/AchievementIcon";
+import { useGlobalWritingLog, useProjects, useProjectGhostTexts, useAchievements } from "@/store/queries";
+import type { WritingLogEntry, Achievement, AchievementCategory } from "@/types";
 import { cn } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -56,7 +60,6 @@ function FullHeatmap({ log }: { log: WritingLogEntry[] }) {
   const max = Math.max(...log.map((e) => e.words), 1);
 
   const today = new Date();
-  // Start from 52 weeks ago, aligned to Monday
   const startDate = new Date(today);
   startDate.setDate(today.getDate() - WEEKS * 7 + 1);
 
@@ -84,7 +87,6 @@ function FullHeatmap({ log }: { log: WritingLogEntry[] }) {
 
   return (
     <div className="overflow-x-auto">
-      {/* Month labels */}
       <div className="flex mb-1 ml-8">
         <div className="grid gap-px" style={{ gridTemplateColumns: `repeat(${WEEKS}, 12px)` }}>
           {months.map(({ label, col }) => (
@@ -98,9 +100,7 @@ function FullHeatmap({ log }: { log: WritingLogEntry[] }) {
           ))}
         </div>
       </div>
-
       <div className="flex gap-1">
-        {/* Day labels */}
         <div className="flex flex-col gap-px mr-1">
           {DAY_LABELS.map((d, i) => (
             <span key={i} className="text-[10px] text-muted-foreground w-6 h-3 flex items-center justify-end">
@@ -108,8 +108,6 @@ function FullHeatmap({ log }: { log: WritingLogEntry[] }) {
             </span>
           ))}
         </div>
-
-        {/* Grid: 52 cols × 7 rows */}
         <div
           className="grid gap-px"
           style={{ gridTemplateColumns: `repeat(${WEEKS}, 12px)`, gridTemplateRows: "repeat(7, 12px)" }}
@@ -132,13 +130,164 @@ function FullHeatmap({ log }: { log: WritingLogEntry[] }) {
   );
 }
 
+// ── Achievements ──────────────────────────────────────────────────────────────
+
+const CATEGORIES: { key: AchievementCategory | "all"; label: string; icon: React.ReactNode }[] = [
+  { key: "all",        label: "All",        icon: <Star className="h-3 w-3" /> },
+  { key: "streaks",    label: "Streaks",    icon: <Flame className="h-3 w-3" /> },
+  { key: "words",      label: "Words",      icon: <PenLine className="h-3 w-3" /> },
+  { key: "codex",      label: "Codex",      icon: <BookOpen className="h-3 w-3" /> },
+  { key: "story",      label: "Story",      icon: <Layers className="h-3 w-3" /> },
+  { key: "publishing", label: "Publishing", icon: <Send className="h-3 w-3" /> },
+  { key: "research",   label: "Research",   icon: <Search className="h-3 w-3" /> },
+];
+
+const TIER_STYLES: Record<number, string> = {
+  1: "text-zinc-400 bg-zinc-400/10 border-zinc-400/20",
+  2: "text-blue-400 bg-blue-400/10 border-blue-400/20",
+  3: "text-violet-400 bg-violet-400/10 border-violet-400/20",
+  4: "text-amber-400 bg-amber-400/10 border-amber-400/20",
+  5: "text-rose-400 bg-rose-400/10 border-rose-400/20",
+};
+
+const TIER_COLOR: Record<number, string> = {
+  1: "text-zinc-400",
+  2: "text-blue-400",
+  3: "text-violet-400",
+  4: "text-amber-400",
+  5: "text-rose-400",
+};
+
+const TIER_GLOW: Record<number, string> = {
+  1: "",
+  2: "shadow-[0_0_12px_0_rgba(96,165,250,0.1)]",
+  3: "shadow-[0_0_12px_0_rgba(167,139,250,0.15)]",
+  4: "shadow-[0_0_14px_0_rgba(251,191,36,0.18)]",
+  5: "shadow-[0_0_18px_0_rgba(251,113,133,0.22)]",
+};
+
+function fmt(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
+  return n.toLocaleString();
+}
+
+function AchievementCard({ ach }: { ach: Achievement }) {
+  const pct = Math.min(100, Math.round((ach.progress / ach.progress_max) * 100));
+  const tierStyle = TIER_STYLES[ach.tier] ?? TIER_STYLES[1];
+  const tierColor = TIER_COLOR[ach.tier] ?? TIER_COLOR[1];
+  const glow = ach.earned ? TIER_GLOW[ach.tier] : "";
+
+  return (
+    <div
+      className={cn(
+        "bg-card border rounded-lg p-4 flex flex-col gap-3 transition-all duration-200",
+        ach.earned ? "border-border/80" : "border-border/40 opacity-55",
+        glow,
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <AchievementIcon
+          achievementKey={ach.key}
+          className={cn("w-9 h-9 shrink-0", tierColor, !ach.earned && "opacity-30")}
+        />
+        <span className={cn("shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded border", tierStyle)}>
+          T{ach.tier}
+        </span>
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold leading-tight mb-0.5">{ach.name}</p>
+        <p className="text-xs text-muted-foreground leading-snug">{ach.description}</p>
+      </div>
+
+      {!ach.earned && (
+        <div className="mt-auto space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground tabular-nums">
+              {fmt(ach.progress)} / {fmt(ach.progress_max)}
+            </span>
+            <span className="text-[10px] text-muted-foreground">{pct}%</span>
+          </div>
+          <div className="h-1 bg-muted/30 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary/50 rounded-full transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {ach.earned && ach.unlocked_at && (
+        <p className="text-[10px] text-muted-foreground/60 mt-auto">
+          Earned {new Date(ach.unlocked_at).toLocaleDateString()}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AchievementsSection({ achievements }: { achievements: Achievement[] }) {
+  const [activeCategory, setActiveCategory] = useState<AchievementCategory | "all">("all");
+
+  const filtered = useMemo(
+    () => activeCategory === "all" ? achievements : achievements.filter((a) => a.category === activeCategory),
+    [achievements, activeCategory],
+  );
+
+  const earnedCount = achievements.filter((a) => a.earned).length;
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold">Achievements</h2>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {earnedCount} / {achievements.length}
+        </span>
+      </div>
+
+      {/* Category filter */}
+      <div className="flex flex-wrap gap-1.5 mb-5">
+        {CATEGORIES.map(({ key, label, icon }) => {
+          const count = key === "all"
+            ? achievements.filter((a) => a.earned).length
+            : achievements.filter((a) => a.category === key && a.earned).length;
+          return (
+            <button
+              key={key}
+              onClick={() => setActiveCategory(key)}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                activeCategory === key
+                  ? "bg-primary/15 border-primary/40 text-primary"
+                  : "bg-transparent border-border/50 text-muted-foreground hover:border-border hover:text-foreground",
+              )}
+            >
+              {icon}
+              {label}
+              <span className="text-[10px] opacity-60 tabular-nums">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {filtered.map((ach) => (
+          <AchievementCard key={ach.key} ach={ach} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function StatsPage() {
   const { data: log = [] } = useGlobalWritingLog();
   const { data: projects = [] } = useProjects();
+  const { data: achievements = [] } = useAchievements();
 
-  // Ghost texts for first project (or all) — fetch for first project as preview
   const firstProject = projects[0];
   const { data: ghostScenes = [] } = useProjectGhostTexts(firstProject?.id ?? 0);
 
@@ -155,7 +304,7 @@ export default function StatsPage() {
   }, [log]);
 
   const thisMonth = useMemo(() => {
-    const prefix = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const prefix = new Date().toISOString().slice(0, 7);
     return log.filter((e) => e.date.startsWith(prefix)).reduce((s, e) => s + e.words, 0);
   }, [log]);
 
@@ -171,7 +320,7 @@ export default function StatsPage() {
         <h1 className="text-xl font-bold">Writing Stats</h1>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+      <main className="max-w-4xl mx-auto px-6 py-8 space-y-10">
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -238,6 +387,9 @@ export default function StatsPage() {
             </div>
           </section>
         )}
+
+        {/* Achievements */}
+        {achievements.length > 0 && <AchievementsSection achievements={achievements} />}
 
         <p className="text-xs text-muted-foreground text-center pb-4">
           {totalWords.toLocaleString()} words tracked in total

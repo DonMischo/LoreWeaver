@@ -1055,6 +1055,18 @@ def migrate_publisher_profiles():
                 """), params)
 
 
+def migrate_achievements():
+    """Create the achievement_unlocks table if it does not yet exist."""
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS achievement_unlocks (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                key         TEXT    NOT NULL UNIQUE,
+                unlocked_at DATETIME DEFAULT (datetime('now'))
+            )
+        """))
+
+
 def get_db():
     db = SessionLocal()
     try:

@@ -420,6 +420,24 @@ export interface SceneMentionStat {
   count: number;
 }
 
+// ── Achievements ─────────────────────────────────────────────────────────────
+
+export type AchievementCategory = "streaks" | "words" | "codex" | "story" | "publishing" | "research";
+
+export interface Achievement {
+  key: string;
+  name: string;
+  description: string;
+  category: AchievementCategory;
+  tier: 1 | 2 | 3 | 4 | 5;
+  metric: string;
+  threshold: number;
+  earned: boolean;
+  unlocked_at: string | null;
+  progress: number;
+  progress_max: number;
+}
+
 // ── Writing log / streaks ─────────────────────────────────────────────────────
 
 export interface WritingLogEntry {
