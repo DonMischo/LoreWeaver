@@ -274,7 +274,7 @@ _ENTRY_JSON_SCHEMAS: dict[str, str] = {
 
 @router.post("/ki")
 async def ki_generate(body: KiGenerateRequest, db: Session = Depends(get_db)):
-    """Non-streaming AI generation for the /ki editor command."""
+    """Streaming AI generation for the /ki editor command (SSE)."""
     scene = db.get(Scene, body.scene_id)
     if not scene:
         raise HTTPException(404, "Scene not found")
@@ -337,25 +337,16 @@ async def ki_generate(body: KiGenerateRequest, db: Session = Depends(get_db)):
             f"Extract only what is present in the source — do not invent facts."
         )
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(
-            OPENROUTER_URL,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost:3000",
-                "X-Title": "Foliantica",
-            },
-            json={"model": model, "messages": [
-                {"role": "system", "content": system},
-                {"role": "user",   "content": user_msg},
-            ], "stream": False},
-        )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user",   "content": user_msg},
+    ]
 
-    if resp.status_code != 200:
-        raise HTTPException(resp.status_code, resp.text)
-
-    return {"text": resp.json()["choices"][0]["message"]["content"]}
+    return StreamingResponse(
+        _stream_openrouter(api_key, model, messages),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/translate")

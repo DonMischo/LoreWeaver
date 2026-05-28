@@ -76,8 +76,11 @@ function KiNodeView({ node, updateAttributes, deleteNode, getPos, editor }: any)
     setError(null);
     setResult(null);
     setEntryJson(null);
+
+    const collectingJson = isCodexDistill && createEntryMode;
+
     try {
-      const data = await kiApi.generate({
+      const res = await kiApi.stream({
         scene_id: sceneId,
         model: effectiveModel,
         codex_ids: codexIds,
@@ -86,25 +89,59 @@ function KiNodeView({ node, updateAttributes, deleteNode, getPos, editor }: any)
         prompt_id: promptId ? Number(promptId) : null,
         entry_type: isCodexDistill ? entryType : undefined,
         word_count: (!isCodexDistill || !createEntryMode) ? nodeWordCount : null,
-        create_entry: isCodexDistill && createEntryMode,
+        create_entry: collectingJson,
       });
-      const text = data.text;
 
-      if (isCodexDistill && createEntryMode) {
-        // Try to parse as JSON
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`${res.status}: ${text}`);
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6);
+          if (raw === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed.error) throw new Error(typeof parsed.error === "string" ? parsed.error : JSON.stringify(parsed.error));
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              accumulated += delta;
+              if (!collectingJson) setResult(accumulated);
+            }
+          } catch (e: any) {
+            if (e.message && !e.message.startsWith("JSON")) throw e;
+          }
+        }
+      }
+
+      // Stream complete — finalise result
+      if (collectingJson) {
         try {
-          const raw = extractJSON(text);
+          const raw = extractJSON(accumulated);
           const parsed = JSON.parse(raw);
           if (parsed && typeof parsed === "object" && parsed.name) {
             setEntryJson(parsed as Partial<CodexEntry>);
           } else {
-            setResult(text); // fallback to text display
+            setResult(accumulated);
           }
         } catch {
-          setResult(text); // fallback to text display
+          setResult(accumulated);
         }
-      } else {
-        setResult(text);
       }
     } catch (e: any) {
       setError(e.message ?? "Generation failed");

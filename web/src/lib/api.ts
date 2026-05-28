@@ -6,6 +6,7 @@ import type {
   WritingLogEntry, GhostTextScene, CorkboardAct, CorkboardData,
   TimelineTrack, TimelineEventItem, SeriesData,
   ProjectAnalytics, ResearchItem, QuerySubmission, ExportProfile, PublisherProfile,
+  Achievement,
 } from "@/types";
 
 const BASE = "/api";
@@ -544,7 +545,7 @@ export const synopsisApi = {
 // ── Ki (AI Generate) ──────────────────────────────────────────────────────────
 
 export const kiApi = {
-  generate: (data: {
+  stream: (data: {
     scene_id: number;
     model: string;
     codex_ids: number[];
@@ -554,7 +555,12 @@ export const kiApi = {
     entry_type?: string;
     word_count?: number | null;
     create_entry?: boolean;
-  }) => req<{ text: string }>("/ai/ki", { method: "POST", body: JSON.stringify(data) }),
+  }) =>
+    fetch(`${BASE}/ai/ki`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }),
 };
 
 // ── Translation ───────────────────────────────────────────────────────────────
@@ -714,4 +720,10 @@ export const exportProfilesApi = {
       body: JSON.stringify(data),
     }),
   delete: (id: number) => req<void>(`/export-profiles/${id}`, { method: "DELETE" }),
+};
+
+// ── Achievements ──────────────────────────────────────────────────────────────
+
+export const achievementsApi = {
+  list: () => req<Achievement[]>("/achievements"),
 };
