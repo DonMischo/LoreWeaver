@@ -188,6 +188,35 @@ const TIER_RING: Record<number, string> = {
   5: "ring-rose-400/30",
 };
 
+const METRIC_LABEL: Record<string, string> = {
+  longest_streak:   "Consecutive writing days",
+  total_words:      "Total words written",
+  best_day:         "Most words in a single day",
+  codex_entries:    "Codex entries created",
+  codex_relations:  "Relationships between characters",
+  codex_mentioned:  "Codex entries mentioned in scenes",
+  inventory_items:  "Items in character inventories",
+  projects:         "Projects created",
+  scene_count:      "Scenes written",
+  typed_scene_count:"Scenes with a type assigned",
+  scene_types_used: "Different scene types used",
+  corkboard_scenes: "Scenes viewed on the corkboard",
+  timeline_events:  "Events on the timeline",
+  fragment_count:   "Saved fragments / snippets",
+  time_system_used: "Set up a custom time system in settings",
+  project_info_set: "Fill in project metadata",
+  project_info_full:"Complete all project metadata fields",
+  queries_sent:     "AI writing queries sent",
+  queries_partial:  "AI queries with partial suggestions",
+  queries_full:     "AI queries accepted in full",
+  queries_offer:    "AI suggestions offered",
+  export_count:     "Documents exported",
+  grammar_enabled:  "Enable the grammar checker in settings",
+  pandoc_enabled:   "Set up Pandoc export in settings",
+  research_items:   "Research items saved",
+  stats_views:      "Visits to the stats page",
+};
+
 function fmt(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
@@ -267,6 +296,11 @@ function ShowcaseCard({ ach, onUnpin }: { ach: Achievement; onUnpin: () => void 
       </div>
       <div className="min-w-0">
         <p className="text-xs font-semibold leading-tight">{ach.name}</p>
+        {ach.description && (
+          <p className="text-[10px] text-muted-foreground/60 italic mt-0.5 line-clamp-3 leading-snug">
+            {ach.description}
+          </p>
+        )}
         {ach.unlocked_at && (
           <p className="text-[10px] text-muted-foreground mt-0.5">
             {new Date(ach.unlocked_at).toLocaleDateString()}
@@ -353,6 +387,18 @@ function ChainCard({ chain, pinned, onPin, onUnpin }: {
             )}
           </div>
 
+          {METRIC_LABEL[displayAch.metric] && (
+            <p className="text-[10px] text-muted-foreground/40 uppercase tracking-wide mb-0.5">
+              {METRIC_LABEL[displayAch.metric]}
+            </p>
+          )}
+
+          {highestEarned && displayAch.description && (
+            <p className="text-[11px] text-muted-foreground/60 italic leading-snug mb-1 line-clamp-2">
+              {displayAch.description}
+            </p>
+          )}
+
           {/* Tier pills — shown when chain has multiple items */}
           {items.length > 1 && (
             <div className="flex items-center gap-1 mt-0.5">
@@ -426,24 +472,31 @@ function ChainCard({ chain, pinned, onPin, onUnpin }: {
 
       {/* Expanded tier history */}
       {expanded && items.length > 1 && (
-        <div className="border-t border-border/20 px-3 py-2 space-y-1.5 bg-muted/5">
+        <div className="border-t border-border/20 px-3 py-2 space-y-2 bg-muted/5">
           {items.map((a) => (
-            <div key={a.key} className="flex items-center gap-2">
+            <div key={a.key} className="flex items-start gap-2">
               <span className={cn(
-                "shrink-0 text-[9px] font-mono px-1 py-0.5 rounded border w-6 text-center",
+                "shrink-0 mt-0.5 text-[9px] font-mono px-1 py-0.5 rounded border w-6 text-center",
                 TIER_STYLES[a.tier] ?? TIER_STYLES[1],
               )}>
                 T{a.tier}
               </span>
-              <p className={cn("text-xs flex-1 truncate", a.earned ? "" : "text-muted-foreground/50")}>
-                {a.name}
-              </p>
+              <div className="flex-1 min-w-0">
+                <p className={cn("text-xs leading-tight", a.earned ? "" : "text-muted-foreground/50")}>
+                  {a.name}
+                </p>
+                {a.earned && a.description && (
+                  <p className="text-[10px] text-muted-foreground/50 italic leading-snug mt-0.5">
+                    {a.description}
+                  </p>
+                )}
+              </div>
               {a.earned && a.unlocked_at ? (
-                <span className="text-[10px] text-muted-foreground/50 shrink-0">
+                <span className="text-[10px] text-muted-foreground/50 shrink-0 mt-0.5">
                   {new Date(a.unlocked_at).toLocaleDateString()}
                 </span>
               ) : !a.earned ? (
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0 mt-1">
                   <div className="w-14 h-1 bg-muted/30 rounded-full overflow-hidden">
                     <div
                       className={cn("h-full rounded-full", TIER_BG[a.tier] ?? TIER_BG[1])}
@@ -668,7 +721,7 @@ function ProjectWordsChart({ data }: { data: StatsTotals["project_words"] }) {
             <Pie data={filtered} dataKey="words" cx="50%" cy="50%" outerRadius={52} innerRadius={28} strokeWidth={0}>
               {filtered.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} fillOpacity={0.85} />)}
             </Pie>
-            <Tooltip contentStyle={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 6, fontSize: 12 }} formatter={(v: number) => [v.toLocaleString(), "words"]} />
+            <Tooltip contentStyle={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 6, fontSize: 12 }} formatter={(v) => [Number(v).toLocaleString(), "words"]} />
           </PieChart>
         </ResponsiveContainer>
         <div className="flex-1 space-y-1.5 min-w-0">
@@ -696,7 +749,7 @@ function PovChart({ data }: { data: StatsTotals["pov_words"] }) {
             <Pie data={data} dataKey="words" cx="50%" cy="50%" outerRadius={52} innerRadius={28} strokeWidth={0}>
               {data.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} fillOpacity={0.85} />)}
             </Pie>
-            <Tooltip contentStyle={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 6, fontSize: 12 }} formatter={(v: number) => [v.toLocaleString(), "words"]} />
+            <Tooltip contentStyle={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 6, fontSize: 12 }} formatter={(v) => [Number(v).toLocaleString(), "words"]} />
           </PieChart>
         </ResponsiveContainer>
         <div className="flex-1 space-y-1.5 min-w-0">
@@ -722,7 +775,7 @@ function SceneLengthChart({ data }: { data: StatsTotals["scene_length_buckets"] 
           <CartesianGrid {...GRID} />
           <XAxis dataKey="range" {...AXIS} />
           <YAxis {...AXIS} width={36} allowDecimals={false} />
-          <Tooltip {...TIP} formatter={(v: number) => [`${v} scenes`, "count"]} />
+          <Tooltip {...TIP} formatter={(v) => [`${Number(v)} scenes`, "count"]} />
           <Bar dataKey="count" radius={[3, 3, 0, 0]} fill="#8b5cf6" fillOpacity={0.8} />
         </BarChart>
       </ResponsiveContainer>

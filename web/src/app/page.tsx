@@ -10,6 +10,7 @@ import {
   ChevronUp, ChevronDown, Pencil, Check, X as XIcon,
 } from "lucide-react";
 import { imagesApi, importApi } from "@/lib/api";
+import { AchievementToastQueue } from "@/components/AchievementToast";
 import { useUploadProjectCover, useDeleteProjectCover, useGlobalWritingLog, useSeries, useUpdateProjectMeta } from "@/store/queries";
 import type { WritingLogEntry, SeriesBook, SeriesGroup, BookMeta } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -1183,6 +1184,8 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AchievementToastQueue />
     </div>
   );
 }

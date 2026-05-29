@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Key, Cpu, Globe, Loader2, RefreshCw, Sparkles, Plus, Trash2, RotateCcw, HelpCircle, Palette, FolderOpen, RotateCw, Hash, AlignCenter, Timer, Container, CheckCircle2, XCircle, AlertCircle, Play, ExternalLink, X } from "lucide-react";
+import { ArrowLeft, Key, Cpu, Globe, Loader2, RefreshCw, Sparkles, Plus, Trash2, RotateCcw, HelpCircle, Palette, FolderOpen, RotateCw, Hash, AlignCenter, Timer, Container, CheckCircle2, XCircle, AlertCircle, Play, ExternalLink, X, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSettings, useUpdateSettings, useOpenRouterModels, usePrompts, useCreatePrompt, useUpdatePrompt, useDeletePrompt, useRevertPrompt, useServiceStatus } from "@/store/queries";
 import { dataDirApi, settingsApi } from "@/lib/api";
+import { ACH_POPUPS_KEY } from "@/components/AchievementToast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useUIStore } from "@/store/ui";
 import { useTheme, THEMES, THEME_LABELS, THEME_PREVIEW } from "@/contexts/ThemeContext";
@@ -76,6 +77,10 @@ export default function SettingsPage() {
   const setTypewriterOffset     = useUIStore((s) => s.setTypewriterOffset);
   const sessionTimerEnabled     = useUIStore((s) => s.sessionTimerEnabled);
   const setSessionTimerEnabled  = useUIStore((s) => s.setSessionTimerEnabled);
+  const [achPopupsEnabled, setAchPopupsEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem(ACH_POPUPS_KEY) !== "false";
+  });
 
   const { data: prompts = [] } = usePrompts();
   const createPrompt  = useCreatePrompt();
@@ -702,6 +707,36 @@ export default function SettingsPage() {
               <span className={cn(
                 "pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
                 sessionTimerEnabled ? "translate-x-4" : "translate-x-0"
+              )} />
+            </button>
+          </div>
+
+          {/* Achievement popups */}
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-3.5 w-3.5 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Achievement popups</p>
+                <p className="text-xs text-muted-foreground">Show a notification when a new achievement is unlocked</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={achPopupsEnabled}
+              onClick={() => {
+                const next = !achPopupsEnabled;
+                setAchPopupsEnabled(next);
+                localStorage.setItem(ACH_POPUPS_KEY, next ? "true" : "false");
+              }}
+              className={cn(
+                "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                achPopupsEnabled ? "bg-primary" : "bg-input"
+              )}
+            >
+              <span className={cn(
+                "pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
+                achPopupsEnabled ? "translate-x-4" : "translate-x-0"
               )} />
             </button>
           </div>
