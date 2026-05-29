@@ -139,10 +139,19 @@ ACHIEVEMENTS = [
     {"key": "export_50",  "chain": "exports", "name": "Publisher Ready", "desc": "Fifty exports. You've refined the process as thoroughly as the prose itself.",             "cat": "publishing", "tier": 3, "metric": "export_count", "threshold": 50},
     {"key": "export_100", "chain": "exports", "name": "Press Master",    "desc": "A hundred exports. You live at the intersection of craft and final production.",           "cat": "publishing", "tier": 4, "metric": "export_count", "threshold": 100},
 
+    # ── Currency tracking ─────────────────────────────────────────────────────
+    {"key": "currency_1",  "chain": "currency", "name": "Coin Keeper",    "desc": "A character holds currency. Every economy needs its first transaction.",                   "cat": "codex", "tier": 1, "metric": "inventory_currency", "threshold": 1},
+    {"key": "currency_5",  "chain": "currency", "name": "Banker",         "desc": "Five characters with purses tracked. 'Money is the root of a good plot.' — paraphrased.", "cat": "codex", "tier": 2, "metric": "inventory_currency", "threshold": 5},
+    {"key": "currency_10", "chain": "currency", "name": "Treasurer",      "desc": "Ten characters with coin. Even Tolkien had to account for hobbit gold in the Shire.",     "cat": "codex", "tier": 3, "metric": "inventory_currency", "threshold": 10},
+
+    # ── Relic tracking ────────────────────────────────────────────────────────
+    {"key": "relic_1",  "chain": "relics", "name": "Keepsake",          "desc": "A relic entered. 'The ring, Mr. Frodo. It must be destroyed.' — Tolkien.",                  "cat": "codex", "tier": 1, "metric": "inventory_relics", "threshold": 1},
+    {"key": "relic_5",  "chain": "relics", "name": "Collector",         "desc": "Five relics catalogued. Every artifact has a story before the story begins.",               "cat": "codex", "tier": 2, "metric": "inventory_relics", "threshold": 5},
+    {"key": "relic_20", "chain": "relics", "name": "Keeper of Relics",  "desc": "Twenty relics. 'The past is never dead.' — Faulkner. You've proven it twenty times.",       "cat": "codex", "tier": 3, "metric": "inventory_relics", "threshold": 20},
+
     # ── Settings / Setup ──────────────────────────────────────────────────────
     {"key": "grammar_active", "chain": "grammar", "name": "Grammar Police", "desc": "The grammar checker is live. 'Good grammar is clear thinking made visible.'",           "cat": "research",   "tier": 1, "metric": "grammar_enabled", "threshold": 1},
     {"key": "pandoc_active",  "chain": "pandoc",  "name": "Typesetter",     "desc": "Professional exports enabled. 'The medium is the message.' — Marshall McLuhan",        "cat": "publishing", "tier": 2, "metric": "pandoc_enabled",  "threshold": 1},
-    {"key": "inventory_1",    "chain": "inventory","name": "Pack It Up",     "desc": "Someone carries something. Objects give characters weight — and history.",             "cat": "codex",      "tier": 1, "metric": "inventory_items", "threshold": 1},
 
     # ── Research ──────────────────────────────────────────────────────────────
     {"key": "research_1",  "chain": "research", "name": "Curious Mind", "desc": "The first research item saved. 'The more I read, the more I know what to write.'",         "cat": "research", "tier": 1, "metric": "research_items", "threshold": 1},
@@ -230,7 +239,23 @@ def _compute_metrics(db: Session) -> dict[str, int]:
     corkboard_scenes  = _safe(db, "SELECT COUNT(*) FROM scenes WHERE node_x IS NOT NULL")
     timeline_events   = _safe(db, "SELECT COUNT(*) FROM timeline_events")
     fragment_count    = _safe(db, "SELECT COUNT(*) FROM fragments")
-    inventory_items   = _safe(db, "SELECT COUNT(*) FROM codex_entries WHERE inventory IS NOT NULL AND inventory != '[]' AND inventory != 'null' AND inventory != ''")
+    # Parse inventory JSON once for items / currency / relics
+    inventory_items = inventory_currency = inventory_relics = 0
+    try:
+        inv_rows = db.execute(text(
+            "SELECT inventory FROM codex_entries WHERE inventory IS NOT NULL AND inventory != '' AND inventory != 'null'"
+        )).fetchall()
+        for (inv_str,) in inv_rows:
+            try:
+                inv = json.loads(inv_str)
+                inventory_items    += len(inv.get("possessions", []))
+                inventory_relics   += len(inv.get("relics", []))
+                if inv.get("currencies"):
+                    inventory_currency += 1
+            except Exception:
+                pass
+    except Exception:
+        pass
     time_system_used  = min(1, _safe(db, "SELECT COUNT(*) FROM projects WHERE time_config IS NOT NULL AND time_config NOT IN ('{}','null','')"))
 
     # Settings from user_settings (first row)
@@ -286,7 +311,9 @@ def _compute_metrics(db: Session) -> dict[str, int]:
         "corkboard_scenes":  corkboard_scenes,
         "timeline_events":   timeline_events,
         "fragment_count":    fragment_count,
-        "inventory_items":   inventory_items,
+        "inventory_items":    inventory_items,
+        "inventory_currency": inventory_currency,
+        "inventory_relics":   inventory_relics,
         "time_system_used":  time_system_used,
         "grammar_enabled":   grammar_enabled,
         "pandoc_enabled":    pandoc_enabled,

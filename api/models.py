@@ -123,6 +123,7 @@ class EntryType(str, enum.Enum):
     character = "character"
     location = "location"
     item = "item"
+    relic = "relic"
     lore = "lore"
     custom = "custom"
 
@@ -135,7 +136,7 @@ class CodexEntry(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     aliases: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="[]")
     entry_type: Mapped[str] = mapped_column(
-        Enum(EntryType), nullable=False, default=EntryType.custom
+        String, nullable=False, default="custom"
     )
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="")
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

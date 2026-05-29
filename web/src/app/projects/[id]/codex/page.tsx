@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import {
-  Plus, Pencil, Trash2, User, MapPin, Package, Scroll, Tag,
+  Plus, Pencil, Trash2, User, MapPin, Package, Scroll, Tag, Gem,
   LayoutGrid, LayoutList, FolderOpen, Loader2, CheckCircle2, X,
   ChevronDown, ChevronUp, ChevronsUpDown, CheckSquare, Square,
   Link2, Link2Off, AlertCircle, EyeOff, Users,
@@ -16,14 +16,14 @@ import { BulkEditDialog } from "@/components/codex/BulkEditDialog";
 import { ImportButton } from "@/components/layout/ImportButton";
 import { useCodexEntries, useCreateCodexEntry, useUpdateCodexEntry, useDeleteCodexEntry, useResyncProjectCommands, useProject, useDetachCodexSharing, useProjects } from "@/store/queries";
 import { importApi } from "@/lib/api";
-import type { CodexEntry, EntryType } from "@/types";
+import type { CodexEntry } from "@/types";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TYPE_ICONS: Record<EntryType, React.ElementType> = {
-  character: User, location: MapPin, item: Package, lore: Scroll, custom: Tag,
+const TYPE_ICONS: Partial<Record<string, React.ElementType>> = {
+  character: User, location: MapPin, item: Package, relic: Gem, lore: Scroll, custom: Tag,
 };
 
 // TYPE_LABELS built via t() inside the component; see typeLabel() helper below
@@ -175,7 +175,7 @@ export default function CodexPage() {
   const projectId = Number(id);
 
   const { t } = useLanguage();
-  const typeLabel = (type: EntryType) => t(`type_${type}`);
+  const typeLabel = (type: string) => t(`type_${type}`) || type;
 
   const { data: project } = useProject(projectId);
   const { data: entries = [], isLoading } = useCodexEntries(projectId);
@@ -229,7 +229,7 @@ export default function CodexPage() {
 
   // ── Filter state ─────────────────────────────────────────────────────────
   const [search, setSearch]           = useState("");
-  const [typeFilter, setTypeFilter]   = useState<EntryType | "all">("all");
+  const [typeFilter, setTypeFilter]   = useState<string>("all");
   const [colorFilter, setColorFilter] = useState<string | null>(null);
   const [groupFilter, setGroupFilter]     = useState<string[]>([]);
   const [speciesFilter, setSpeciesFilter] = useState<string[]>([]);
@@ -254,6 +254,8 @@ export default function CodexPage() {
   const uniqueSpecies  = [...new Set(entries.map(e => e.species).filter(Boolean) as string[])].sort();
   const uniqueSubtypes = [...new Set(entries.map(e => e.subtype).filter(Boolean) as string[])].sort();
   const uniqueTags     = [...new Set(entries.flatMap(e => e.tags))].sort();
+  const BUILT_IN_FILTER = ["character", "location", "item", "relic", "lore", "custom"];
+  const uniqueCustomTypes = [...new Set(entries.map(e => e.entry_type).filter(t => !BUILT_IN_FILTER.includes(t)))].sort();
   const hasExtraFilters = uniqueGroups.length > 0 || uniqueSpecies.length > 0 || uniqueSubtypes.length > 0 || uniqueColors.length > 1 || uniqueTags.length > 0;
 
   // ── Filtering ────────────────────────────────────────────────────────────
@@ -420,7 +422,7 @@ export default function CodexPage() {
 
           {/* Type chips */}
           <div className="flex gap-1 flex-wrap">
-            {(["all", "character", "location", "item", "lore", "custom"] as const).map(tp => (
+            {(["all", "character", "location", "item", "relic", "lore", "custom"] as const).map(tp => (
               <button
                 key={tp}
                 onClick={() => setTypeFilter(tp)}
@@ -432,6 +434,20 @@ export default function CodexPage() {
                 )}
               >
                 {tp === "all" ? t("codex_all") : typeLabel(tp)}
+              </button>
+            ))}
+            {uniqueCustomTypes.map(ct => (
+              <button
+                key={ct}
+                onClick={() => setTypeFilter(ct)}
+                className={cn(
+                  "text-xs px-2.5 py-1 rounded-full transition-colors",
+                  typeFilter === ct
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                )}
+              >
+                {ct}
               </button>
             ))}
           </div>
@@ -570,7 +586,7 @@ export default function CodexPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {sorted.map(entry => {
-              const Icon = TYPE_ICONS[entry.entry_type as EntryType] ?? Tag;
+              const Icon = TYPE_ICONS[entry.entry_type] ?? Tag;
               const isSelected = selectedIds.has(entry.id);
               return (
                 <div
@@ -694,7 +710,7 @@ export default function CodexPage() {
               </thead>
               <tbody className="divide-y divide-border/50">
                 {sorted.map(entry => {
-                  const Icon = TYPE_ICONS[entry.entry_type as EntryType] ?? Tag;
+                  const Icon = TYPE_ICONS[entry.entry_type] ?? Tag;
                   const isSelected = selectedIds.has(entry.id);
                   const subtypeLabel = entry.entry_type === "character" ? entry.species : entry.subtype;
                   return (
@@ -751,7 +767,7 @@ export default function CodexPage() {
                       <td className="px-3 py-2.5 w-40">
                         <div className="flex items-center gap-1.5 text-xs">
                           <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span>{typeLabel(entry.entry_type as EntryType)}</span>
+                          <span>{typeLabel(entry.entry_type)}</span>
                         </div>
                         {subtypeLabel && (
                           <div className="text-xs text-muted-foreground mt-0.5">{subtypeLabel}</div>

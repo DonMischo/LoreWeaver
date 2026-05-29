@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins, History, ChevronUp, ChevronDown, Pencil, Globe, LayoutList, Share2, Users, Eye, EyeOff } from "lucide-react";
+import { X, Plus, Trash2, Link2, ImageIcon, Package, Coins, History, ChevronUp, ChevronDown, Pencil, Globe, LayoutList, Share2, Users, Eye, EyeOff, Gem } from "lucide-react";
 import { imagesApi, translateApi, structureApi, type StructureResult } from "@/lib/api";
 import { useUploadCodexImage, useDeleteCodexImage, useInventorySummary, useCharacterItemLog, useCharacterCurrencyLog, useEntryRelations, useCreateRelation, useDeleteRelation, useSettings, useEntryAccess, useSetEntryAccess } from "@/store/queries";
 import { Button } from "@/components/ui/button";
@@ -9,16 +9,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
-  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { CodexEntry, CodexRelationResolved, EntryType } from "@/types";
+import type { CodexEntry, CodexRelationResolved } from "@/types";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { NameGeneratorWidget } from "./NameGeneratorWidget";
 import type { NameType } from "@/lib/nameGenerator";
 
-const ENTRY_TYPES: EntryType[] = ["character", "location", "item", "lore", "custom"];
+const BUILT_IN_TYPES = ["character", "location", "item", "relic", "lore"] as const;
+const ENTRY_TYPES: string[] = [...BUILT_IN_TYPES, "custom"];
 
 // Stable empty-array fallback — must live outside the component so its reference
 // never changes between renders. Using [] as a default parameter creates a new
@@ -68,9 +69,9 @@ const RELATION_GROUPS: { label: string; items: string[] }[] = [
 ];
 const PRESET_RELATIONS = RELATION_GROUPS.flatMap(g => g.items);
 
-const ENTRY_TYPE_ORDER = ["character", "location", "item", "lore", "custom"] as const;
+const ENTRY_TYPE_ORDER = ["character", "location", "item", "relic", "lore", "custom"] as const;
 const ENTRY_TYPE_LABELS: Record<string, string> = {
-  character: "Characters", location: "Locations", item: "Items", lore: "Lore", custom: "Custom",
+  character: "Characters", location: "Locations", item: "Items", relic: "Relics", lore: "Lore", custom: "Custom",
 };
 
 // ── Inventory sub-components ──────────────────────────────────────────────────
@@ -265,7 +266,7 @@ export function CodexEntryDialog({
   const [name, setName]               = useState(initial?.name ?? "");
   const [aliasInput, setAliasInput]   = useState("");
   const [aliases, setAliases]         = useState<string[]>(initial?.aliases ?? []);
-  const [entryType, setEntryType]     = useState<EntryType>(initial?.entry_type ?? "custom");
+  const [entryType, setEntryType]     = useState<string>(initial?.entry_type ?? "custom");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [notes, setNotes]             = useState(initial?.notes ?? "");
   const [color, setColor]             = useState(initial?.color ?? "#eab308");
@@ -293,12 +294,18 @@ export function CodexEntryDialog({
   const [nativeCurrencies, setNativeCurrencies] = useState<{ name: string; amount: number }[]>(
     initial?.inventory?.currencies?.map(c => ({ name: c.name, amount: c.amount })) ?? []
   );
+  const [nativeRelics, setNativeRelics] = useState<{ entry_id: number; notes?: string }[]>(
+    initial?.inventory?.relics?.map(r => ({ entry_id: r.entry_id, notes: r.notes })) ?? []
+  );
   // Add-item UI state
   const [addItemId, setAddItemId]       = useState("");
   const [addItemQty, setAddItemQty]     = useState("1");
   // Add-currency UI state
   const [addCurrencyName, setAddCurrencyName]     = useState("");
   const [addCurrencyAmount, setAddCurrencyAmount] = useState("0");
+  // Add-relic UI state
+  const [addRelicId, setAddRelicId]     = useState("");
+  const [addRelicNotes, setAddRelicNotes] = useState("");
 
   // Relation-add state
   const [relTarget, setRelTarget]     = useState("");
@@ -386,10 +393,15 @@ export function CodexEntryDialog({
       setNativeCurrencies(
         initial?.inventory?.currencies?.map(c => ({ name: c.name, amount: c.amount })) ?? []
       );
+      setNativeRelics(
+        initial?.inventory?.relics?.map(r => ({ entry_id: r.entry_id, notes: r.notes })) ?? []
+      );
       setAddItemId("");
       setAddItemQty("1");
       setAddCurrencyName("");
       setAddCurrencyAmount("0");
+      setAddRelicId("");
+      setAddRelicNotes("");
       setAliasInput("");
       setTagInput("");
       setGroupInput("");
@@ -472,7 +484,7 @@ export function CodexEntryDialog({
       // Native inventory: base quantities manually set here.
       // Command deltas are computed on-the-fly and not stored here.
       inventory: entryType === "character"
-        ? { possessions: nativePossessions, currencies: nativeCurrencies }
+        ? { possessions: nativePossessions, currencies: nativeCurrencies, relics: nativeRelics }
         : null,
       name_type: nameType || null,
       share_mode: shareMode,
@@ -583,16 +595,47 @@ export function CodexEntryDialog({
                 </div>
                 <div className="space-y-1.5">
                   <Label>{t("entry_type")}</Label>
-                  <Select value={entryType} onValueChange={(v) => setEntryType(v as EntryType)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {ENTRY_TYPES.map((et) => (
-                        <SelectItem key={et} value={et}>
-                          {t(`type_${et}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {(() => {
+                    const existingCustomTypes = [...new Set(
+                      allEntries.map(e => e.entry_type).filter(t => !ENTRY_TYPES.includes(t))
+                    )].sort();
+                    const allTypes = [...ENTRY_TYPES, ...existingCustomTypes];
+                    const selectValue = allTypes.includes(entryType) ? entryType : "__custom_new__";
+                    return (
+                      <>
+                        <Select value={selectValue} onValueChange={(v) => {
+                          if (v === "__custom_new__") setEntryType("");
+                          else setEntryType(v);
+                        }}>
+                          <SelectTrigger><SelectValue placeholder="Select type…" /></SelectTrigger>
+                          <SelectContent>
+                            {ENTRY_TYPES.map((et) => (
+                              <SelectItem key={et} value={et}>{t(`type_${et}`) || et}</SelectItem>
+                            ))}
+                            {existingCustomTypes.length > 0 && (
+                              <>
+                                <SelectSeparator />
+                                {existingCustomTypes.map(ct => (
+                                  <SelectItem key={ct} value={ct}>{ct}</SelectItem>
+                                ))}
+                              </>
+                            )}
+                            <SelectSeparator />
+                            <SelectItem value="__custom_new__">New type…</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {(!ENTRY_TYPES.includes(entryType) || entryType === "") && (
+                          <Input
+                            className="mt-1.5 h-8 text-sm"
+                            placeholder="Type name (e.g. Faction, Creature…)"
+                            value={entryType}
+                            onChange={e => setEntryType(e.target.value)}
+                            autoFocus={selectValue === "__custom_new__"}
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -891,6 +934,78 @@ export function CodexEntryDialog({
                         })}
                       </div>
                     )}
+
+                    {/* Relic rows */}
+                    {nativeRelics.length > 0 && (
+                      <div className="space-y-1">
+                        {nativeRelics.map((relic, i) => {
+                          const relicEntry = allEntries.find(e => e.id === relic.entry_id);
+                          return (
+                            <div key={i} className="flex items-start gap-1.5 text-xs">
+                              <Gem className="h-3 w-3 shrink-0 mt-0.5 text-violet-400" />
+                              <div className="flex-1 min-w-0">
+                                <span className="truncate">{relicEntry?.name ?? `Relic #${relic.entry_id}`}</span>
+                                {relic.notes && (
+                                  <p className="text-muted-foreground/60 italic truncate">{relic.notes}</p>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setNativeRelics(prev => prev.filter((_, j) => j !== i))}
+                                className="text-muted-foreground hover:text-destructive"
+                                title="Remove relic"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Add relic */}
+                    {(() => {
+                      const nativeRelicIds = new Set(nativeRelics.map(r => r.entry_id));
+                      const addableRelics = allEntries.filter(e => e.entry_type === "relic" && !nativeRelicIds.has(e.id));
+                      return addableRelics.length > 0 ? (
+                        <div className="flex gap-1.5 items-center pt-1 border-t border-border/40">
+                          <span title="Relics — items special, typical or bound to this character">
+                            <Gem className="h-3 w-3 shrink-0 text-violet-400" />
+                          </span>
+                          <select
+                            value={addRelicId}
+                            onChange={e => setAddRelicId(e.target.value)}
+                            className="flex-1 h-6 text-xs rounded border border-border bg-background px-1 min-w-0"
+                          >
+                            <option value="">Select relic…</option>
+                            {addableRelics.map(e => (
+                              <option key={e.id} value={String(e.id)}>{e.name}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            value={addRelicNotes}
+                            onChange={e => setAddRelicNotes(e.target.value)}
+                            placeholder="Notes…"
+                            className="flex-1 h-6 text-xs rounded border border-border bg-background px-1.5 min-w-0"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const id = parseInt(addRelicId, 10);
+                              if (!id) return;
+                              setNativeRelics(prev => [...prev, { entry_id: id, notes: addRelicNotes.trim() || undefined }]);
+                              setAddRelicId("");
+                              setAddRelicNotes("");
+                            }}
+                            className="text-muted-foreground hover:text-foreground"
+                            title="Add relic"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : null;
+                    })()}
 
                     {/* Add native currency */}
                     <div className="flex gap-1.5 items-center pt-1 border-t border-border/40">

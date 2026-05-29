@@ -240,7 +240,7 @@ export const DEFAULT_TIME_CONFIG: TimeConfig = {
   day_night: { hours_per_day: 24, night_start_hour: 20, night_duration: 10 },
 };
 
-export type EntryType = "character" | "location" | "item" | "lore" | "custom";
+export type EntryType = "character" | "location" | "item" | "relic" | "lore" | "custom";
 
 export interface Currency {
   name: string;
@@ -253,9 +253,15 @@ export interface Possession {
   notes?: string;
 }
 
+export interface Relic {
+  entry_id: number;
+  notes?: string;
+}
+
 export interface CharacterInventory {
   currencies: Currency[];
   possessions: Possession[];
+  relics?: Relic[];
 }
 
 export interface CodexEntry {
@@ -263,7 +269,7 @@ export interface CodexEntry {
   project_id: number;
   name: string;
   aliases: string[];
-  entry_type: EntryType;
+  entry_type: string;
   description: string | null;
   notes: string | null;
   color: string;

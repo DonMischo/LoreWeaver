@@ -2,7 +2,6 @@ import json
 from datetime import datetime
 from typing import Optional, Any, Literal
 from pydantic import BaseModel, Field, model_validator, ConfigDict
-from models import EntryType
 
 
 # ── Projects ──────────────────────────────────────────────────────────────────
@@ -199,7 +198,7 @@ class SceneOut(SceneBase):
 class CodexEntryBase(BaseModel):
     name: str
     aliases: list[str] = Field(default_factory=list)
-    entry_type: EntryType = EntryType.custom
+    entry_type: str = "custom"
     description: Optional[str] = ""
     notes: Optional[str] = None
     color: str = "#eab308"
@@ -222,7 +221,7 @@ class CodexEntryCreate(CodexEntryBase):
 class CodexEntryUpdate(BaseModel):
     name: Optional[str] = None
     aliases: Optional[list[str]] = None
-    entry_type: Optional[EntryType] = None
+    entry_type: Optional[str] = None
     description: Optional[str] = None
     notes: Optional[str] = None
     color: Optional[str] = None

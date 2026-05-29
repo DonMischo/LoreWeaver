@@ -991,6 +991,82 @@ const ExportMaster = ({ className }: P) => (
   </svg>
 );
 
+// ── CURRENCY ─────────────────────────────────────────────────────────────────
+
+// T1: Single coin
+const CoinSingle = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <circle cx="12" cy="12" r="7" fill="currentColor" fillOpacity=".18" stroke="currentColor" strokeWidth="1.4" />
+    <line x1="9" y1="12" x2="15" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <line x1="12" y1="9.5" x2="12" y2="14.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+// T2: Stack of coins
+const CoinStack = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <ellipse cx="12" cy="17" rx="6" ry="2.2" fill="currentColor" fillOpacity=".18" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M6 17V14" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M18 17V14" stroke="currentColor" strokeWidth="1.3" />
+    <ellipse cx="12" cy="14" rx="6" ry="2.2" fill="currentColor" fillOpacity=".22" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M6 14V11" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M18 14V11" stroke="currentColor" strokeWidth="1.3" />
+    <ellipse cx="12" cy="11" rx="6" ry="2.2" fill="currentColor" fillOpacity=".28" stroke="currentColor" strokeWidth="1.3" />
+    <line x1="10" y1="11" x2="14" y2="11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+);
+
+// T3: Vault door
+const VaultDoor = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" fillOpacity=".12" stroke="currentColor" strokeWidth="1.4" />
+    <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.3" />
+    <circle cx="12" cy="12" r="1.8" fill="currentColor" fillOpacity=".35" />
+    <line x1="12" y1="7.5" x2="12" y2="5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <line x1="16.5" y1="12" x2="19" y2="12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <line x1="15.2" y1="8.8" x2="17" y2="7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <rect x="17" y="10" width="2.5" height="4" rx="1" fill="currentColor" fillOpacity=".5" />
+  </svg>
+);
+
+// ── RELICS ────────────────────────────────────────────────────────────────────
+
+// T1: Faceted gem / diamond
+const RelicGem = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <polygon points="12,4 18,9 12,20 6,9" fill="currentColor" fillOpacity=".2" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    <polygon points="12,4 18,9 12,13 6,9" fill="currentColor" fillOpacity=".35" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+    <line x1="6" y1="9" x2="18" y2="9" stroke="currentColor" strokeWidth="1.1" />
+    <line x1="12" y1="4" x2="12" y2="13" stroke="currentColor" strokeWidth=".8" strokeOpacity=".4" />
+  </svg>
+);
+
+// T2: Amulet (gem on chain)
+const RelicAmulet = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M8 5 Q12 3 16 5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+    <line x1="8" y1="5" x2="9.5" y2="11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <line x1="16" y1="5" x2="14.5" y2="11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <polygon points="12,10 15,13 12,19 9,13" fill="currentColor" fillOpacity=".25" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    <polygon points="12,10 15,13 12,15.5 9,13" fill="currentColor" fillOpacity=".45" strokeWidth="0" />
+  </svg>
+);
+
+// T3: Ornate artifact (gem with rays)
+const RelicArtifact = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => {
+      const r = Math.PI * deg / 180;
+      const x1 = 12 + Math.cos(r) * 5.5; const y1 = 12 + Math.sin(r) * 5.5;
+      const x2 = 12 + Math.cos(r) * 7.8; const y2 = 12 + Math.sin(r) * 7.8;
+      return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeOpacity=".6" />;
+    })}
+    <circle cx="12" cy="12" r="4" fill="currentColor" fillOpacity=".18" stroke="currentColor" strokeWidth="1.3" />
+    <polygon points="12,8.5 14,11.5 12,15.5 10,11.5" fill="currentColor" fillOpacity=".55" strokeWidth="0" />
+    <polygon points="12,8.5 14,11.5 12,15.5 10,11.5" stroke="currentColor" strokeWidth=".8" strokeLinejoin="round" fillOpacity="0" />
+  </svg>
+);
+
 // ── ICON MAP ─────────────────────────────────────────────────────────────────
 
 const ICON_MAP: Record<string, (p: P) => React.JSX.Element> = {
@@ -1119,10 +1195,20 @@ const ICON_MAP: Record<string, (p: P) => React.JSX.Element> = {
   // Pandoc
   pandoc_active: PandocConvert,
 
-  // Inventory
+  // Inventory (possessions)
   inventory_1:  PouchIcon,
   inventory_10: BackpackIcon,
   inventory_50: ChestIcon,
+
+  // Currency
+  currency_1:  CoinSingle,
+  currency_5:  CoinStack,
+  currency_10: VaultDoor,
+
+  // Relics
+  relic_1:  RelicGem,
+  relic_5:  RelicAmulet,
+  relic_20: RelicArtifact,
 
   // Stats engagement
   stats_view:    ChartEye,
