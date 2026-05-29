@@ -1,7 +1,8 @@
+import json
 from datetime import date, datetime, UTC, timedelta
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, distinct
+from sqlalchemy import func, distinct, text
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -12,110 +13,161 @@ from models import (
 
 router = APIRouter(prefix="/api", tags=["achievements"])
 
-# ── Achievement definitions ───────────────────────────────────────────────────
-# Each entry: key, name, desc, cat, tier (1-5), metric, threshold
+# ── Achievement definitions ────────────────────────────────────────────────────
+# key, chain, name, desc, cat, tier, metric, threshold
 
 ACHIEVEMENTS = [
     # ── Streaks ───────────────────────────────────────────────────────────────
-    {"key": "streak_1",   "name": "First Spark",       "desc": "Write for the very first day.",            "cat": "streaks", "tier": 1, "metric": "longest_streak", "threshold": 1},
-    {"key": "streak_3",   "name": "Three's Company",   "desc": "Maintain a 3-day writing streak.",         "cat": "streaks", "tier": 1, "metric": "longest_streak", "threshold": 3},
-    {"key": "streak_7",   "name": "Week Warrior",      "desc": "Write every day for a full week.",         "cat": "streaks", "tier": 2, "metric": "longest_streak", "threshold": 7},
-    {"key": "streak_14",  "name": "Fortnight Fighter", "desc": "14-day writing streak.",                   "cat": "streaks", "tier": 2, "metric": "longest_streak", "threshold": 14},
-    {"key": "streak_30",  "name": "Monthly Maven",     "desc": "30-day writing streak.",                   "cat": "streaks", "tier": 3, "metric": "longest_streak", "threshold": 30},
-    {"key": "streak_90",  "name": "Quarter Champion",  "desc": "90-day writing streak.",                   "cat": "streaks", "tier": 4, "metric": "longest_streak", "threshold": 90},
-    {"key": "streak_180", "name": "Half-Year Hero",    "desc": "180-day writing streak.",                  "cat": "streaks", "tier": 4, "metric": "longest_streak", "threshold": 180},
-    {"key": "streak_365", "name": "Year of Words",     "desc": "Write every single day for a full year.",  "cat": "streaks", "tier": 5, "metric": "longest_streak", "threshold": 365},
+    {"key": "streak_1",   "chain": "streak", "name": "First Spark",       "desc": "Every odyssey starts with a single day. The page is open.",                                "cat": "streaks", "tier": 1, "metric": "longest_streak", "threshold": 1},
+    {"key": "streak_3",   "chain": "streak", "name": "Three's Company",   "desc": "Three days in — the habit is quietly taking root.",                                        "cat": "streaks", "tier": 1, "metric": "longest_streak", "threshold": 3},
+    {"key": "streak_7",   "chain": "streak", "name": "Week Warrior",      "desc": "'Write every day.' — Ray Bradbury lived by it. So do you, for one week now.",             "cat": "streaks", "tier": 2, "metric": "longest_streak", "threshold": 7},
+    {"key": "streak_14",  "chain": "streak", "name": "Fortnight Fighter", "desc": "Two full weeks. Trollope wrote two hours every morning, never missing a day.",            "cat": "streaks", "tier": 2, "metric": "longest_streak", "threshold": 14},
+    {"key": "streak_30",  "chain": "streak", "name": "Monthly Maven",     "desc": "Thirty days of showing up. Murakami ran and wrote every day for decades.",               "cat": "streaks", "tier": 3, "metric": "longest_streak", "threshold": 30},
+    {"key": "streak_90",  "chain": "streak", "name": "Quarter Champion",  "desc": "A full season of words. 'The secret of getting ahead is getting started.' — Twain",      "cat": "streaks", "tier": 4, "metric": "longest_streak", "threshold": 90},
+    {"key": "streak_180", "chain": "streak", "name": "Half-Year Hero",    "desc": "Half a year of daily prose. Discipline is the quiet superpower of all great authors.",    "cat": "streaks", "tier": 4, "metric": "longest_streak", "threshold": 180},
+    {"key": "streak_365", "chain": "streak", "name": "Year of Words",     "desc": "'Write every day of your life.' — Ray Bradbury. You just completed the year.",            "cat": "streaks", "tier": 5, "metric": "longest_streak", "threshold": 365},
 
     # ── Total words ───────────────────────────────────────────────────────────
-    {"key": "words_100",  "name": "First Words",       "desc": "Write your first 100 words.",              "cat": "words", "tier": 1, "metric": "total_words", "threshold": 100},
-    {"key": "words_1k",   "name": "Getting Started",   "desc": "1,000 words written total.",               "cat": "words", "tier": 1, "metric": "total_words", "threshold": 1_000},
-    {"key": "words_5k",   "name": "In the Flow",       "desc": "5,000 words written.",                     "cat": "words", "tier": 2, "metric": "total_words", "threshold": 5_000},
-    {"key": "words_10k",  "name": "Committed",         "desc": "10,000 words written.",                    "cat": "words", "tier": 2, "metric": "total_words", "threshold": 10_000},
-    {"key": "words_20k",  "name": "Short Story",       "desc": "20,000 words written.",                    "cat": "words", "tier": 2, "metric": "total_words", "threshold": 20_000},
-    {"key": "words_40k",  "name": "Novella",           "desc": "40,000 words — novella territory.",        "cat": "words", "tier": 3, "metric": "total_words", "threshold": 40_000},
-    {"key": "words_80k",  "name": "Novel",             "desc": "80,000 words — a full novel.",             "cat": "words", "tier": 3, "metric": "total_words", "threshold": 80_000},
-    {"key": "words_100k", "name": "Centennial",        "desc": "100,000 words written.",                   "cat": "words", "tier": 4, "metric": "total_words", "threshold": 100_000},
-    {"key": "words_250k", "name": "Prolific",          "desc": "250,000 words written.",                   "cat": "words", "tier": 4, "metric": "total_words", "threshold": 250_000},
-    {"key": "words_500k", "name": "Half a Million",    "desc": "500,000 words written.",                   "cat": "words", "tier": 5, "metric": "total_words", "threshold": 500_000},
-    {"key": "words_1m",   "name": "The Million Club",  "desc": "One million words. You are a legend.",     "cat": "words", "tier": 5, "metric": "total_words", "threshold": 1_000_000},
+    {"key": "words_100",  "chain": "words", "name": "First Words",      "desc": "'In the beginning was the Word.' — John 1:1. Yours are written now.",                       "cat": "words", "tier": 1, "metric": "total_words", "threshold": 100},
+    {"key": "words_1k",   "chain": "words", "name": "Getting Started",  "desc": "A thousand words. Every novel ever written started with exactly this.",                     "cat": "words", "tier": 1, "metric": "total_words", "threshold": 1_000},
+    {"key": "words_5k",   "chain": "words", "name": "In the Flow",      "desc": "Five thousand words — enough for a Raymond Carver short story. Keep going.",               "cat": "words", "tier": 2, "metric": "total_words", "threshold": 5_000},
+    {"key": "words_10k",  "chain": "words", "name": "Committed",        "desc": "'The first draft of anything is garbage.' — Hemingway. Write the garbage anyway.",          "cat": "words", "tier": 2, "metric": "total_words", "threshold": 10_000},
+    {"key": "words_20k",  "chain": "words", "name": "Short Story",      "desc": "Long enough for a Kafka novella. Short enough to write another.",                          "cat": "words", "tier": 2, "metric": "total_words", "threshold": 20_000},
+    {"key": "words_40k",  "chain": "words", "name": "Novella",          "desc": "'The Old Man and the Sea' runs to 27k. You've already surpassed Hemingway's masterpiece.", "cat": "words", "tier": 3, "metric": "total_words", "threshold": 40_000},
+    {"key": "words_80k",  "chain": "words", "name": "Novel",            "desc": "Full novel length. 'Pride and Prejudice' took Austen years — you've reached her range.",   "cat": "words", "tier": 3, "metric": "total_words", "threshold": 80_000},
+    {"key": "words_100k", "chain": "words", "name": "Centennial",       "desc": "'The Great Gatsby' is only 47k. You have written it twice over and kept going.",           "cat": "words", "tier": 4, "metric": "total_words", "threshold": 100_000},
+    {"key": "words_250k", "chain": "words", "name": "Prolific",         "desc": "A quarter million. Tolstoy's 'War and Peace' is 580k — you are closing in on Tolstoy.",   "cat": "words", "tier": 4, "metric": "total_words", "threshold": 250_000},
+    {"key": "words_500k", "chain": "words", "name": "Half a Million",   "desc": "'Les Misérables', 'Moby-Dick', 'Don Quixote' — you now write at their scale.",            "cat": "words", "tier": 5, "metric": "total_words", "threshold": 500_000},
+    {"key": "words_1m",   "chain": "words", "name": "The Million Club", "desc": "King writes 2,000 words a day. You've just matched 500 of his sessions.",                 "cat": "words", "tier": 5, "metric": "total_words", "threshold": 1_000_000},
+    {"key": "words_2m",   "chain": "words", "name": "Dynasty",          "desc": "Two million words. Some authors publish yearly for decades — you outpace them.",           "cat": "words", "tier": 5, "metric": "total_words", "threshold": 2_000_000},
+    {"key": "words_5m",   "chain": "words", "name": "The Epics",        "desc": "Five million. Tolkien, Pratchett, Asimov — the company of the truly prolific.",            "cat": "words", "tier": 5, "metric": "total_words", "threshold": 5_000_000},
+    {"key": "words_10m",  "chain": "words", "name": "Infinite Ink",     "desc": "'The pen is mightier than the sword.' — Bulwer-Lytton. Yours has proven it ten times.",   "cat": "words", "tier": 5, "metric": "total_words", "threshold": 10_000_000},
 
     # ── Best single day ───────────────────────────────────────────────────────
-    {"key": "day_500",  "name": "Warm-Up",        "desc": "Write 500+ words in a single day.",    "cat": "words", "tier": 1, "metric": "best_day", "threshold": 500},
-    {"key": "day_2k",   "name": "Big Day",         "desc": "Write 2,000+ words in a single day.", "cat": "words", "tier": 2, "metric": "best_day", "threshold": 2_000},
-    {"key": "day_5k",   "name": "Marathon",        "desc": "Write 5,000+ words in a single day.", "cat": "words", "tier": 3, "metric": "best_day", "threshold": 5_000},
-    {"key": "day_10k",  "name": "Ultramarathon",   "desc": "10,000 words in one day. Unstoppable.","cat": "words", "tier": 5, "metric": "best_day", "threshold": 10_000},
+    {"key": "day_500",  "chain": "best_day", "name": "Warm-Up",      "desc": "Five hundred words — Hemingway's personal daily minimum. A solid session.",              "cat": "words", "tier": 1, "metric": "best_day", "threshold": 500},
+    {"key": "day_2k",   "chain": "best_day", "name": "Big Day",       "desc": "Two thousand in one session — Stephen King's daily target. Running with the greats.",    "cat": "words", "tier": 2, "metric": "best_day", "threshold": 2_000},
+    {"key": "day_5k",   "chain": "best_day", "name": "Marathon",      "desc": "Five thousand in one day. Kerouac typed On the Road in three weeks — your pace matches.", "cat": "words", "tier": 3, "metric": "best_day", "threshold": 5_000},
+    {"key": "day_10k",  "chain": "best_day", "name": "Ultramarathon", "desc": "Ten thousand words in a single day. 'I wrote it in a fugue.' — probably you, today.",    "cat": "words", "tier": 5, "metric": "best_day", "threshold": 10_000},
 
     # ── Codex entries ─────────────────────────────────────────────────────────
-    {"key": "codex_1",    "name": "Ink Drop",        "desc": "Create your first codex entry.",              "cat": "codex", "tier": 1, "metric": "codex_entries", "threshold": 1},
-    {"key": "codex_5",    "name": "Quill",            "desc": "5 codex entries.",                            "cat": "codex", "tier": 1, "metric": "codex_entries", "threshold": 5},
-    {"key": "codex_15",   "name": "Scribe",           "desc": "15 codex entries.",                           "cat": "codex", "tier": 2, "metric": "codex_entries", "threshold": 15},
-    {"key": "codex_30",   "name": "Chronicler",       "desc": "30 codex entries.",                           "cat": "codex", "tier": 2, "metric": "codex_entries", "threshold": 30},
-    {"key": "codex_75",   "name": "Lore Keeper",      "desc": "75 codex entries.",                           "cat": "codex", "tier": 3, "metric": "codex_entries", "threshold": 75},
-    {"key": "codex_150",  "name": "Grand Archivist",  "desc": "150 codex entries.",                          "cat": "codex", "tier": 3, "metric": "codex_entries", "threshold": 150},
-    {"key": "codex_300",  "name": "World Architect",  "desc": "300 codex entries.",                          "cat": "codex", "tier": 4, "metric": "codex_entries", "threshold": 300},
-    {"key": "codex_500",  "name": "Mythographer",     "desc": "500 codex entries.",                          "cat": "codex", "tier": 4, "metric": "codex_entries", "threshold": 500},
-    {"key": "codex_750",  "name": "Omniscient",       "desc": "750 codex entries.",                          "cat": "codex", "tier": 5, "metric": "codex_entries", "threshold": 750},
-    {"key": "codex_1k",   "name": "God of Worlds",    "desc": "1,000 codex entries — a living universe.",   "cat": "codex", "tier": 5, "metric": "codex_entries", "threshold": 1_000},
+    {"key": "codex_1",   "chain": "codex", "name": "Ink Drop",       "desc": "Your first entry. A character, place, or idea given a name and a home.",               "cat": "codex", "tier": 1, "metric": "codex_entries", "threshold": 1},
+    {"key": "codex_5",   "chain": "codex", "name": "Quill",           "desc": "Five entries — the world is beginning to breathe.",                                    "cat": "codex", "tier": 1, "metric": "codex_entries", "threshold": 5},
+    {"key": "codex_15",  "chain": "codex", "name": "Scribe",          "desc": "Tolkien spent years building Middle-earth before writing a word of The Hobbit.",       "cat": "codex", "tier": 2, "metric": "codex_entries", "threshold": 15},
+    {"key": "codex_30",  "chain": "codex", "name": "Chronicler",      "desc": "Thirty entries. A world deserving of its own maps and mythology.",                    "cat": "codex", "tier": 2, "metric": "codex_entries", "threshold": 30},
+    {"key": "codex_75",  "chain": "codex", "name": "Lore Keeper",     "desc": "The Silmarillion took Tolkien his entire lifetime. You're building faster.",          "cat": "codex", "tier": 3, "metric": "codex_entries", "threshold": 75},
+    {"key": "codex_150", "chain": "codex", "name": "Grand Archivist", "desc": "One hundred and fifty entries. A secondary world with genuine, layered depth.",       "cat": "codex", "tier": 3, "metric": "codex_entries", "threshold": 150},
+    {"key": "codex_300", "chain": "codex", "name": "World Architect", "desc": "The Encyclopedia of Middle-earth lists over 2,000 entries. You're on your way.",      "cat": "codex", "tier": 4, "metric": "codex_entries", "threshold": 300},
+    {"key": "codex_500", "chain": "codex", "name": "Mythographer",    "desc": "Five hundred entries — a mythology in its own right, built myth by myth.",            "cat": "codex", "tier": 4, "metric": "codex_entries", "threshold": 500},
+    {"key": "codex_750", "chain": "codex", "name": "Omniscient",      "desc": "Seven hundred and fifty. You know this world better than its inhabitants do.",        "cat": "codex", "tier": 5, "metric": "codex_entries", "threshold": 750},
+    {"key": "codex_1k",  "chain": "codex", "name": "God of Worlds",   "desc": "'In the beginning…' — a thousand entries later, your universe is self-sustaining.",  "cat": "codex", "tier": 5, "metric": "codex_entries", "threshold": 1_000},
 
     # ── Codex relations ───────────────────────────────────────────────────────
-    {"key": "rel_1",   "name": "First Link",           "desc": "Connect two codex entries.",                 "cat": "codex", "tier": 1, "metric": "codex_relations", "threshold": 1},
-    {"key": "rel_10",  "name": "Web Weaver",           "desc": "10 relations between codex entries.",        "cat": "codex", "tier": 2, "metric": "codex_relations", "threshold": 10},
-    {"key": "rel_25",  "name": "Networker",            "desc": "25 codex relations.",                        "cat": "codex", "tier": 3, "metric": "codex_relations", "threshold": 25},
-    {"key": "rel_50",  "name": "Social Architect",     "desc": "50 codex relations.",                        "cat": "codex", "tier": 3, "metric": "codex_relations", "threshold": 50},
-    {"key": "rel_100", "name": "Cosmic Nexus",         "desc": "100 codex relations — an intricate web.",    "cat": "codex", "tier": 4, "metric": "codex_relations", "threshold": 100},
-    {"key": "rel_250", "name": "All Things Connected", "desc": "250 relations. Everything is linked.",       "cat": "codex", "tier": 5, "metric": "codex_relations", "threshold": 250},
+    {"key": "rel_1",   "chain": "relations", "name": "First Link",           "desc": "Two souls connected by a thread. Every web begins here.",                             "cat": "codex", "tier": 1, "metric": "codex_relations", "threshold": 1},
+    {"key": "rel_10",  "chain": "relations", "name": "Web Weaver",           "desc": "'No man is an island.' — John Donne was writing about your codex.",                  "cat": "codex", "tier": 2, "metric": "codex_relations", "threshold": 10},
+    {"key": "rel_25",  "chain": "relations", "name": "Networker",            "desc": "Twenty-five links. Your cast is becoming a community with its own history.",         "cat": "codex", "tier": 3, "metric": "codex_relations", "threshold": 25},
+    {"key": "rel_50",  "chain": "relations", "name": "Social Architect",     "desc": "Fifty connections. The web of relationships is what holds a world together.",        "cat": "codex", "tier": 3, "metric": "codex_relations", "threshold": 50},
+    {"key": "rel_100", "chain": "relations", "name": "Cosmic Nexus",         "desc": "'Everything is connected.' — the oldest truth in storytelling. A hundred links.",    "cat": "codex", "tier": 4, "metric": "codex_relations", "threshold": 100},
+    {"key": "rel_250", "chain": "relations", "name": "All Things Connected", "desc": "In Dostoevsky, everyone is linked by three degrees. You've mapped your own web.",    "cat": "codex", "tier": 5, "metric": "codex_relations", "threshold": 250},
 
-    # ── Codex entries mentioned in actual prose ───────────────────────────────
-    {"key": "mentioned_1",   "name": "Shadow",               "desc": "1 codex entry appears in your prose.",        "cat": "codex", "tier": 1, "metric": "codex_mentioned", "threshold": 1},
-    {"key": "mentioned_10",  "name": "Presence",             "desc": "10 codex entries woven into your scenes.",    "cat": "codex", "tier": 2, "metric": "codex_mentioned", "threshold": 10},
-    {"key": "mentioned_25",  "name": "Cast of Characters",   "desc": "25 entries present in your prose.",          "cat": "codex", "tier": 3, "metric": "codex_mentioned", "threshold": 25},
-    {"key": "mentioned_50",  "name": "Living World",         "desc": "50 codex entries breathe in your text.",     "cat": "codex", "tier": 4, "metric": "codex_mentioned", "threshold": 50},
-    {"key": "mentioned_100", "name": "Everyone Has a Role",  "desc": "100 entries appear across your scenes.",     "cat": "codex", "tier": 4, "metric": "codex_mentioned", "threshold": 100},
-    {"key": "mentioned_200", "name": "Woven Into the Prose", "desc": "200 entries live and breathe in your world.","cat": "codex", "tier": 5, "metric": "codex_mentioned", "threshold": 200},
+    # ── Codex mentioned in prose ──────────────────────────────────────────────
+    {"key": "mentioned_1",   "chain": "mentioned", "name": "Shadow",               "desc": "A name appears in the prose. A character earns their place.",                      "cat": "codex", "tier": 1, "metric": "codex_mentioned", "threshold": 1},
+    {"key": "mentioned_10",  "chain": "mentioned", "name": "Presence",             "desc": "Ten entries living in your scenes. The world is populating itself.",               "cat": "codex", "tier": 2, "metric": "codex_mentioned", "threshold": 10},
+    {"key": "mentioned_25",  "chain": "mentioned", "name": "Cast of Characters",   "desc": "Twenty-five voices woven through. Even Tolstoy started with a cast this size.",   "cat": "codex", "tier": 3, "metric": "codex_mentioned", "threshold": 25},
+    {"key": "mentioned_50",  "chain": "mentioned", "name": "Living World",         "desc": "Fifty entries breathe in your prose. The world feels genuinely inhabited.",        "cat": "codex", "tier": 4, "metric": "codex_mentioned", "threshold": 50},
+    {"key": "mentioned_100", "chain": "mentioned", "name": "Everyone Has a Role",  "desc": "A hundred presences across your scenes. Every walk-on has a story behind them.",  "cat": "codex", "tier": 4, "metric": "codex_mentioned", "threshold": 100},
+    {"key": "mentioned_200", "chain": "mentioned", "name": "Woven Into the Prose", "desc": "Two hundred entities alive on the page. The lore is no longer background — it is the story.", "cat": "codex", "tier": 5, "metric": "codex_mentioned", "threshold": 200},
+
+    # ── Inventory tracking ────────────────────────────────────────────────────
+    {"key": "inventory_1",  "chain": "inventory", "name": "Pack It Up",      "desc": "Someone carries something. Objects give characters weight — and history.",              "cat": "codex", "tier": 1, "metric": "inventory_items", "threshold": 1},
+    {"key": "inventory_10", "chain": "inventory", "name": "Quartermaster",   "desc": "'The Ring must be carried by someone.' — Tolkien knew the weight of objects.",          "cat": "codex", "tier": 2, "metric": "inventory_items", "threshold": 10},
+    {"key": "inventory_50", "chain": "inventory", "name": "Master of Goods", "desc": "Fifty items tracked. Your world has economy, scarcity, and real stakes.",               "cat": "codex", "tier": 3, "metric": "inventory_items", "threshold": 50},
 
     # ── Projects ──────────────────────────────────────────────────────────────
-    {"key": "project_1", "name": "Project Launcher",   "desc": "Create your first project.",               "cat": "story", "tier": 1, "metric": "projects", "threshold": 1},
-    {"key": "project_3", "name": "Juggler",             "desc": "3 projects — you live in many worlds.",   "cat": "story", "tier": 2, "metric": "projects", "threshold": 3},
-    {"key": "project_5", "name": "Multi-World Writer",  "desc": "5 projects created.",                     "cat": "story", "tier": 3, "metric": "projects", "threshold": 5},
+    {"key": "project_1", "chain": "projects", "name": "Project Launcher",  "desc": "Every great library begins with one book.",                                              "cat": "story", "tier": 1, "metric": "projects", "threshold": 1},
+    {"key": "project_3", "chain": "projects", "name": "Juggler",           "desc": "Three worlds on the go. Dickens once serialised three novels simultaneously.",            "cat": "story", "tier": 2, "metric": "projects", "threshold": 3},
+    {"key": "project_5", "chain": "projects", "name": "Multi-World Writer","desc": "Five projects. Your imagination refuses to be contained to one universe.",              "cat": "story", "tier": 3, "metric": "projects", "threshold": 5},
 
     # ── Scenes ────────────────────────────────────────────────────────────────
-    {"key": "scenes_10",  "name": "Scene Starter",  "desc": "Write 10 scenes.",                        "cat": "story", "tier": 1, "metric": "scene_count", "threshold": 10},
-    {"key": "scenes_50",  "name": "Scene Writer",   "desc": "Write 50 scenes.",                        "cat": "story", "tier": 2, "metric": "scene_count", "threshold": 50},
-    {"key": "scenes_100", "name": "Storyteller",    "desc": "Write 100 scenes.",                       "cat": "story", "tier": 3, "metric": "scene_count", "threshold": 100},
-    {"key": "scenes_250", "name": "World Spinner",  "desc": "250 scenes — worlds within worlds.",      "cat": "story", "tier": 4, "metric": "scene_count", "threshold": 250},
-    {"key": "scenes_500", "name": "Prolific Author","desc": "500 scenes. You are a machine.",           "cat": "story", "tier": 5, "metric": "scene_count", "threshold": 500},
+    {"key": "scenes_10",  "chain": "scenes", "name": "Scene Starter",  "desc": "Ten scenes. The structure of a story is beginning to emerge.",                              "cat": "story", "tier": 1, "metric": "scene_count", "threshold": 10},
+    {"key": "scenes_50",  "chain": "scenes", "name": "Scene Writer",   "desc": "Fifty scenes — half a novel's worth of moments and decisions.",                             "cat": "story", "tier": 2, "metric": "scene_count", "threshold": 50},
+    {"key": "scenes_100", "chain": "scenes", "name": "Storyteller",    "desc": "A hundred scenes. 'A story is a series of scenes.' Yours are well into three figures.",     "cat": "story", "tier": 3, "metric": "scene_count", "threshold": 100},
+    {"key": "scenes_250", "chain": "scenes", "name": "World Spinner",  "desc": "Two hundred and fifty scenes. Some novelists never write this many in a career.",           "cat": "story", "tier": 4, "metric": "scene_count", "threshold": 250},
+    {"key": "scenes_500", "chain": "scenes", "name": "Prolific Author","desc": "Five hundred scenes. At this pace you'll outlast any deadline ever set.",                   "cat": "story", "tier": 5, "metric": "scene_count", "threshold": 500},
 
-    # ── Scene variety ─────────────────────────────────────────────────────────
-    {"key": "scene_types_5", "name": "Five Colors", "desc": "Use all 5 scene types across your projects.", "cat": "story", "tier": 3, "metric": "scene_types_used", "threshold": 5},
+    # ── Scene tagging ─────────────────────────────────────────────────────────
+    {"key": "typed_1",       "chain": "typed_scenes", "name": "Genre Aware",      "desc": "You know what kind of scene you're writing. Intention is the beginning of craft.",    "cat": "story", "tier": 1, "metric": "typed_scene_count", "threshold": 1},
+    {"key": "typed_10",      "chain": "typed_scenes", "name": "Scene Classifier", "desc": "Ten typed scenes. Structure is not a cage — it is a skeleton.",                       "cat": "story", "tier": 2, "metric": "typed_scene_count", "threshold": 10},
+    {"key": "typed_50",      "chain": "typed_scenes", "name": "Scene Architect",  "desc": "Fifty scenes tagged. You can see the machinery beneath the story now.",               "cat": "story", "tier": 3, "metric": "typed_scene_count", "threshold": 50},
+    {"key": "typed_100",     "chain": "typed_scenes", "name": "Master Plotter",   "desc": "A hundred typed scenes. You don't write scenes anymore — you engineer them.",         "cat": "story", "tier": 4, "metric": "typed_scene_count", "threshold": 100},
+    {"key": "scene_types_5", "chain": "typed_scenes", "name": "Five Colors",      "desc": "All five scene types used. Action, dialogue, introspection, description, transition.", "cat": "story", "tier": 3, "metric": "scene_types_used",  "threshold": 5},
 
-    # ── Publishing ────────────────────────────────────────────────────────────
-    {"key": "query_1",   "name": "In the Arena",    "desc": "Submit your first query letter.",              "cat": "publishing", "tier": 1, "metric": "queries_sent",    "threshold": 1},
-    {"key": "query_10",  "name": "Thick Skin",       "desc": "10 queries sent.",                            "cat": "publishing", "tier": 2, "metric": "queries_sent",    "threshold": 10},
-    {"key": "query_25",  "name": "Battle-Hardened",  "desc": "25 queries — rejection proof.",               "cat": "publishing", "tier": 3, "metric": "queries_sent",    "threshold": 25},
-    {"key": "query_50",  "name": "The Grind",         "desc": "50 queries sent. Relentless.",               "cat": "publishing", "tier": 4, "metric": "queries_sent",    "threshold": 50},
-    {"key": "partial",   "name": "Partial Victory",   "desc": "An agent requested a partial manuscript.",   "cat": "publishing", "tier": 3, "metric": "queries_partial", "threshold": 1},
-    {"key": "full_req",  "name": "Full Send",          "desc": "An agent requested the full manuscript.",   "cat": "publishing", "tier": 4, "metric": "queries_full",    "threshold": 1},
-    {"key": "offer",     "name": "The Call",           "desc": "You received an offer of representation.",  "cat": "publishing", "tier": 5, "metric": "queries_offer",   "threshold": 1},
+    # ── Corkboard ─────────────────────────────────────────────────────────────
+    {"key": "corkboard_1",  "chain": "corkboard", "name": "On the Board",    "desc": "First card up. Hitchcock planned every scene on index cards before filming.",           "cat": "story", "tier": 1, "metric": "corkboard_scenes", "threshold": 1},
+    {"key": "corkboard_10", "chain": "corkboard", "name": "Board Architect", "desc": "Ten cards arranged. The story is taking shape on the wall.",                            "cat": "story", "tier": 2, "metric": "corkboard_scenes", "threshold": 10},
+    {"key": "corkboard_50", "chain": "corkboard", "name": "Grand Planner",   "desc": "Fifty scenes laid out. From here you can see the whole shape of the thing.",            "cat": "story", "tier": 3, "metric": "corkboard_scenes", "threshold": 50},
+
+    # ── Timeline ──────────────────────────────────────────────────────────────
+    {"key": "timeline_1",   "chain": "timeline", "name": "First Event",     "desc": "A moment pinned in time. History begins with a single recorded event.",                  "cat": "story", "tier": 1, "metric": "timeline_events", "threshold": 1},
+    {"key": "timeline_10",  "chain": "timeline", "name": "History Maker",   "desc": "'The past is never dead. It's not even past.' — Faulkner. You are tracking it.",        "cat": "story", "tier": 2, "metric": "timeline_events", "threshold": 10},
+    {"key": "timeline_50",  "chain": "timeline", "name": "World Historian", "desc": "Fifty events across time. Your world has a history deep enough to feel real.",           "cat": "story", "tier": 3, "metric": "timeline_events", "threshold": 50},
+    {"key": "timeline_100", "chain": "timeline", "name": "Epoch Architect", "desc": "Tolkien kept detailed timelines for Arda spanning thousands of years. So do you.",       "cat": "story", "tier": 4, "metric": "timeline_events", "threshold": 100},
+
+    # ── Fragments / Snippets ──────────────────────────────────────────────────
+    {"key": "snippet_1",  "chain": "snippets", "name": "First Fragment",   "desc": "'Save everything.' The first fragment is the seed of an archive.",                        "cat": "story", "tier": 1, "metric": "fragment_count", "threshold": 1},
+    {"key": "snippet_10", "chain": "snippets", "name": "Snippet Hoarder",  "desc": "Ten fragments in the vault. Ideas are currency — save before you spend.",               "cat": "story", "tier": 2, "metric": "fragment_count", "threshold": 10},
+    {"key": "snippet_50", "chain": "snippets", "name": "Fragment Archive", "desc": "Fifty fragments. The deleted scenes of a mind that never stops writing.",                 "cat": "story", "tier": 3, "metric": "fragment_count", "threshold": 50},
+
+    # ── Custom time system ────────────────────────────────────────────────────
+    {"key": "time_lord", "chain": "time_system", "name": "Time Lord", "desc": "A custom calendar for a custom world. Tolkien invented an entire astronomy for Arda.", "cat": "story", "tier": 2, "metric": "time_system_used", "threshold": 1},
+
+    # ── Project info ──────────────────────────────────────────────────────────
+    {"key": "project_meta",      "chain": "project_info", "name": "Author Profile",   "desc": "Title, author, genre — the metadata that turns a draft into a real book.",          "cat": "story",       "tier": 1, "metric": "project_info_set",  "threshold": 1},
+    {"key": "project_meta_full", "chain": "project_info", "name": "Submission Ready", "desc": "Every field complete. Your submission package is ready to go out the door.",          "cat": "publishing", "tier": 3, "metric": "project_info_full", "threshold": 1},
+
+    # ── Publishing — queries ──────────────────────────────────────────────────
+    {"key": "query_1",  "chain": "queries",   "name": "In the Arena",    "desc": "'It is not the critic who counts.' — Roosevelt. You stepped into the arena.",               "cat": "publishing", "tier": 1, "metric": "queries_sent",    "threshold": 1},
+    {"key": "query_10", "chain": "queries",   "name": "Thick Skin",      "desc": "Ten queries out. 'Harry Potter' was rejected twelve times. Keep going.",                   "cat": "publishing", "tier": 2, "metric": "queries_sent",    "threshold": 10},
+    {"key": "query_25", "chain": "queries",   "name": "Battle-Hardened", "desc": "Twenty-five queries. King papered his wall with rejection slips — then sold Carrie.",      "cat": "publishing", "tier": 3, "metric": "queries_sent",    "threshold": 25},
+    {"key": "query_50", "chain": "queries",   "name": "The Grind",       "desc": "Fifty queries. Perseverance is the one skill no writing workshop can teach.",               "cat": "publishing", "tier": 4, "metric": "queries_sent",    "threshold": 50},
+    {"key": "partial",  "chain": "agent_req", "name": "Partial Victory", "desc": "An agent wants to read more. The door is ajar — push it.",                                 "cat": "publishing", "tier": 3, "metric": "queries_partial", "threshold": 1},
+    {"key": "full_req", "chain": "agent_req", "name": "Full Send",       "desc": "A full manuscript requested. The most exciting sentence in publishing: 'Send it all.'",     "cat": "publishing", "tier": 4, "metric": "queries_full",    "threshold": 1},
+    {"key": "offer",    "chain": "agent_req", "name": "The Call",        "desc": "An offer of representation. This is the phone call every writer dreams about.",             "cat": "publishing", "tier": 5, "metric": "queries_offer",   "threshold": 1},
+
+    # ── Publishing — exports ──────────────────────────────────────────────────
+    {"key": "export_1",   "chain": "exports", "name": "First Print",     "desc": "Your first export — the manuscript takes physical form for the first time.",               "cat": "publishing", "tier": 1, "metric": "export_count", "threshold": 1},
+    {"key": "export_10",  "chain": "exports", "name": "Print Run",       "desc": "Ten exports. Each revision cycle brings the prose closer to what it should be.",           "cat": "publishing", "tier": 2, "metric": "export_count", "threshold": 10},
+    {"key": "export_50",  "chain": "exports", "name": "Publisher Ready", "desc": "Fifty exports. You've refined the process as thoroughly as the prose itself.",             "cat": "publishing", "tier": 3, "metric": "export_count", "threshold": 50},
+    {"key": "export_100", "chain": "exports", "name": "Press Master",    "desc": "A hundred exports. You live at the intersection of craft and final production.",           "cat": "publishing", "tier": 4, "metric": "export_count", "threshold": 100},
+
+    # ── Settings / Setup ──────────────────────────────────────────────────────
+    {"key": "grammar_active", "chain": "grammar", "name": "Grammar Police", "desc": "The grammar checker is live. 'Good grammar is clear thinking made visible.'",           "cat": "research",   "tier": 1, "metric": "grammar_enabled", "threshold": 1},
+    {"key": "pandoc_active",  "chain": "pandoc",  "name": "Typesetter",     "desc": "Professional exports enabled. 'The medium is the message.' — Marshall McLuhan",        "cat": "publishing", "tier": 2, "metric": "pandoc_enabled",  "threshold": 1},
+    {"key": "inventory_1",    "chain": "inventory","name": "Pack It Up",     "desc": "Someone carries something. Objects give characters weight — and history.",             "cat": "codex",      "tier": 1, "metric": "inventory_items", "threshold": 1},
 
     # ── Research ──────────────────────────────────────────────────────────────
-    {"key": "research_1",  "name": "Curious Mind", "desc": "Save your first research item.",        "cat": "research", "tier": 1, "metric": "research_items", "threshold": 1},
-    {"key": "research_10", "name": "Deep Dive",    "desc": "10 research items collected.",          "cat": "research", "tier": 2, "metric": "research_items", "threshold": 10},
-    {"key": "research_25", "name": "Scholar",      "desc": "25 research items — you dig deep.",    "cat": "research", "tier": 3, "metric": "research_items", "threshold": 25},
-    {"key": "research_50", "name": "Librarian",    "desc": "50 research items saved.",              "cat": "research", "tier": 4, "metric": "research_items", "threshold": 50},
+    {"key": "research_1",  "chain": "research", "name": "Curious Mind", "desc": "The first research item saved. 'The more I read, the more I know what to write.'",         "cat": "research", "tier": 1, "metric": "research_items", "threshold": 1},
+    {"key": "research_10", "chain": "research", "name": "Deep Dive",    "desc": "Ten items collected. 'For every page written, ten must be read.' — the writer's equation.", "cat": "research", "tier": 2, "metric": "research_items", "threshold": 10},
+    {"key": "research_25", "chain": "research", "name": "Scholar",      "desc": "Twenty-five items. You research as rigorously as you write.",                               "cat": "research", "tier": 3, "metric": "research_items", "threshold": 25},
+    {"key": "research_50", "chain": "research", "name": "Librarian",    "desc": "'A library is a hospital for the mind.' — Anonymous. Yours is well-stocked.",               "cat": "research", "tier": 4, "metric": "research_items", "threshold": 50},
+
+    # ── Stats engagement ──────────────────────────────────────────────────────
+    {"key": "stats_view",    "chain": "stats", "name": "Self Aware",  "desc": "First visit to the stats page. 'What gets measured gets managed.' — Drucker",           "cat": "research", "tier": 1, "metric": "stats_views", "threshold": 1},
+    {"key": "stats_addict",  "chain": "stats", "name": "Data Driven", "desc": "Ten visits. You study your output as carefully as you study your prose.",                    "cat": "research", "tier": 2, "metric": "stats_views", "threshold": 10},
+    {"key": "stats_analyst", "chain": "stats", "name": "The Analyst", "desc": "Fifty visits. You track your craft the way Hemingway tracked his daily word count.",         "cat": "research", "tier": 3, "metric": "stats_views", "threshold": 50},
 ]
+
+# Deduplicate by key (in case of copy-paste error above)
+_seen: set[str] = set()
+ACHIEVEMENTS = [a for a in ACHIEVEMENTS if not (a["key"] in _seen or _seen.add(a["key"]))]  # type: ignore[func-returns-value]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _compute_streaks(dates: list[str]) -> tuple[int, int]:
-    """Returns (current_streak, longest_streak) from a list of YYYY-MM-DD date strings."""
     if not dates:
         return 0, 0
-
     date_objects = sorted({date.fromisoformat(d) for d in dates})
-
-    longest = 1
-    cur = 1
+    longest = cur = 1
     for i in range(1, len(date_objects)):
         if (date_objects[i] - date_objects[i - 1]).days == 1:
             cur += 1
@@ -123,7 +175,6 @@ def _compute_streaks(dates: list[str]) -> tuple[int, int]:
                 longest = cur
         else:
             cur = 1
-
     today = date.today()
     current = 0
     check = today
@@ -131,21 +182,25 @@ def _compute_streaks(dates: list[str]) -> tuple[int, int]:
     while check in date_set:
         current += 1
         check -= timedelta(days=1)
-
     return current, longest
 
 
+def _safe(db: Session, query: str, default=0):
+    try:
+        return db.execute(text(query)).scalar() or default
+    except Exception:
+        return default
+
+
 def _compute_metrics(db: Session) -> dict[str, int]:
-    # Writing log aggregated globally (sum across all projects per day)
     log_rows = (
         db.query(WritingLog.date, func.sum(WritingLog.words_added).label("words"))
         .group_by(WritingLog.date)
         .all()
     )
-
-    total_words = sum(r.words for r in log_rows)
-    best_day = max((r.words for r in log_rows), default=0)
-    active_dates = [r.date for r in log_rows if r.words > 0]
+    total_words   = db.query(func.sum(Scene.word_count)).scalar() or 0
+    best_day      = max((r.words for r in log_rows), default=0)
+    active_dates  = [r.date for r in log_rows if r.words > 0]
     current_streak, longest_streak = _compute_streaks(active_dates)
 
     codex_entries   = db.query(func.count(CodexEntry.id)).scalar() or 0
@@ -156,8 +211,8 @@ def _compute_metrics(db: Session) -> dict[str, int]:
         .scalar() or 0
     )
 
-    projects      = db.query(func.count(Project.id)).scalar() or 0
-    scene_count   = db.query(func.count(Scene.id)).scalar() or 0
+    projects         = db.query(func.count(Project.id)).scalar() or 0
+    scene_count      = db.query(func.count(Scene.id)).scalar() or 0
     scene_types_used = (
         db.query(func.count(distinct(Scene.scene_type)))
         .filter(Scene.scene_type.isnot(None))
@@ -165,40 +220,80 @@ def _compute_metrics(db: Session) -> dict[str, int]:
     )
 
     queries_sent    = db.query(func.count(QuerySubmission.id)).scalar() or 0
-    queries_partial = (
-        db.query(func.count(QuerySubmission.id))
-        .filter(QuerySubmission.status == "partial_requested")
-        .scalar() or 0
-    )
-    queries_full = (
-        db.query(func.count(QuerySubmission.id))
-        .filter(QuerySubmission.status == "full_requested")
-        .scalar() or 0
-    )
-    queries_offer = (
-        db.query(func.count(QuerySubmission.id))
-        .filter(QuerySubmission.status == "offer")
-        .scalar() or 0
-    )
+    queries_partial = db.query(func.count(QuerySubmission.id)).filter(QuerySubmission.status == "partial_requested").scalar() or 0
+    queries_full    = db.query(func.count(QuerySubmission.id)).filter(QuerySubmission.status == "full_requested").scalar()   or 0
+    queries_offer   = db.query(func.count(QuerySubmission.id)).filter(QuerySubmission.status == "offer").scalar()            or 0
+    research_items  = db.query(func.count(ResearchItem.id)).scalar() or 0
 
-    research_items = db.query(func.count(ResearchItem.id)).scalar() or 0
+    # ── New metrics via raw SQL ───────────────────────────────────────────────
+    typed_scene_count = _safe(db, "SELECT COUNT(*) FROM scenes WHERE scene_type IS NOT NULL")
+    corkboard_scenes  = _safe(db, "SELECT COUNT(*) FROM scenes WHERE node_x IS NOT NULL")
+    timeline_events   = _safe(db, "SELECT COUNT(*) FROM timeline_events")
+    fragment_count    = _safe(db, "SELECT COUNT(*) FROM fragments")
+    inventory_items   = _safe(db, "SELECT COUNT(*) FROM codex_entries WHERE inventory IS NOT NULL AND inventory != '[]' AND inventory != 'null' AND inventory != ''")
+    time_system_used  = min(1, _safe(db, "SELECT COUNT(*) FROM projects WHERE time_config IS NOT NULL AND time_config NOT IN ('{}','null','')"))
+
+    # Settings from user_settings (first row)
+    grammar_enabled = pandoc_enabled = export_count = stats_views = 0
+    try:
+        row = db.execute(text(
+            "SELECT grammar_check_enabled, pandoc_enabled, export_count, stats_views FROM user_settings LIMIT 1"
+        )).fetchone()
+        if row:
+            grammar_enabled = int(row[0] or 0)
+            pandoc_enabled  = int(row[1] or 0)
+            export_count    = int(row[2] or 0)
+            stats_views     = int(row[3] or 0)
+    except Exception:
+        pass
+
+    # Project info: any book_meta with a title
+    project_info_set = project_info_full = 0
+    try:
+        rows = db.execute(text(
+            "SELECT book_meta FROM projects WHERE book_meta IS NOT NULL AND book_meta NOT IN ('{}','null','')"
+        )).fetchall()
+        for (bm,) in rows:
+            try:
+                meta = json.loads(bm or "{}")
+                if meta.get("title"):
+                    project_info_set = 1
+                if meta.get("title") and meta.get("author") and meta.get("genre"):
+                    project_info_full = 1
+                    break
+            except Exception:
+                pass
+    except Exception:
+        pass
 
     return {
-        "current_streak":  current_streak,
-        "longest_streak":  longest_streak,
-        "total_words":     total_words,
-        "best_day":        best_day,
-        "codex_entries":   codex_entries,
-        "codex_relations": codex_relations,
-        "codex_mentioned": codex_mentioned,
-        "projects":        projects,
-        "scene_count":     scene_count,
+        "current_streak":   current_streak,
+        "longest_streak":   longest_streak,
+        "total_words":      total_words,
+        "best_day":         best_day,
+        "codex_entries":    codex_entries,
+        "codex_relations":  codex_relations,
+        "codex_mentioned":  codex_mentioned,
+        "projects":         projects,
+        "scene_count":      scene_count,
         "scene_types_used": scene_types_used,
-        "queries_sent":    queries_sent,
-        "queries_partial": queries_partial,
-        "queries_full":    queries_full,
-        "queries_offer":   queries_offer,
-        "research_items":  research_items,
+        "queries_sent":     queries_sent,
+        "queries_partial":  queries_partial,
+        "queries_full":     queries_full,
+        "queries_offer":    queries_offer,
+        "research_items":   research_items,
+        "typed_scene_count": typed_scene_count,
+        "corkboard_scenes":  corkboard_scenes,
+        "timeline_events":   timeline_events,
+        "fragment_count":    fragment_count,
+        "inventory_items":   inventory_items,
+        "time_system_used":  time_system_used,
+        "grammar_enabled":   grammar_enabled,
+        "pandoc_enabled":    pandoc_enabled,
+        "export_count":      export_count,
+        "stats_views":       stats_views,
+        "project_info_set":  project_info_set,
+        "project_info_full": project_info_full,
     }
 
 
@@ -206,16 +301,15 @@ def _compute_metrics(db: Session) -> dict[str, int]:
 
 @router.get("/achievements")
 def get_achievements(db: Session = Depends(get_db)):
-    metrics  = _compute_metrics(db)
-    unlocks  = {u.key: u.unlocked_at for u in db.query(AchievementUnlock).all()}
-
+    metrics      = _compute_metrics(db)
+    unlocks      = {u.key: u.unlocked_at for u in db.query(AchievementUnlock).all()}
     results      = []
     newly_earned = []
     now          = datetime.now(UTC).replace(tzinfo=None)
 
     for ach in ACHIEVEMENTS:
-        val       = metrics.get(ach["metric"], 0)
-        earned    = val >= ach["threshold"]
+        val    = metrics.get(ach["metric"], 0)
+        earned = val >= ach["threshold"]
 
         if earned and ach["key"] not in unlocks:
             newly_earned.append(AchievementUnlock(key=ach["key"], unlocked_at=now))
@@ -224,6 +318,7 @@ def get_achievements(db: Session = Depends(get_db)):
         ts = unlocks.get(ach["key"])
         results.append({
             "key":          ach["key"],
+            "chain":        ach["chain"],
             "name":         ach["name"],
             "description":  ach["desc"],
             "category":     ach["cat"],

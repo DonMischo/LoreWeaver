@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from sqlalchemy import text
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
@@ -122,6 +123,13 @@ async def export_project(
 
     else:
         raise HTTPException(400, "Unknown format")
+
+    # ── Track export count ────────────────────────────────────────────────────
+    try:
+        db.execute(text("UPDATE user_settings SET export_count = COALESCE(export_count, 0) + 1"))
+        db.commit()
+    except Exception:
+        pass
 
     # ── 2. Deliver ────────────────────────────────────────────────────────────
     if opts.save_to_disk:
@@ -356,6 +364,13 @@ async def batch_export(
 
                 except Exception as exc:
                     failed.append({"publisher": pub.name, "error": str(exc)[:120]})
+
+    # ── Track export count ────────────────────────────────────────────────────
+    try:
+        db.execute(text("UPDATE user_settings SET export_count = COALESCE(export_count, 0) + 1"))
+        db.commit()
+    except Exception:
+        pass
 
     zip_buf.seek(0)
     headers = {"Content-Disposition": f'attachment; filename="{safe_name}_submissions.zip"'}

@@ -52,7 +52,8 @@ if __name__ == "__main__":
     dev  = "--dev" in sys.argv
 
     if dev:
-        uvicorn.run("main:app", host=host, port=port, reload=True, log_level="info")
+        src_dir = os.path.dirname(os.path.abspath(__file__))
+        uvicorn.run("main:app", host=host, port=port, reload=True, reload_dirs=[src_dir], log_level="info")
     else:
         from main import app  # noqa: E402  (import after chdir for correct DB path)
         uvicorn.run(app, host=host, port=port, workers=1, log_level="warning")

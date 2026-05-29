@@ -426,6 +426,7 @@ export type AchievementCategory = "streaks" | "words" | "codex" | "story" | "pub
 
 export interface Achievement {
   key: string;
+  chain: string;
   name: string;
   description: string;
   category: AchievementCategory;

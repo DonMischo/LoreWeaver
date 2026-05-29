@@ -5,11 +5,15 @@ no extra dependencies beyond the stdlib.
 """
 import re
 from collections import Counter
+import re as _re
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
-from models import Project, Act, Chapter, Scene
+from models import Project, Act, Chapter, Scene, CodexEntry, WritingLog
 from schemas import ProjectAnalytics, SceneAnalytics, ChapterAnalytics
 
 router = APIRouter(prefix="/api", tags=["analytics"])
@@ -142,3 +146,122 @@ def get_analytics(project_id: int, db: Session = Depends(get_db)):
         total_word_count=total_words,
         scene_type_dist=dict(global_type_dist),
     )
+
+
+@router.get("/stats/totals")
+def get_stats_totals(db: Session = Depends(get_db)):
+    def _wc(content: str) -> int:
+        return len(_re.sub(r"<[^>]+>", "", content or "").split())
+
+    # ── Total words ──────────────────────────────────────────────────────────────
+    try:
+        total_wc = db.execute(text(
+            "SELECT COALESCE(SUM(word_count), 0) FROM scenes"
+        )).scalar() or 0
+        if total_wc == 0:
+            rows = db.execute(text(
+                "SELECT content FROM scenes WHERE content IS NOT NULL AND content != ''"
+            )).fetchall()
+            total_wc = sum(_wc(r[0]) for r in rows)
+    except Exception as exc:
+        print(f"[stats/totals] total_wc: {exc}")
+        total_wc = 0
+
+    # ── Per-project word counts ──────────────────────────────────────────────────
+    try:
+        proj_rows = db.execute(text("""
+            SELECT p.id, p.title, COALESCE(SUM(s.word_count), 0) AS wc
+            FROM projects p
+            JOIN acts     a ON a.project_id  = p.id
+            JOIN chapters c ON c.act_id      = a.id
+            JOIN scenes   s ON s.chapter_id  = c.id
+            GROUP BY p.id, p.title
+        """)).fetchall()
+        project_words = [{"id": r[0], "title": r[1], "words": r[2] or 0} for r in proj_rows]
+
+        if project_words and all(p["words"] == 0 for p in project_words):
+            content_rows = db.execute(text("""
+                SELECT p.id, p.title, s.content
+                FROM projects p
+                JOIN acts     a ON a.project_id  = p.id
+                JOIN chapters c ON c.act_id      = a.id
+                JOIN scenes   s ON s.chapter_id  = c.id
+                WHERE s.content IS NOT NULL AND s.content != ''
+            """)).fetchall()
+            proj_map: dict[int, dict] = {}
+            for pid, ptitle, content in content_rows:
+                if pid not in proj_map:
+                    proj_map[pid] = {"id": pid, "title": ptitle, "words": 0}
+                proj_map[pid]["words"] += _wc(content)
+            project_words = list(proj_map.values())
+    except Exception as exc:
+        print(f"[stats/totals] project_words: {exc}")
+        project_words = []
+
+    # ── POV character word counts ────────────────────────────────────────────────
+    try:
+        pov_rows = db.execute(text("""
+            SELECT ce.name, COALESCE(SUM(s.word_count), 0) AS wc
+            FROM codex_entries ce
+            JOIN scenes s ON s.pov_character_id = ce.id
+            GROUP BY ce.id, ce.name
+            ORDER BY wc DESC
+            LIMIT 8
+        """)).fetchall()
+        pov_words = [{"name": r[0], "words": r[1] or 0} for r in pov_rows if (r[1] or 0) > 0]
+    except Exception as exc:
+        print(f"[stats/totals] pov_words: {exc}")
+        pov_words = []
+
+    # ── Day-of-week productivity (from writing_log) ──────────────────────────────
+    try:
+        DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        dow_rows = db.execute(text(
+            "SELECT strftime('%w', date) AS dow, SUM(words_added) AS total "
+            "FROM writing_log GROUP BY dow ORDER BY dow"
+        )).fetchall()
+        dow_map = {int(r[0]): int(r[1] or 0) for r in dow_rows if r[0] is not None}
+        day_of_week = [{"day": DOW[i], "words": dow_map.get(i, 0)} for i in range(7)]
+    except Exception as exc:
+        print(f"[stats/totals] day_of_week: {exc}")
+        day_of_week = [{"day": d, "words": 0} for d in ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]]
+
+    # ── Scene length distribution (histogram buckets) ────────────────────────────
+    try:
+        bucket_rows = db.execute(text("""
+            SELECT
+                CASE
+                    WHEN word_count < 100  THEN '< 100'
+                    WHEN word_count < 300  THEN '100-299'
+                    WHEN word_count < 600  THEN '300-599'
+                    WHEN word_count < 1000 THEN '600-999'
+                    WHEN word_count < 2000 THEN '1k-1.9k'
+                    ELSE '2k+'
+                END AS bucket,
+                COUNT(*) AS cnt
+            FROM scenes WHERE word_count > 0
+            GROUP BY bucket ORDER BY MIN(word_count)
+        """)).fetchall()
+        scene_length_buckets = [{"range": r[0], "count": r[1]} for r in bucket_rows]
+    except Exception as exc:
+        print(f"[stats/totals] scene_length: {exc}")
+        scene_length_buckets = []
+
+    return {
+        "total_words":          total_wc,
+        "project_words":        project_words,
+        "pov_words":            pov_words,
+        "day_of_week":          day_of_week,
+        "scene_length_buckets": scene_length_buckets,
+    }
+
+
+@router.post("/stats/ping")
+def ping_stats_view(db: Session = Depends(get_db)):
+    """Increment the stats-page view counter (used for achievement tracking)."""
+    try:
+        db.execute(text("UPDATE user_settings SET stats_views = COALESCE(stats_views, 0) + 1"))
+        db.commit()
+    except Exception:
+        pass
+    return {"ok": True}

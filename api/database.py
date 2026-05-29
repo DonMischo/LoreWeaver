@@ -117,6 +117,9 @@ def migrate_new_columns():
         ("scenes",        "beat",                       "TEXT"),
         ("scenes",        "scene_type",                 "TEXT"),
         ("projects",      "main_plot_color",             "TEXT"),
+        ("scenes",        "word_count",                 "INTEGER DEFAULT 0"),
+        ("user_settings", "stats_views",                 "INTEGER DEFAULT 0"),
+        ("user_settings", "export_count",                "INTEGER DEFAULT 0"),
     ]
     for table, col, col_type in new_columns:
         try:
@@ -1065,6 +1068,25 @@ def migrate_achievements():
                 unlocked_at DATETIME DEFAULT (datetime('now'))
             )
         """))
+
+
+def migrate_backfill_word_counts():
+    """Backfill scenes.word_count for rows where it is 0 but content exists."""
+    import re as _re
+    with engine.begin() as conn:
+        rows = conn.execute(text(
+            "SELECT id, content FROM scenes "
+            "WHERE (word_count IS NULL OR word_count = 0) "
+            "AND content IS NOT NULL AND content != ''"
+        )).fetchall()
+        for scene_id, content in rows:
+            plain = _re.sub(r"<[^>]+>", "", content)
+            wc = len(plain.split())
+            if wc > 0:
+                conn.execute(
+                    text("UPDATE scenes SET word_count = :wc WHERE id = :id"),
+                    {"wc": wc, "id": scene_id},
+                )
 
 
 def get_db():

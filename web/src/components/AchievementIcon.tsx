@@ -194,6 +194,51 @@ const MeteorIcon = ({ className }: P) => (
   </svg>
 );
 
+// T5+: legendary word-count icons ─────────────────────────────────────────────
+
+// 2M: tome inside a supernova ring
+const TomeNova = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect fill="currentColor" x="5" y="4" width="12" height="16" rx="1.5" />
+    <rect fill="currentColor" fillOpacity=".2" x="3" y="6" width="3" height="12" rx="1" />
+    <path stroke="currentColor" strokeWidth=".9" strokeLinecap="round" d="M8 9H14 M8 12H14 M8 15H11" opacity=".28" />
+    {/* supernova ring */}
+    <circle stroke="currentColor" strokeWidth="1" cx="12" cy="12" r="10.5" fill="none" strokeOpacity=".25" />
+    {/* 8 radial spikes */}
+    {[0,45,90,135,180,225,270,315].map((deg, i) => {
+      const r = (deg * Math.PI) / 180;
+      const x1 = 12 + 11 * Math.cos(r), y1 = 12 + 11 * Math.sin(r);
+      const x2 = 12 + 12.5 * Math.cos(r), y2 = 12 + 12.5 * Math.sin(r);
+      return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity=".6" />;
+    })}
+  </svg>
+);
+
+// 5M+: quill + galaxy spiral
+const WordGalaxy = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    {/* spiral arms (simplified) */}
+    <path stroke="currentColor" strokeWidth="1" fill="none" strokeLinecap="round"
+      d="M12 12 Q16 8 18 4" strokeOpacity=".5" />
+    <path stroke="currentColor" strokeWidth="1" fill="none" strokeLinecap="round"
+      d="M12 12 Q8 16 6 20" strokeOpacity=".5" />
+    <path stroke="currentColor" strokeWidth=".8" fill="none" strokeLinecap="round"
+      d="M12 12 Q6 9 3 6" strokeOpacity=".35" />
+    <path stroke="currentColor" strokeWidth=".8" fill="none" strokeLinecap="round"
+      d="M12 12 Q18 15 21 18" strokeOpacity=".35" />
+    {/* stars scattered */}
+    <circle fill="currentColor" cx="18" cy="4"  r="1.3" fillOpacity=".9" />
+    <circle fill="currentColor" cx="6"  cy="20" r="1.1" fillOpacity=".8" />
+    <circle fill="currentColor" cx="3"  cy="6"  r="0.9" fillOpacity=".6" />
+    <circle fill="currentColor" cx="21" cy="18" r="0.9" fillOpacity=".6" />
+    <circle fill="currentColor" cx="20" cy="9"  r="0.7" fillOpacity=".4" />
+    <circle fill="currentColor" cx="4"  cy="15" r="0.7" fillOpacity=".4" />
+    {/* centre: quill tip */}
+    <path fill="currentColor" d="M12 12 C11 10 10 8.5 11.5 7.5 C13 6.5 14.5 8 13.5 10 Z" />
+    <path stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" d="M12 12 L10.5 15" opacity=".55" />
+  </svg>
+);
+
 // ── CODEX ENTRIES — page → cosmic tome ───────────────────────────────────────
 
 // T1: single page with dog-ear
@@ -629,6 +674,323 @@ const Librarian = ({ className }: P) => (
   </svg>
 );
 
+// ── TIMELINE — dot → epic ─────────────────────────────────────────────────────
+
+// T1: single dot on a line
+const TimelineDot = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity=".4" />
+    <circle fill="currentColor" cx="12" cy="12" r="3.5" />
+  </svg>
+);
+
+// T2: three dots on a line
+const TimelineThree = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity=".4" />
+    <circle fill="currentColor" cx="6" cy="12" r="2.5" fillOpacity=".55" />
+    <circle fill="currentColor" cx="12" cy="12" r="3" />
+    <circle fill="currentColor" cx="18" cy="12" r="2.5" fillOpacity=".55" />
+  </svg>
+);
+
+// T3: multi-track timeline
+const TimelineTracks = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <line x1="3" y1="8"  x2="21" y2="8"  stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity=".3" />
+    <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity=".3" />
+    <line x1="3" y1="16" x2="21" y2="16" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity=".3" />
+    <circle fill="currentColor" cx="7"  cy="8"  r="2.2" />
+    <circle fill="currentColor" cx="15" cy="8"  r="2.2" fillOpacity=".65" />
+    <circle fill="currentColor" cx="6"  cy="12" r="2.2" fillOpacity=".65" />
+    <circle fill="currentColor" cx="16" cy="12" r="2.2" />
+    <circle fill="currentColor" cx="10" cy="16" r="2.2" />
+    <circle fill="currentColor" cx="19" cy="16" r="2.2" fillOpacity=".65" />
+  </svg>
+);
+
+// T4: dense multi-track with connections
+const TimelineEpic = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <line x1="2" y1="7"  x2="22" y2="7"  stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity=".25" />
+    <line x1="2" y1="12" x2="22" y2="12" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity=".25" />
+    <line x1="2" y1="17" x2="22" y2="17" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity=".25" />
+    <line x1="9" y1="7" x2="9" y2="12"  stroke="currentColor" strokeWidth=".8" opacity=".4" />
+    <line x1="15" y1="12" x2="15" y2="17" stroke="currentColor" strokeWidth=".8" opacity=".4" />
+    <circle fill="currentColor" cx="5"  cy="7"  r="2" />
+    <circle fill="currentColor" cx="14" cy="7"  r="1.8" fillOpacity=".65" />
+    <circle fill="currentColor" cx="20" cy="7"  r="1.8" fillOpacity=".65" />
+    <circle fill="currentColor" cx="7"  cy="12" r="1.8" fillOpacity=".65" />
+    <circle fill="currentColor" cx="15" cy="12" r="2" />
+    <circle fill="currentColor" cx="9"  cy="17" r="1.8" fillOpacity=".65" />
+    <circle fill="currentColor" cx="19" cy="17" r="2" />
+  </svg>
+);
+
+// ── SNIPPETS / FRAGMENTS — note → archive ─────────────────────────────────────
+
+// T1: torn note
+const SnippetNote = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor" fillOpacity=".15" d="M5 5 H19 V20 H5 Z" />
+    <path stroke="currentColor" strokeWidth="1.5" d="M5 5 H19 V20 H5 Z" />
+    <path fill="currentColor" fillOpacity=".4" d="M5 5 L5 8 L8 6 L11 8 L14 6 L17 8 L19 6 L19 5 Z" />
+    <path stroke="currentColor" strokeWidth="1" strokeLinecap="round" d="M8 12H16 M8 15H14" opacity=".5" />
+  </svg>
+);
+
+// T2: stack of notes
+const SnippetStack = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect fill="currentColor" fillOpacity=".18" x="2" y="8" width="13" height="14" rx="1" />
+    <rect fill="currentColor" fillOpacity=".38" x="4" y="6" width="13" height="14" rx="1" />
+    <rect fill="currentColor" fillOpacity=".9" x="6" y="4" width="13" height="14" rx="1" />
+    <path stroke="currentColor" strokeWidth="1" strokeLinecap="round" d="M9 8H16 M9 11H16 M9 14H13" opacity=".35" />
+  </svg>
+);
+
+// T3: filing archive box
+const SnippetArchive = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect fill="currentColor" x="2" y="7" width="20" height="4" rx="1" />
+    <rect fill="currentColor" fillOpacity=".15" x="3" y="11" width="18" height="10" rx="1" />
+    <rect stroke="currentColor" strokeWidth="1.5" x="3" y="11" width="18" height="10" rx="1" />
+    <path stroke="currentColor" strokeWidth="1" strokeLinecap="round" d="M10 15H14" opacity=".5" />
+    <rect fill="currentColor" fillOpacity=".5" x="5" y="4" width="4" height="4" rx=".5" />
+    <rect fill="currentColor" fillOpacity=".5" x="10" y="4.5" width="4" height="3.5" rx=".5" />
+    <rect fill="currentColor" fillOpacity=".5" x="15" y="4" width="4" height="4" rx=".5" />
+  </svg>
+);
+
+// ── TYPED SCENES — tag → master ───────────────────────────────────────────────
+
+// T1: single label tag
+const TagSingle = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor" d="M4 6 H14 L21 12 L14 18 H4 Z" />
+    <circle fill="currentColor" fillOpacity=".25" cx="8.5" cy="12" r="2" />
+  </svg>
+);
+
+// T2: two overlapping tags
+const TagDouble = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor" fillOpacity=".38" d="M2 9 H11 L17 15 L11 21 H2 Z" />
+    <path fill="currentColor" d="M5 3 H14 L20 9 L14 15 H5 Z" />
+    <circle fill="currentColor" fillOpacity=".25" cx="9" cy="9" r="1.8" />
+  </svg>
+);
+
+// T3: fan of tags
+const TagFan = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor" fillOpacity=".22" d="M1 10 H9  L14 15 L9  20 H1 Z" />
+    <path fill="currentColor" fillOpacity=".5"  d="M3 7  H11 L17 12 L11 17 H3 Z" />
+    <path fill="currentColor"                   d="M6 4  H14 L20 9  L14 14 H6 Z" />
+    <circle fill="currentColor" fillOpacity=".25" cx="10" cy="9" r="1.5" />
+  </svg>
+);
+
+// T4: grid of four tags (master plotter)
+const TagMaster = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor"                   d="M2 3  H8  L11 6  L8  9  H2 Z" />
+    <path fill="currentColor" fillOpacity=".7"  d="M12 3  H18 L21 6  L18 9  H12 Z" />
+    <path fill="currentColor" fillOpacity=".5"  d="M2 13 H8  L11 16 L8  19 H2 Z" />
+    <path fill="currentColor" fillOpacity=".35" d="M12 13 H18 L21 16 L18 19 H12 Z" />
+    <circle fill="currentColor" fillOpacity=".3" cx="5.5" cy="6" r="1.2" />
+    <circle fill="currentColor" fillOpacity=".3" cx="5.5" cy="16" r="1.2" />
+  </svg>
+);
+
+// ── TIME SYSTEM — clock + gear ────────────────────────────────────────────────
+
+const TimeLordIcon = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <circle stroke="currentColor" strokeWidth="1.5" cx="10" cy="11" r="7.5" />
+    <path stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" d="M10 7.5V11L13 13" />
+    {/* gear at bottom-right */}
+    <circle fill="currentColor" cx="18.5" cy="18.5" r="3.5" />
+    <circle stroke="currentColor" strokeWidth="1" fill="none" cx="18.5" cy="18.5" r="1.5" />
+    <rect fill="currentColor" x="17.8" y="14.2" width="1.4" height="1.6" rx=".3" />
+    <rect fill="currentColor" x="17.8" y="21.2" width="1.4" height="1.6" rx=".3" />
+    <rect fill="currentColor" x="14.2" y="17.8" width="1.6" height="1.4" rx=".3" />
+    <rect fill="currentColor" x="21.2" y="17.8" width="1.6" height="1.4" rx=".3" />
+  </svg>
+);
+
+// ── PROJECT INFO — document forms ─────────────────────────────────────────────
+
+// T1: document with info symbol
+const InfoDoc = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor" fillOpacity=".12" d="M5 3 H15 L19 7 V21 H5 Z" />
+    <path stroke="currentColor" strokeWidth="1.5" d="M5 3 H15 L19 7 V21 H5 Z" />
+    <path fill="currentColor" fillOpacity=".22" d="M15 3 L19 7 H15 Z" />
+    <path stroke="currentColor" strokeWidth="1" strokeLinecap="round" d="M8 15H16 M8 18H13" opacity=".4" />
+    <circle fill="currentColor" cx="12" cy="9" r="1.2" />
+    <line x1="12" y1="11.5" x2="12" y2="13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+// T3: document with checkmark (submission ready)
+const CompleteDoc = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor" fillOpacity=".12" d="M5 2 H15 L19 6 V22 H5 Z" />
+    <path stroke="currentColor" strokeWidth="1.5" d="M5 2 H15 L19 6 V22 H5 Z" />
+    <path fill="currentColor" fillOpacity=".22" d="M15 2 L19 6 H15 Z" />
+    <path stroke="currentColor" strokeWidth="1" strokeLinecap="round" d="M8 10H15 M8 13H12" opacity=".35" />
+    <path stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" d="M8 18 L11 21 L17 15" />
+  </svg>
+);
+
+// ── GRAMMAR CHECK ─────────────────────────────────────────────────────────────
+
+const GrammarCheck = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" d="M3 7H13 M3 11H10" opacity=".5" />
+    {/* wavy underline */}
+    <path stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"
+      d="M3 15 Q4.5 13.5 6 15 Q7.5 16.5 9 15 Q10.5 13.5 12 15" opacity=".65" />
+    {/* checkmark */}
+    <path stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" d="M14 13 L17 17 L22 9" />
+  </svg>
+);
+
+// ── PANDOC / CONVERT ──────────────────────────────────────────────────────────
+
+const PandocConvert = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor" fillOpacity=".12" d="M4 3 H13 L17 7 V19 H4 Z" />
+    <path stroke="currentColor" strokeWidth="1.5" d="M4 3 H13 L17 7 V19 H4 Z" />
+    <path fill="currentColor" fillOpacity=".22" d="M13 3 L17 7 H13 Z" />
+    <path stroke="currentColor" strokeWidth="1" strokeLinecap="round" d="M7 11H14 M7 14H11" opacity=".4" />
+    {/* export arrow top-right */}
+    <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M17 10 L22 5" opacity=".9" />
+    <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M18.5 5 H22 V8.5" opacity=".9" />
+  </svg>
+);
+
+// ── INVENTORY — pouch → chest ─────────────────────────────────────────────────
+
+// T1: small pouch
+const PouchIcon = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor" d="M8.5 8 Q8.5 4.5 12 4.5 Q15.5 4.5 15.5 8 L17.5 21 H6.5 Z" />
+    <path stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" d="M10 6.5 L14 6.5" opacity=".4" />
+  </svg>
+);
+
+// T2: backpack
+const BackpackIcon = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect fill="currentColor" fillOpacity=".12" x="5" y="7" width="14" height="14" rx="2" />
+    <rect stroke="currentColor" strokeWidth="1.5" x="5" y="7" width="14" height="14" rx="2" />
+    <path stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" d="M9 7 Q9 4 12 4 Q15 4 15 7" />
+    <rect stroke="currentColor" strokeWidth="1" x="8" y="13" width="8" height="5" rx="1" opacity=".5" />
+    <path stroke="currentColor" strokeWidth="1" strokeLinecap="round" d="M10 15.5 H14" opacity=".4" />
+  </svg>
+);
+
+// T3: treasure chest
+const ChestIcon = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor" fillOpacity=".35" d="M3 5 H21 V12 Q12 13.5 3 12 Z" />
+    <path stroke="currentColor" strokeWidth="1.5" d="M3 5 H21 V12 Q12 13.5 3 12 Z" />
+    <rect fill="currentColor" fillOpacity=".12" x="3" y="12" width="18" height="8" rx="1" />
+    <rect stroke="currentColor" strokeWidth="1.5" x="3" y="12" width="18" height="8" rx="1" />
+    <rect fill="currentColor" x="9.5" y="10" width="5" height="4" rx="1" />
+    <path stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" d="M10.5 10 V8.5 A1.5 1.5 0 0113.5 8.5 V10" />
+    <line x1="3" y1="15" x2="21" y2="15" stroke="currentColor" strokeWidth="1" opacity=".25" />
+  </svg>
+);
+
+// ── STATS ENGAGEMENT — eye → analyst ─────────────────────────────────────────
+
+// T1: bar chart with eye
+const ChartEye = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect fill="currentColor" fillOpacity=".45" x="2" y="15" width="4"  height="7" rx=".5" />
+    <rect fill="currentColor" fillOpacity=".65" x="8" y="11" width="4"  height="11" rx=".5" />
+    <rect fill="currentColor"                   x="14" y="8" width="4"  height="14" rx=".5" />
+    <ellipse stroke="currentColor" strokeWidth="1.5" cx="20" cy="6" rx="3.5" ry="2.5" />
+    <circle fill="currentColor" cx="20" cy="6" r="1.3" />
+  </svg>
+);
+
+// T2: heartbeat / pulse line (data driven)
+const ChartPulse = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <line x1="2" y1="14" x2="22" y2="14" stroke="currentColor" strokeWidth="1" opacity=".22" />
+    <path stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+      d="M2 14 L6 14 L8 6 L11 19 L13 11 L15 14 L22 14" />
+  </svg>
+);
+
+// T3: area chart with analysis circle
+const ChartAnalyst = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor" fillOpacity=".18"
+      d="M2 20 L6 16 L10 10 L14 13 L18 7 L22 9 L22 20 Z" />
+    <path stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+      d="M2 20 L6 16 L10 10 L14 13 L18 7 L22 9" />
+    <circle stroke="currentColor" strokeWidth="1.5" cx="10" cy="10" r="3" />
+    <path stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" d="M12 7.5 L15 4" opacity=".5" />
+    <path stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" d="M15 4 L18 4 L18 7" opacity=".5" />
+  </svg>
+);
+
+// ── EXPORTS — doc → press ─────────────────────────────────────────────────────
+
+// T1: document with down-arrow (first export)
+const ExportDoc = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor" fillOpacity=".12" d="M5 3 H15 L19 7 V21 H5 Z" />
+    <path stroke="currentColor" strokeWidth="1.5" d="M5 3 H15 L19 7 V21 H5 Z" />
+    <path fill="currentColor" fillOpacity=".22" d="M15 3 L19 7 H15 Z" />
+    <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M12 8 V15" />
+    <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M9 13 L12 16 L15 13" />
+  </svg>
+);
+
+// T2: stacked docs with arrow
+const ExportStack = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect fill="currentColor" fillOpacity=".2" x="2" y="5" width="11" height="13" rx="1" />
+    <rect fill="currentColor" fillOpacity=".4" x="5" y="3" width="11" height="13" rx="1" />
+    <rect fill="currentColor" fillOpacity=".85" x="8" y="1" width="11" height="13" rx="1" />
+    <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M19 14 V21" />
+    <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16.5 19 L19 22 L21.5 19" />
+  </svg>
+);
+
+// T3: doc + upload arrow (batch)
+const ExportBatch = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path fill="currentColor" fillOpacity=".12" d="M2 8 H12 L16 12 V22 H2 Z" />
+    <path stroke="currentColor" strokeWidth="1.3" d="M2 8 H12 L16 12 V22 H2 Z" />
+    <path stroke="currentColor" strokeWidth=".9" strokeLinecap="round" d="M5 13H13 M5 16H10" opacity=".4" />
+    <rect stroke="currentColor" strokeWidth="1.3" fill="none" x="15" y="13" width="8" height="5" rx="1" opacity=".5" />
+    <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M19 11 V5" />
+    <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M17 7 L19 5 L21 7" />
+  </svg>
+);
+
+// T4: printing press (100 exports)
+const ExportMaster = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect fill="currentColor" fillOpacity=".12" x="2" y="10" width="20" height="7" rx="1.5" />
+    <rect stroke="currentColor" strokeWidth="1.5" x="2" y="10" width="20" height="7" rx="1.5" />
+    <rect fill="currentColor" x="3" y="11.5" width="18" height="4" rx="1" />
+    {/* paper in */}
+    <rect fill="currentColor" fillOpacity=".35" x="6" y="4" width="12" height="7" rx=".5" />
+    <path stroke="currentColor" strokeWidth=".9" strokeLinecap="round" d="M9 6H15 M9 8.5H13" opacity=".5" />
+    {/* paper out */}
+    <rect fill="currentColor" fillOpacity=".35" x="6" y="17" width="12" height="5" rx=".5" />
+    <path stroke="currentColor" strokeWidth=".9" strokeLinecap="round" d="M9 19H15 M9 21H12" opacity=".4" />
+  </svg>
+);
+
 // ── ICON MAP ─────────────────────────────────────────────────────────────────
 
 const ICON_MAP: Record<string, (p: P) => React.JSX.Element> = {
@@ -654,6 +1016,9 @@ const ICON_MAP: Record<string, (p: P) => React.JSX.Element> = {
   words_250k: TomeGlowing,
   words_500k: TomeGlowing,
   words_1m:   TomeGlowing,
+  words_2m:   TomeNova,
+  words_5m:   WordGalaxy,
+  words_10m:  WordGalaxy,
 
   // Best single day
   day_500:  PenStroke,
@@ -718,6 +1083,57 @@ const ICON_MAP: Record<string, (p: P) => React.JSX.Element> = {
   research_10: MagBook,
   research_25: ScholarGlass,
   research_50: Librarian,
+
+  // Timeline
+  timeline_1:   TimelineDot,
+  timeline_10:  TimelineThree,
+  timeline_50:  TimelineTracks,
+  timeline_100: TimelineEpic,
+
+  // Snippets / fragments
+  snippet_1:  SnippetNote,
+  snippet_10: SnippetStack,
+  snippet_50: SnippetArchive,
+
+  // Typed scenes
+  typed_1:   TagSingle,
+  typed_10:  TagDouble,
+  typed_50:  TagFan,
+  typed_100: TagMaster,
+
+  // Corkboard (reuse scene board icons)
+  corkboard_1:  SceneCard,
+  corkboard_10: SceneCards,
+  corkboard_50: SceneBoard,
+
+  // Time system
+  time_lord: TimeLordIcon,
+
+  // Project info
+  project_meta:      InfoDoc,
+  project_meta_full: CompleteDoc,
+
+  // Grammar
+  grammar_active: GrammarCheck,
+
+  // Pandoc
+  pandoc_active: PandocConvert,
+
+  // Inventory
+  inventory_1:  PouchIcon,
+  inventory_10: BackpackIcon,
+  inventory_50: ChestIcon,
+
+  // Stats engagement
+  stats_view:    ChartEye,
+  stats_addict:  ChartPulse,
+  stats_analyst: ChartAnalyst,
+
+  // Exports
+  export_1:   ExportDoc,
+  export_10:  ExportStack,
+  export_50:  ExportBatch,
+  export_100: ExportMaster,
 };
 
 // ── Export ────────────────────────────────────────────────────────────────────

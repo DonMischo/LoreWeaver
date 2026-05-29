@@ -727,3 +727,18 @@ export const exportProfilesApi = {
 export const achievementsApi = {
   list: () => req<Achievement[]>("/achievements"),
 };
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+export interface StatsTotals {
+  total_words:          number;
+  project_words:        { id: number; title: string; words: number }[];
+  pov_words:            { name: string; words: number }[];
+  day_of_week:          { day: string; words: number }[];
+  scene_length_buckets: { range: string; count: number }[];
+}
+
+export const statsApi = {
+  totals: () => req<StatsTotals>("/stats/totals"),
+  pingView: () => req<{ ok: boolean }>("/stats/ping", { method: "POST" }),
+};
